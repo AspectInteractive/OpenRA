@@ -38,7 +38,7 @@ namespace OpenRA.Mods.Common.Activities
 
 		public static void TestAnyaPathSearch_SplitIntervalAtCornerPoints(Actor self, Target t)
 		{
-			var anyaSearch = new AnyaPathSearch(self.World);
+			var anyaSearch = new AnyaPathSearch(self.World, self);
 			var startCCPos = anyaSearch.GetNearestCCPos(self.CenterPosition);
 			var destCCPos = anyaSearch.GetNearestCCPos(t.CenterPosition);
 			var intervalLeft = anyaSearch.GetFirstInterval(startCCPos, 1, AnyaPathSearch.IntervalSide.Left);
@@ -61,7 +61,7 @@ namespace OpenRA.Mods.Common.Activities
 			//          the reverse is true.
 
 			#if DEBUG
-			var anyaSearch = new AnyaPathSearch(self.World);
+			var anyaSearch = new AnyaPathSearch(self.World, self);
 			anyaSearch.AnyaFindPath(self.CenterPosition, t.CenterPosition);
 			#endif
 

@@ -165,16 +165,16 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public LinkedList<IntervalState> ClosedList { get; private set; }
 		public enum StateListType : byte { OpenList, ClosedList, NoList }
 
-		public World thisWorld;
-
-		readonly int ccPosMaxSizeX;
-		readonly int ccPosMaxSizeY;
-		readonly int ccPosMinSizeX;
-		readonly int ccPosMinSizeY;
-		readonly int cPosMaxSizeX;
-		readonly int cPosMaxSizeY;
-		readonly int cPosMinSizeX;
-		readonly int cPosMinSizeY;
+		private readonly World thisWorld;
+		private readonly Actor self;
+		private readonly int ccPosMaxSizeX;
+		private readonly int ccPosMaxSizeY;
+		private readonly int ccPosMinSizeX;
+		private readonly int ccPosMinSizeY;
+		private readonly int cPosMaxSizeX;
+		private readonly int cPosMaxSizeY;
+		private readonly int cPosMinSizeX;
+		private readonly int cPosMinSizeY;
 
 		public enum IntervalSide : byte { Left, Right, All, None }
 		public enum CellSurroundingCorner : byte { TopLeft, TopRight, BottomLeft, BottomRight }
@@ -516,7 +516,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				}
 			}
 
-			return new Interval(ccPosInRow);
+			return new Interval(ccPosInRow.OrderBy(cc => cc.X).ThenBy(cc => cc.Y).ToList());
 		}
 
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
@@ -648,7 +648,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				return true; // All invalid cells are blocked
 
 			var locomotor = thisWorld.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
-			return locomotor.MovementCostToEnterCell(default, (CPos)cell, BlockedByActor.Immovable, null) == short.MaxValue;
+			return locomotor.MovementCostToEnterCell(default, (CPos)cell, BlockedByActor.None, self) == short.MaxValue;
 		}
 
 		public int NumberOfCellsBlocked(List<CPos> cells)
@@ -926,8 +926,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 			intersectingLeftEdge = GetNearestCCPos(new WPos(intersectingLeftEdge, newRowWPosY, intervalFirstCC.Layer)).X;
 			intersectingRightEdge = GetNearestCCPos(new WPos(intersectingRightEdge, newRowWPosY, intervalFirstCC.Layer)).X;
 
-			var leftBound = intervalFirstCC.X - GetFirstInterval(intervalFirstCC, 0, IntervalSide.Left).CCs.FirstOrDefault().X; // may not be working
-			var rightBound = intervalLastCC.X - GetFirstInterval(intervalLastCC, 0, IntervalSide.Right).CCs.LastOrDefault().X; // may not be working
+			var nextLeftInterval = GetFirstInterval(intervalFirstCC, 0, IntervalSide.Left);
+			var leftBound = intervalFirstCC.X - nextLeftInterval.CCs.FirstOrDefault().X; // may not be working
+			var nextRightInterval = GetFirstInterval(intervalLastCC, 0, IntervalSide.Right);
+			var rightBound = intervalLastCC.X - nextRightInterval.CCs.LastOrDefault().X; // may not be working
 
 			var newLeft = intersectingLeftEdge < leftBound ? leftBound : intersectingLeftEdge;
 			var newRight = intersectingRightEdge > rightBound ? rightBound : intersectingRightEdge; // becomes 0 since rightBound errors to 0
@@ -1070,9 +1072,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		#region Constructors
-		public AnyaPathSearch(World world)
+		public AnyaPathSearch(World world, Actor self)
 		{
 			thisWorld = world;
+			this.self = self;
 			ccPosMaxSizeX = thisWorld.Map.MapSize.X;
 			ccPosMinSizeX = 0;
 			ccPosMaxSizeY = thisWorld.Map.MapSize.Y;
