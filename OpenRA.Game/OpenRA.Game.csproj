@@ -1,9 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>OpenRA</RootNamespace>
+    <Configurations>Debug;Release;DebugWithOverlay</Configurations>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Mono)' != ''">
     <DefineConstants>MONO</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugWithOverlay|AnyCPU'">
+    <Optimize>false</Optimize>
   </PropertyGroup>
   <ItemGroup Condition="'$(Mono)' == ''">
     <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="6.0.0" />

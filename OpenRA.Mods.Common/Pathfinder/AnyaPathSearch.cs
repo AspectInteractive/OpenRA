@@ -19,7 +19,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OpenRA.Graphics;
+using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 #pragma warning disable SA1512 // SingleLineCommentsMustNotBeFollowedByBlankLine
@@ -41,7 +44,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 			public List<CCPos> CCs;
 			public bool Observable = false;
 
-			public Interval(List<CCPos> ccs) { CCs = ccs; }
+			public Interval(List<CCPos> ccs)
+			{
+				CCs = ccs;
+			}
 
 			public Interval()
 				: this(new List<CCPos>()) { }
@@ -58,6 +64,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 				if (obj is null)
 					return false;
 				throw new NotImplementedException();
+			}
+
+			public void RenderIntervalIn(World world)
+			{
+				world.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().AddInterval(this);
 			}
 
 			public override int GetHashCode() { return CCs.GetHashCode(); }
@@ -516,7 +527,14 @@ namespace OpenRA.Mods.Common.Pathfinder
 				}
 			}
 
-			return new Interval(ccPosInRow.OrderBy(cc => cc.X).ThenBy(cc => cc.Y).ToList());
+			var intervalCCs = ccPosInRow.OrderBy(cc => cc.X).ThenBy(cc => cc.Y).ToList();
+			var newInterval = new Interval(intervalCCs);
+
+			#if DEBUGWITHOVERLAY
+			newInterval.RenderIntervalIn(thisWorld);
+			#endif
+
+			return newInterval;
 		}
 
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
@@ -600,7 +618,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		public Interval GetInterval(CCPos rootCCPos, int offset, IntervalSide intervalSide, int startX = int.MinValue, int endX = int.MaxValue)
 		{
-			var interval = new Interval(new List<CCPos>());
+			var interval = new Interval();
 			if (intervalSide != IntervalSide.None)
 			{
 				if (intervalSide == IntervalSide.All)
@@ -612,6 +630,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 			}
 			else
 				interval = new Interval(GetBoundedCCPosOfOffsetRow(rootCCPos, offset, startX, endX));
+
+			#if DEBUGWITHOVERLAY
+			interval.RenderIntervalIn(thisWorld);
+			#endif
 
 			return interval;
 		}
@@ -757,6 +779,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 					var intervalToAdd = new Interval(interval.CCs.GetRange(start, count));
 					intervalSet.Add(intervalToAdd);
 					start = i + 1; // update starting position for next interval
+
+					#if DEBUGWITHOVERLAY
+					intervalToAdd.RenderIntervalIn(thisWorld);
+					#endif
 				}
 
 				i += 1;
@@ -810,6 +836,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 				var intervalLeft = GetFirstInterval(startCCPos, offset, IntervalSide.Left);
 				var intervalRight = GetFirstInterval(startCCPos, offset, IntervalSide.Right);
 				intervalToUse = new Interval(intervalLeft.CCs.Union(intervalRight.CCs).ToList());
+
+				#if DEBUGWITHOVERLAY
+				intervalToUse.RenderIntervalIn(thisWorld);
+				#endif
 			}
 			else
 			{ // intervalSide is None or All, so we get all points from start to end
@@ -857,6 +887,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 					{
 						var intervalLeftAndRight = new Interval(intervalLeft.CCs.Union(intervalRight.CCs).ToList());
 						intervalSet = intervalSet.Union(SplitIntervalAtCornerPoints(intervalLeftAndRight)).ToList();
+
+						#if DEBUGWITHOVERLAY
+						intervalLeftAndRight.RenderIntervalIn(thisWorld);
+						#endif
 					}
 					else // dir == 0
 					{
@@ -927,9 +961,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 			intersectingRightEdge = GetNearestCCPos(new WPos(intersectingRightEdge, newRowWPosY, intervalFirstCC.Layer)).X;
 
 			var nextLeftInterval = GetFirstInterval(intervalFirstCC, 0, IntervalSide.Left);
-			var leftBound = intervalFirstCC.X - nextLeftInterval.CCs.FirstOrDefault().X; // may not be working
+			var leftBound = nextLeftInterval.CCs.Count > 0 ? intervalFirstCC.X - nextLeftInterval.CCs.FirstOrDefault().X : intervalFirstCC.X;
 			var nextRightInterval = GetFirstInterval(intervalLastCC, 0, IntervalSide.Right);
-			var rightBound = intervalLastCC.X - nextRightInterval.CCs.LastOrDefault().X; // may not be working
+			var rightBound = nextRightInterval.CCs.Count > 0 ? intervalLastCC.X - nextRightInterval.CCs.LastOrDefault().X : intervalLastCC.X;
 
 			var newLeft = intersectingLeftEdge < leftBound ? leftBound : intersectingLeftEdge;
 			var newRight = intersectingRightEdge > rightBound ? rightBound : intersectingRightEdge; // becomes 0 since rightBound errors to 0
@@ -941,6 +975,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 				var intervalLeftAndRight = new Interval(newLeftInterval.CCs.Union(newRightInterval.CCs).ToList());
 				var intervalSet = SplitIntervalAtCornerPoints(intervalLeftAndRight).ToList();
 				AddIntervalListToStateList(intervalSet, ref successors, rootPos, goal);
+
+				#if DEBUGWITHOVERLAY
+				intervalLeftAndRight.RenderIntervalIn(thisWorld);
+				#endif
 			}
 
 			// TO DO: Add double support
@@ -1049,7 +1087,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					successors.Add(new IntervalState(intervalRight, start, goal, thisWorld));
 					for (var dirY = -1; dirY <= 1; dirY += 1)
 					{
-						if (dirY != 0 && CCPosDirectionIsBlocked(intervalLeft.CCs.FirstOrDefault(), 0, dirY)) // Top is blocked
+						if (dirY != 0 && CCPosDirectionIsBlocked(intervalRight.CCs.FirstOrDefault(), 0, dirY)) // Top is blocked
 						{
 							var intervalSet = GenerateSubIntervals(start, dirY, intervalLastCC, 0, IntervalSide.Right,
 																   unBlockedDirY: dirY * (-1));

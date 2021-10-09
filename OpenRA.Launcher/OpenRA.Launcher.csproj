@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>OpenRA</AssemblyName>
     <IsPublishable Condition="'$(CopyGenericLauncher)' == 'False'">false</IsPublishable>
+    <Configurations>Debug;Release;DebugWithOverlay</Configurations>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RunConfiguration)' == 'Red Alert'">
@@ -20,6 +21,15 @@
   <PropertyGroup Condition="'$(RunConfiguration)' == 'Tiberian Sun'">
     <StartAction>Project</StartAction>
     <StartArguments>Engine.EngineDir=".." Game.Mod=ts</StartArguments>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugWithOverlay|AnyCPU'">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <Optimize>false</Optimize>
   </PropertyGroup>
   <ItemGroup>
     <None Include="App.config" />

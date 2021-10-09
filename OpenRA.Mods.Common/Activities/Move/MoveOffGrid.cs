@@ -60,7 +60,7 @@ namespace OpenRA.Mods.Common.Activities
 			// ISSUE 2: CCs are not in the right order, larger X values appear earlier than smaller X values, but sometimes
 			//          the reverse is true.
 
-			#if DEBUG
+			#if DEBUG || DEBUGWITHOVERLAY
 			var anyaSearch = new AnyaPathSearch(self.World, self);
 			anyaSearch.AnyaFindPath(self.CenterPosition, t.CenterPosition);
 			#endif
