@@ -9,6 +9,7 @@
 		VictoryMusic: score
 		DefeatMusic: map
 	TerrainGeometryOverlay:
+	AnyaPathfinderOverlay:
 	DebugVisualizations:
 	Locomotor@FOOT:
 		Name: foot

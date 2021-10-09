@@ -1,6 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>OpenRA</RootNamespace>
+    <Configurations>Debug;Release;DebugWithOverlay</Configurations>
   </PropertyGroup>
   <ItemGroup Condition="'$(MSBuildRuntimeType)'!='Mono'">
     <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="6.0.0" />
