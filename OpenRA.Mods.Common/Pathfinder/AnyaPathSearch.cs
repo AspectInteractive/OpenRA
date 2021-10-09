@@ -289,7 +289,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		{
 			ResetLists();
 
-			List<WPos> path = null;
+			List<WPos> path = new List<WPos>();
 			var destCCPos = GetNearestCCPos(destPos);
 			var pathFound = false;
 			var goalState = new IntervalState();
@@ -299,12 +299,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			GenerateStartSuccessors(sourcePos, destPos);
 
+
 			while (OpenList.Count > 0)
 			{
 				var minState = PopFirstFromOpen();
 				if (minState.Interval.CCs.Any(cc => cc.Y == destCCPos.Y) &&
-					minState.Interval.CCs.FirstOrDefault().X == destCCPos.X &&
-					minState.Interval.CCs.LastOrDefault().X == destCCPos.X)
+					minState.Interval.CCs.FirstOrDefault().X <= destCCPos.X &&
+					minState.Interval.CCs.LastOrDefault().X >= destCCPos.X)
 				{
 					// may need code to create path here
 					pathFound = true;
@@ -512,19 +513,21 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			if (intervalSide == IntervalSide.Left)
 			{
-				while (currCCPos.X >= ccPosMinSizeX && !leftPathIsBlockedFunc(currCCPos))
+				while (currCCPos.X > ccPosMinSizeX && !leftPathIsBlockedFunc(currCCPos))
 				{
 					ccPosInRow.Add(currCCPos);
 					currCCPos = new CCPos(currCCPos.X - 1, currCCPos.Y, currCCPos.Layer);
 				}
+				ccPosInRow.Add(currCCPos); // We must include the final point
 			}
 			else if (intervalSide == IntervalSide.Right)
 			{
-				while (currCCPos.X <= ccPosMaxSizeX && !rightPathIsBlockedFunc(currCCPos))
+				while (currCCPos.X < ccPosMaxSizeX && !rightPathIsBlockedFunc(currCCPos))
 				{
 					ccPosInRow.Add(currCCPos);
 					currCCPos = new CCPos(currCCPos.X + 1, currCCPos.Y, currCCPos.Layer);
 				}
+				ccPosInRow.Add(currCCPos);
 			}
 
 			var intervalCCs = ccPosInRow.OrderBy(cc => cc.X).ThenBy(cc => cc.Y).ToList();
@@ -755,10 +758,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var botLeftBlocked = CellSurroundingCCPosIsBlocked(ccPos, CellSurroundingCorner.BottomLeft);
 			var botRightBlocked = CellSurroundingCCPosIsBlocked(ccPos, CellSurroundingCorner.BottomRight);
 
-			// XO or OX  Checks if either pattern exists around the ccPos, where X is blocked and O is traversable
-			// OX    XO
-			return (!topLeftBlocked && !botRightBlocked && topRightBlocked && botLeftBlocked) ||
-			        (topLeftBlocked && botRightBlocked && !topRightBlocked && !botLeftBlocked);
+			System.Console.WriteLine($"ccPos {ccPos} has blockages TL:{topLeftBlocked}" +
+									 $",TR:{topRightBlocked},BL:{botLeftBlocked},BR:{botRightBlocked}");
+
+			// At least one corner is blocked while one diagonal is free)
+			return (!topLeftBlocked && !botRightBlocked && (topRightBlocked || botLeftBlocked)) ||
+			       ((topLeftBlocked || botRightBlocked) && !topRightBlocked && !botLeftBlocked);
 		}
 
 		public List<Interval> SplitIntervalAtCornerPoints(Interval interval)
@@ -953,16 +958,16 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var intervalLastCC = interval.CCs.LastOrDefault();
 			var intervalLastCCWPos = thisWorld.Map.WPosFromCCPos(intervalLastCC);
 
-			var intersectingLeftEdge = WPos.GetIntersectingX(rootPos, intervalFirstCCWPos, newRowY);
-			var intersectingRightEdge = WPos.GetIntersectingX(rootPos, intervalLastCCWPos, newRowY);
+			var intersectingLeftEdge = WPos.GetIntersectingX(rootPos, intervalFirstCCWPos, newRowWPosY);
+			var intersectingRightEdge = WPos.GetIntersectingX(rootPos, intervalLastCCWPos, newRowWPosY);
 
 			// Because we have not implemented WPos corners yet, we have to round to the nearest CCPos
 			intersectingLeftEdge = GetNearestCCPos(new WPos(intersectingLeftEdge, newRowWPosY, intervalFirstCC.Layer)).X;
 			intersectingRightEdge = GetNearestCCPos(new WPos(intersectingRightEdge, newRowWPosY, intervalFirstCC.Layer)).X;
 
-			var nextLeftInterval = GetFirstInterval(intervalFirstCC, 0, IntervalSide.Left);
+			var nextLeftInterval = GetFirstInterval(intervalFirstCC, dirY, IntervalSide.Left);
 			var leftBound = nextLeftInterval.CCs.Count > 0 ? intervalFirstCC.X - nextLeftInterval.CCs.FirstOrDefault().X : intervalFirstCC.X;
-			var nextRightInterval = GetFirstInterval(intervalLastCC, 0, IntervalSide.Right);
+			var nextRightInterval = GetFirstInterval(intervalLastCC, dirY, IntervalSide.Right);
 			var rightBound = nextRightInterval.CCs.Count > 0 ? intervalLastCC.X - nextRightInterval.CCs.LastOrDefault().X : intervalLastCC.X;
 
 			var newLeft = intersectingLeftEdge < leftBound ? leftBound : intersectingLeftEdge;
@@ -995,7 +1000,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 				if (CCPosDirectionIsBlocked(intervalFirstCC, 1, dirY) &&
 				    CCPosDirectionIsBlocked(intervalFirstCC, -1, reverseDirY))
 				{
-					var intervalSet = GenerateSubIntervals(intervalFirstCC, 0, intervalFirstCC.X, newRowY, 0, IntervalSide.Left);
+					var intervalSet = GenerateSubIntervals(intervalFirstCC, 0, intervalFirstCC.X, newRowY, 0, IntervalSide.Left,
+														   int.MinValue, reverseDirY);
 					AddIntervalListToStateList(intervalSet, ref successors, intervalFirstCCWPos, goal);
 				}
 				else if (CCPosDirectionIsBlocked(intervalFirstCC, -1, dirY))
@@ -1003,7 +1009,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					if (intervalFirstCC.X > GetNearestCCPos(rootPos).X)
 					{
 						var intervalSet = GenerateSubIntervals(intervalFirstCC, 0, intervalFirstCC.X, newRowY, 0, IntervalSide.Right,
-																newLeft);
+																newLeft, reverseDirY);
 						AddIntervalListToStateList(intervalSet, ref successors, intervalFirstCCWPos, goal);
 					}
 				}
@@ -1011,7 +1017,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 				{
 					if (newLeft == intersectingLeftEdge)
 					{
-						var intervalSet = GenerateSubIntervals(intervalFirstCC, 0, newLeft, newRowY, 0, IntervalSide.Left);
+						var intervalSet = GenerateSubIntervals(intervalFirstCC, 0, newLeft, newRowY, 0, IntervalSide.Left,
+																int.MinValue, reverseDirY);
 						AddIntervalListToStateList(intervalSet, ref successors, intervalFirstCCWPos, goal);
 					}
 				}
@@ -1029,7 +1036,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 				if (CCPosDirectionIsBlocked(intervalLastCC, -1, dirY) &&
 				    CCPosDirectionIsBlocked(intervalLastCC, 1, reverseDirY))
 				{
-					var intervalSet = GenerateSubIntervals(intervalLastCC, 0, intervalLastCC.X, newRowY, 0, IntervalSide.Right);
+					var intervalSet = GenerateSubIntervals(intervalLastCC, 0, intervalLastCC.X, newRowY, 0, IntervalSide.Right,
+															int.MinValue, reverseDirY);
 					AddIntervalListToStateList(intervalSet, ref successors, intervalLastCCWPos, goal);
 				}
 				else if (CCPosDirectionIsBlocked(intervalFirstCC, 1, dirY))
@@ -1037,7 +1045,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					if (intervalLastCC.X < GetNearestCCPos(rootPos).X)
 					{
 						var intervalSet = GenerateSubIntervals(intervalLastCC, 0, intervalLastCC.X, newRowY, 0, IntervalSide.Right,
-																newRight);
+																newRight, reverseDirY);
 						AddIntervalListToStateList(intervalSet, ref successors, intervalLastCCWPos, goal);
 					}
 				}
@@ -1045,7 +1053,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 				{
 					if (newRight == intersectingRightEdge)
 					{
-						var intervalSet = GenerateSubIntervals(intervalLastCC, 0, newRight, newRowY, 0, IntervalSide.Right);
+						var intervalSet = GenerateSubIntervals(intervalLastCC, 0, newRight, newRowY, 0, IntervalSide.Right,
+																int.MinValue, reverseDirY);
 						AddIntervalListToStateList(intervalSet, ref successors, intervalLastCCWPos, goal);
 					}
 				}

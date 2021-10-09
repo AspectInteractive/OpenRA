@@ -10,6 +10,7 @@
 		DefeatMusic: map
 	TerrainGeometryOverlay:
 	AnyaPathfinderOverlay:
+	CPosCoordsDebugOverlay:
 	DebugVisualizations:
 	Locomotor@FOOT:
 		Name: foot

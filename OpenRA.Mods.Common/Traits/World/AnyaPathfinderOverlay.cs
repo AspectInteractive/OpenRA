@@ -89,8 +89,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void AddInterval(Interval interval)
 		{
-			currHue = (currHue + lineColorIncrement) % 256; // each interval has a new colour to show recency
-			System.Console.WriteLine($"Writing Color: {currHue}, {currSat}, {currLight}");
+			currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon); // each interval has a new colour to show recency
+			// System.Console.WriteLine($"Writing Color: {currHue}, {currSat}, {currLight}");
 			intervalsWithColors.Add((interval, Color.FromAhsv(currHue, currSat, currLight)));
 		}
 
