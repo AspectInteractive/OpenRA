@@ -3,6 +3,7 @@
     <OutputType>winexe</OutputType>
     <ApplicationIcon>$(LauncherIcon)</ApplicationIcon>
     <AssemblyName>$(LauncherName)</AssemblyName>
+    <Configurations>Debug;Release;DebugWithOverlay</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
