@@ -16,17 +16,31 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Commands
 {
+	public readonly struct Command
+	{
+		public readonly string Name;
+		public readonly string Desc;
+		public readonly bool InHelp;
+
+		public Command(string name, string desc, bool inHelp)
+		{
+			Name = name;
+			Desc = desc;
+			InHelp = inHelp;
+		}
+	}
+
 	[TraitLocation(SystemActors.World)]
 	[Desc("Enables commands triggered by typing them into the chatbox. Attach this to the world actor.")]
 	public class ChatCommandsInfo : TraitInfo<ChatCommands> { }
 
 	public class ChatCommands : INotifyChat
 	{
-		public Dictionary<string, IChatCommand> Commands { get; private set; }
+		public Dictionary<string, List<IChatCommand>> Commands { get; private set; }
 
 		public ChatCommands()
 		{
-			Commands = new Dictionary<string, IChatCommand>();
+			Commands = new Dictionary<string, List<IChatCommand>>();
 		}
 
 		public bool OnChat(string playername, string message)
@@ -34,10 +48,11 @@ namespace OpenRA.Mods.Common.Commands
 			if (message.StartsWith("/"))
 			{
 				var name = message.Substring(1).Split(' ')[0].ToLowerInvariant();
-				var command = Commands.FirstOrDefault(x => x.Key == name);
+				var commandList = Commands.FirstOrDefault(x => x.Key == name);
 
-				if (command.Value != null)
-					command.Value.InvokeCommand(name.ToLowerInvariant(), message.Substring(1 + name.Length).Trim());
+				if (commandList.Value != null)
+					foreach (var command in commandList.Value)
+						command.InvokeCommand(name.ToLowerInvariant(), message.Substring(1 + name.Length).Trim());
 				else
 					TextNotificationsManager.Debug("{0} is not a valid command.", name);
 
@@ -50,7 +65,10 @@ namespace OpenRA.Mods.Common.Commands
 		public void RegisterCommand(string name, IChatCommand command)
 		{
 			// Override possible duplicates instead of crashing.
-			Commands[name.ToLowerInvariant()] = command;
+			if (Commands.ContainsKey(name.ToLowerInvariant()))
+				Commands[name.ToLowerInvariant()].Add(command);
+			else
+				Commands[name.ToLowerInvariant()] = new List<IChatCommand>() { command };
 		}
 	}
 

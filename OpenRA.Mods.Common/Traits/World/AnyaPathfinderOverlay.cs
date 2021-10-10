@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
@@ -26,8 +27,7 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class AnyaPathfinderOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
 	{
-		const string CommandName = "anya";
-		const string CommandDesc = "toggles the anya pathfinder overlay.";
+		public readonly List<Command> Comms;
 
 		private List<(Interval, Color)> intervalsWithColors = new List<(Interval, Color)>();
 
@@ -36,6 +36,16 @@ namespace OpenRA.Mods.Common.Traits
 		private float currSat = 1.0F; // 0.0 - 1.0
 		private float currLight = 0.7F; // 0.0 - 1.0 with 1.0 being brightest
 		private float lineColorIncrement = 0.05F;
+		public Action<string> ToggleVisibility;
+
+		public AnyaPathfinderOverlay()
+		{
+			Comms = new List<Command>()
+			{
+				new Command("anya", "toggles the anya pathfinder overlay.", true),
+				new Command("anyall", "toggles all anya pathfinder overlays.", false)
+			};
+		}
 
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
@@ -45,14 +55,24 @@ namespace OpenRA.Mods.Common.Traits
 			if (console == null || help == null)
 				return;
 
-			console.RegisterCommand(CommandName, this);
-			help.RegisterHelp(CommandName, CommandDesc);
+			foreach (var comm in Comms)
+			{
+				console.RegisterCommand(comm.Name, this);
+				if (comm.InHelp)
+					help.RegisterHelp(comm.Name, comm.Desc);
+			}
+
+			ToggleVisibility = arg => DevCommands.Visibility(arg, w);
 		}
 
 		void IChatCommand.InvokeCommand(string name, string arg)
 		{
-			if (name == CommandName)
+			if (Comms.Where(comm => comm.Name == name).Any())
+			{
 				Enabled ^= true;
+				ToggleVisibility("");
+			}
+
 		}
 
 		public static List<LineAnnotationRenderable> GetIntervalRenderableSet(Interval interval, int lineThickness, Color lineColor, int endPointRadius,
