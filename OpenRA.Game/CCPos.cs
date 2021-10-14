@@ -10,6 +10,7 @@
 #endregion
 
 using System;
+using System.Collections.Generic;
 using Eluant;
 using Eluant.ObjectBinding;
 using OpenRA.Scripting;
@@ -18,6 +19,19 @@ namespace OpenRA
 {
 	public class CCPos : IScriptBindable, ILuaAdditionBinding, ILuaSubtractionBinding, ILuaEqualityBinding, ILuaTableBinding, IEquatable<CPos>
 	{
+		public const int TL = 0;
+		public const int TR = 1;
+		public const int BL = 2;
+		public const int BR = 3;
+
+		public Dictionary<int, bool> Blocked = new Dictionary<int, bool>()
+													{
+														{ TL, false },
+														{ TR, false },
+														{ BL, false },
+														{ BR, false }
+													};
+
 		// Coordinates are packed in a 32 bit signed int
 		// X and Y are 12 bits (signed): -2048...2047
 		// Layer is an unsigned byte
