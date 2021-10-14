@@ -72,7 +72,6 @@ namespace OpenRA.Mods.Common.Traits
 				Enabled ^= true;
 				ToggleVisibility("");
 			}
-
 		}
 
 		public static List<LineAnnotationRenderable> GetIntervalRenderableSet(Interval interval, int lineThickness, Color lineColor, int endPointRadius,
