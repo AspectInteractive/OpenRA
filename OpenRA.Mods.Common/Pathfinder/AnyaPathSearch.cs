@@ -62,6 +62,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			public int Clearance => Math.Abs(CCs.LastOrDefault().X - CCs.FirstOrDefault().X);
 			public bool ClearanceExists => Math.Abs(CCs.LastOrDefault().X - CCs.FirstOrDefault().X) > 0;
 			public bool Empty => CCs.Count == 0;
+			public bool NotEmptyAndHasClearance => CCs.Count > 0 && Math.Abs(CCs.LastOrDefault().X - CCs.FirstOrDefault().X) > 0;
 
 			public override bool Equals(object obj)
 			{
@@ -338,7 +339,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					var currSucc = successors.ElementAt(i);
 					if (!ClosedList.Any(state => state == currSucc)) // check where Closed is being set
 					{
-						var newGval = currSucc.Gval + (int)(currSucc.Pos - minState.Pos).HorizontalLengthSquared;
+						var newGval = minState.Gval + (int)(currSucc.Pos - minState.Pos).HorizontalLengthSquared;
 						if (newGval < currSucc.Gval)
 						{
 							currSucc.Gval = newGval;
@@ -726,12 +727,15 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		public List<Interval> SplitIntervalAtCornerPoints(Interval interval)
 		{
+			if (interval.Empty)
+				return new List<Interval>();
+
 			var intervalSet = new List<Interval>();
 			var intervalFirstCC = interval.CCs.FirstOrDefault();
 			var intervalLastCC = interval.CCs.LastOrDefault();
 			var currCCPos = intervalFirstCC;
 			var priorCCPos = currCCPos;
-			while (currCCPos != intervalLastCC)
+			while (currCCPos.X <= intervalLastCC.X)
 			{
 				// make sure to close interval if this is the last ccPos
 				if ((CellSurroundingCCPosIsBlocked(currCCPos, CellSurroundingCorner.TopRight) &&
@@ -807,7 +811,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				var intervalLeft = GetFirstInterval(startCCPos, offset, IntervalSide.Left);
 				var intervalRight = GetFirstInterval(startCCPos, offset, IntervalSide.Right);
 				intervalToUse = MergedInterval(intervalLeft, intervalRight);
-				if (!(!intervalToUse.Empty && intervalToUse.ClearanceExists))
+				if (!intervalToUse.NotEmptyAndHasClearance)
 					intervalToUse = new Interval();
 			}
 			else
@@ -857,12 +861,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 			{
 				var intervalLeft = GetFirstInterval(nearestCCPos, dir, IntervalSide.Left);
 				var intervalRight = GetFirstInterval(nearestCCPos, dir, IntervalSide.Right);
-				if ((!intervalLeft.Empty && intervalLeft.ClearanceExists) || (!intervalRight.Empty && intervalRight.ClearanceExists))
+				if (intervalLeft.NotEmptyAndHasClearance || intervalRight.NotEmptyAndHasClearance)
 				{
 					if (dir != 0)
 					{
 						var intervalLeftAndRight = MergedInterval(intervalLeft, intervalRight);
-						if (!intervalLeftAndRight.Empty && intervalLeftAndRight.ClearanceExists)
+						if (intervalLeftAndRight.NotEmptyAndHasClearance)
 							intervalSet = intervalSet.Union(SplitIntervalAtCornerPoints(intervalLeftAndRight)).ToList();
 
 						#if DEBUGWITHOVERLAY
@@ -872,9 +876,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 					}
 					else // dir == 0
 					{
-						if (!intervalLeft.Empty && intervalLeft.ClearanceExists)
+						if (intervalLeft.NotEmptyAndHasClearance)
 							intervalSet.Add(intervalLeft);
-						if (!intervalRight.Empty && intervalRight.ClearanceExists)
+						if (intervalRight.NotEmptyAndHasClearance)
 							intervalSet.Add(intervalRight);
 					}
 				}
@@ -889,6 +893,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 					AddStateToOpen(state);
 				}
 			}
+
+			foreach (var intervalState in OpenList)
+				intervalState.Gval = 0;
+
 		}
 
 		public CCPos FurthestCCPosFromPos(WPos sourceWPos, List<CCPos> destCCs)
@@ -933,9 +941,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 			intersectingRightEdge = GetNearestCCPos(new WPos(intersectingRightEdge, newRowWPosY, intervalFirstCC.Layer)).X;
 
 			var nextLeftInterval = GetFirstInterval(intervalFirstCC, dirY, IntervalSide.Left);
-			var leftBound = nextLeftInterval.ClearanceExists ? nextLeftInterval.CCs.FirstOrDefault().X : intervalFirstCC.X;
+			var leftBound = nextLeftInterval.NotEmptyAndHasClearance ? nextLeftInterval.CCs.FirstOrDefault().X : intervalFirstCC.X;
 			var nextRightInterval = GetFirstInterval(intervalLastCC, dirY, IntervalSide.Right);
-			var rightBound = nextRightInterval.ClearanceExists ? nextRightInterval.CCs.LastOrDefault().X : intervalLastCC.X;
+			var rightBound = nextRightInterval.NotEmptyAndHasClearance ? nextRightInterval.CCs.LastOrDefault().X : intervalLastCC.X;
 
 			var newLeft = intersectingLeftEdge < leftBound ? leftBound : intersectingLeftEdge;
 			var newRight = intersectingRightEdge > rightBound ? rightBound : intersectingRightEdge;
@@ -1033,7 +1041,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var intervalLeft = GetFirstInterval(intervalFirstCC, 0, IntervalSide.Left);
 			var intervalRight = GetFirstInterval(intervalLastCC, 0, IntervalSide.Right);
 
-			if (startCCPos.X >= intervalLastCC.X && !intervalLeft.Empty && intervalLeft.ClearanceExists) // at least one CCPos is unblocked
+			if (startCCPos.X >= intervalLastCC.X && intervalLeft.NotEmptyAndHasClearance) // at least one CCPos is unblocked
 			{
 				successors.Add(new IntervalState(intervalLeft, start, goal, thisWorld));
 				for (var dirY = -1; dirY <= 1; dirY += 1)
@@ -1046,7 +1054,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				}
 			}
 
-			if (startCCPos.X <= intervalFirstCC.X && !intervalRight.Empty && intervalRight.ClearanceExists) // at least one CCPos is unblocked
+			if (startCCPos.X <= intervalFirstCC.X && intervalRight.NotEmptyAndHasClearance) // at least one CCPos is unblocked
 			{
 				successors.Add(new IntervalState(intervalRight, start, goal, thisWorld));
 				for (var dirY = -1; dirY <= 1; dirY += 1)
