@@ -30,9 +30,11 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly List<Command> Comms;
 
 		private List<(Interval, Color)> intervalsWithColors = new List<(Interval, Color)>();
+		private List<List<WPos>> paths = new List<List<WPos>>();
 
 		public bool Enabled;
 		private float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
+		private float pathHue = Color.Yellow.ToAhsv().H; // 0.0 - 1.0
 		private float currSat = 1.0F; // 0.0 - 1.0
 		private float currLight = 0.7F; // 0.0 - 1.0 with 1.0 being brightest
 		private float lineColorIncrement = 0.05F;
@@ -74,11 +76,54 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
+		public static void GenericLinkedPointsFunc<T1>(List<T1> pointList, int pointListLen, Action<T1, T1> funcOnLinkedPoints)
+		{
+			for (var i = 0; i < (pointListLen - 1); i++)
+			{
+				var currItem = pointList[i];
+				var nextItem = pointList[i + 1];
+				funcOnLinkedPoints(currItem, nextItem);
+			}
+		}
+		public static void GenericLinkedPointsFunc<T1, T2>(List<T1> pointList, int pointListLen, Func<T1, T2> pointUnpacker,
+														Action<T2, T2> funcOnLinkedPoints)
+		{
+			for (var i = 0; i < (pointListLen - 1); i++)
+			{
+				var currItem = pointUnpacker(pointList[i]);
+				var nextItem = pointUnpacker(pointList[i + 1]);
+				funcOnLinkedPoints(currItem, nextItem);
+			}
+		}
+
+		public static List<LineAnnotationRenderable> GetPathRenderableSet(List<WPos> path, int lineThickness, Color lineColor, int endPointRadius,
+																	int endPointThickness, Color endPointColor)
+		{
+			var linesToRender = new List<LineAnnotationRenderable>();
+			Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderable(wpos1, wpos2,
+																			lineThickness, lineColor, lineColor,
+																			(endPointRadius, endPointThickness, endPointColor), 3));
+			GenericLinkedPointsFunc(path, path.Count, funcOnLinkedPoints);
+			return linesToRender;
+		}
+
 		public static List<LineAnnotationRenderable> GetIntervalRenderableSet(Interval interval, int lineThickness, Color lineColor, int endPointRadius,
 																	int endPointThickness, Color endPointColor, World world)
 		{
 			var linesToRender = new List<LineAnnotationRenderable>();
-			for (var i = 0; i < interval.CCs.Count - 1; i++)
+			Func<CCPos, WPos> pointUnpacker = cc => world.Map.WPosFromCCPos(cc);
+			Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderable(wpos1, wpos2,
+																			lineThickness, lineColor, lineColor,
+																			(endPointRadius, endPointThickness, endPointColor), 2));
+			GenericLinkedPointsFunc(interval.CCs, interval.CCs.Count, pointUnpacker, funcOnLinkedPoints);
+			return linesToRender;
+		}
+
+		/*public static List<LineAnnotationRenderable> GetIntervalRenderableSet(Interval interval, int lineThickness, Color lineColor, int endPointRadius,
+																	int endPointThickness, Color endPointColor, World world)
+		{
+			var linesToRender = new List<LineAnnotationRenderable>();
+			for (var i = 0; i < (interval.CCs.Count - 1); i++)
 			{
 				var iWPos = world.Map.WPosFromCCPos(interval.CCs[i]);
 				var iNextWPos = world.Map.WPosFromCCPos(interval.CCs[i + 1]);
@@ -87,7 +132,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			return linesToRender;
-		}
+		}*/
 
 		IEnumerable<IRenderable> IRenderAnnotations.RenderAnnotations(Actor self, WorldRenderer wr)
 		{
@@ -97,10 +142,22 @@ namespace OpenRA.Mods.Common.Traits
 			var lineThickness = 3;
 			var endPointRadius = 100;
 			var endPointThickness = lineThickness;
+
+			// Render Intervals
 			foreach (var (interval, color) in intervalsWithColors)
 			{
 				var linesToRender = GetIntervalRenderableSet(interval, lineThickness, color,
 															endPointRadius, endPointThickness, color, wr.World);
+				foreach (var line in linesToRender)
+					yield return line;
+			}
+
+			// Render Paths
+			var lineColor = Color.FromAhsv(pathHue, currSat, currLight);
+			foreach (var path in paths)
+			{
+				var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor,
+														endPointRadius, endPointThickness, lineColor);
 				foreach (var line in linesToRender)
 					yield return line;
 			}
@@ -122,7 +179,16 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
+		public void AddPath(List<WPos> path) { paths.Add(path); }
+		public void RemovePath(List<WPos> path)
+		{
+			foreach (var currPath in paths)
+				if (currPath == path)
+					paths.Remove(currPath);
+		}
+
 		public void ClearIntervals() { intervalsWithColors.Clear(); }
+		public void ClearPaths() { paths.Clear(); }
 
 		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}

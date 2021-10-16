@@ -43,8 +43,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public const int BR = 3;
 		static readonly List<WPos> EmptyPath = new List<WPos>(0);
 
-		public bool AtStart = true;
+		public void RenderPath(List<WPos> path)
+		{
+			if (path.Count > 1) // cannot render a path of length 1
+				thisWorld.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPath(path);
+		}
 
+		public bool AtStart = true;
 		public class Interval
 		{
 			public List<CCPos> CCs;
@@ -78,7 +83,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 				if (CCs.Count > 0)
 					world.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().AddInterval(this);
 			}
-
 			public override int GetHashCode() { return CCs.GetHashCode(); }
 		}
 
@@ -367,6 +371,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 				path.Add(sourcePos);
 				path.Reverse();
+
+				#if DEBUGWITHOVERLAY
+				RenderPath(path);
+				#endif
+
 				return path;
 			}
 
@@ -730,6 +739,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 			if (interval.Empty)
 				return new List<Interval>();
 
+			bool IntervalBlocked(CCPos cc) => CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight) &&
+											  CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
+
 			var intervalSet = new List<Interval>();
 			var intervalFirstCC = interval.CCs.FirstOrDefault();
 			var intervalLastCC = interval.CCs.LastOrDefault();
@@ -738,9 +750,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			while (currCCPos.X <= intervalLastCC.X)
 			{
 				// make sure to close interval if this is the last ccPos
-				if ((CellSurroundingCCPosIsBlocked(currCCPos, CellSurroundingCorner.TopRight) &&
-					CellSurroundingCCPosIsBlocked(currCCPos, CellSurroundingCorner.BottomRight)) ||
-					currCCPos == intervalLastCC)
+				if (IntervalBlocked(currCCPos) || currCCPos == intervalLastCC)
 				{
 					var intervalToAdd = new Interval(new List<CCPos>() { priorCCPos, currCCPos });
 					intervalToAdd.Blocked[T] = CellSurroundingCCPosIsBlocked(currCCPos, CellSurroundingCorner.TopRight);
@@ -751,6 +761,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 					#if DEBUGWITHOVERLAY
 					intervalToAdd.RenderIntervalIn(thisWorld);
 					#endif
+
+					if (IntervalBlocked(new CCPos(currCCPos.X + 1, currCCPos.Y, currCCPos.Layer)))
+						break;
 				}
 				currCCPos = new CCPos(currCCPos.X + 1, currCCPos.Y, currCCPos.Layer);
 			}
