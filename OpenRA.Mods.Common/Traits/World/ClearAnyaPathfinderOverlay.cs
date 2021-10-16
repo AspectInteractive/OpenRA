@@ -54,7 +54,12 @@ namespace OpenRA.Mods.Common.Traits
 					help.RegisterHelp(comm.Name, comm.Desc);
 			}
 
-			ClearFunc = () => w.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().ClearIntervals();
+			ClearFunc = () =>
+			{
+				var anyaPathFinderTrait = w.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault();
+				anyaPathFinderTrait.ClearIntervals();
+				anyaPathFinderTrait.ClearPaths();
+			};
 		}
 
 		void IChatCommand.InvokeCommand(string name, string arg)
