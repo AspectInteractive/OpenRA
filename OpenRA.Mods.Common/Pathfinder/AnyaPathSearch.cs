@@ -43,8 +43,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public const int BR = 3;
 		static readonly List<WPos> EmptyPath = new List<WPos>(0);
 
-		public bool AtStart = true;
+		public void RenderPath(List<WPos> path)
+		{
+			if (path.Count > 1) // cannot render a path of length 1
+				thisWorld.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPath(path);
+		}
 
+		public bool AtStart = true;
 		public class Interval
 		{
 			public List<CCPos> CCs;
@@ -78,7 +83,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 				if (CCs.Count > 0)
 					world.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().AddInterval(this);
 			}
-
 			public override int GetHashCode() { return CCs.GetHashCode(); }
 		}
 
@@ -89,7 +93,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			public int Hval = 0;
 			public World thisWorld;
 			public int Gval = int.MaxValue;
-			public int Fval = 0;
+			public int Fval => Gval + Hval;
 			public IntervalState ParentState;
 			public StateListType InList = StateListType.NoList;
 			public IntervalState() { }
@@ -131,7 +135,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			{
 				toState.Gval = fromState.Gval;
 				toState.Hval = fromState.Hval;
-				toState.Fval = fromState.Gval + fromState.Hval;
 			}
 
 			public static bool operator ==(IntervalState state1, IntervalState state2)
@@ -367,6 +370,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 				path.Add(sourcePos);
 				path.Reverse();
+
+				#if DEBUGWITHOVERLAY
+				RenderPath(path);
+				#endif
+
 				return path;
 			}
 
@@ -717,8 +725,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var botLeftBlocked = CellSurroundingCCPosIsBlocked(ccPos, CellSurroundingCorner.BottomLeft);
 			var botRightBlocked = CellSurroundingCCPosIsBlocked(ccPos, CellSurroundingCorner.BottomRight);
 
+			#if DEBUGWITHOVERLAY
 			System.Console.WriteLine($"ccPos {ccPos} has blockages TL:{topLeftBlocked}" +
 									 $",TR:{topRightBlocked},BL:{botLeftBlocked},BR:{botRightBlocked}");
+			#endif
 
 			// At least one corner is blocked while one diagonal is free)
 			return (!topLeftBlocked && !botRightBlocked && (topRightBlocked || botLeftBlocked)) ||
@@ -730,6 +740,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 			if (interval.Empty)
 				return new List<Interval>();
 
+			bool IntervalBlocked(CCPos cc) => CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight) &&
+											  CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
+
 			var intervalSet = new List<Interval>();
 			var intervalFirstCC = interval.CCs.FirstOrDefault();
 			var intervalLastCC = interval.CCs.LastOrDefault();
@@ -738,9 +751,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			while (currCCPos.X <= intervalLastCC.X)
 			{
 				// make sure to close interval if this is the last ccPos
-				if ((CellSurroundingCCPosIsBlocked(currCCPos, CellSurroundingCorner.TopRight) &&
-					CellSurroundingCCPosIsBlocked(currCCPos, CellSurroundingCorner.BottomRight)) ||
-					currCCPos == intervalLastCC)
+				if (IntervalBlocked(currCCPos) || currCCPos == intervalLastCC)
 				{
 					var intervalToAdd = new Interval(new List<CCPos>() { priorCCPos, currCCPos });
 					intervalToAdd.Blocked[T] = CellSurroundingCCPosIsBlocked(currCCPos, CellSurroundingCorner.TopRight);
@@ -751,6 +762,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 					#if DEBUGWITHOVERLAY
 					intervalToAdd.RenderIntervalIn(thisWorld);
 					#endif
+
+					if (IntervalBlocked(new CCPos(currCCPos.X + 1, currCCPos.Y, currCCPos.Layer)))
+						break;
 				}
 				currCCPos = new CCPos(currCCPos.X + 1, currCCPos.Y, currCCPos.Layer);
 			}
@@ -924,6 +938,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		public void GenerateSuccessors_DifferentRow(WPos rootPos, Interval interval, WPos goal, ref List<IntervalState> successors)
 		{
+			const int LEFT = -1;
+			const int RIGHT = -1;
+
 			var dirY = interval.CCs.FirstOrDefault().Y < GetNearestCCPos(rootPos).Y ? -1 : 1; // if root is lower, direction is up, and vice versa
 			var reverseDirY = dirY * (-1);
 			var newRowY = interval.CCs.FirstOrDefault().Y + dirY;
@@ -963,7 +980,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			// NOTE: Once WPos corners are implemented, we need to add Math.Abs(intervalFirstCC.XDbl - intervalFirstCC.X)
 			if (CCPosIsConvexCorner(intervalFirstCC))
 			{
-				if (CCPosDirectionIsBlocked(intervalFirstCC, -1, reverseDirY))
+				if (CCPosDirectionIsBlocked(intervalFirstCC, LEFT, reverseDirY))
 				{
 					// TO DO: Add caching of states within an Index table like in the C++ code (anya_index_table)
 					var intervalLeftOfInterval = GetFirstInterval(intervalFirstCC, 0, IntervalSide.Left);
@@ -971,13 +988,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 						successors.Add(new IntervalState(intervalLeftOfInterval, intervalFirstCCWPos, goal, thisWorld));
 				}
 
-				if (CCPosDirectionIsBlocked(intervalFirstCC, 1, dirY) &&
-				    CCPosDirectionIsBlocked(intervalFirstCC, -1, reverseDirY))
+				if (CCPosDirectionIsBlocked(intervalFirstCC, RIGHT, dirY) &&
+				    CCPosDirectionIsBlocked(intervalFirstCC, LEFT, reverseDirY))
 				{
 					var intervalSet = GenerateSubIntervals(0, intervalFirstCC.X, newRowY, 0, IntervalSide.Left, unBlockedDirY: reverseDirY);
 					AddIntervalListToStateList(intervalSet, ref successors, intervalFirstCCWPos, goal);
 				}
-				else if (CCPosDirectionIsBlocked(intervalFirstCC, -1, dirY))
+				else if (CCPosDirectionIsBlocked(intervalFirstCC, LEFT, dirY))
 				{
 					if (intervalFirstCC.X > GetNearestCCPos(rootPos).X)
 					{
@@ -985,7 +1002,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 						AddIntervalListToStateList(intervalSet, ref successors, intervalFirstCCWPos, goal);
 					}
 				}
-				else if (CCPosDirectionIsBlocked(intervalFirstCC, -1, reverseDirY))
+				else if (CCPosDirectionIsBlocked(intervalFirstCC, LEFT, reverseDirY))
 				{
 					if (newLeft == intersectingLeftEdge)
 					{
@@ -997,7 +1014,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			if (CCPosIsConvexCorner(intervalLastCC))
 			{
-				if (CCPosDirectionIsBlocked(intervalLastCC, 1, reverseDirY))
+				if (CCPosDirectionIsBlocked(intervalLastCC, RIGHT, reverseDirY))
 				{
 					// TO DO: Add caching of states within an Index table like in the C++ code (anya_index_table)
 					var intervalRightOfInterval = GetFirstInterval(intervalLastCC, 0, IntervalSide.Right);
@@ -1005,13 +1022,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 						successors.Add(new IntervalState(intervalRightOfInterval, intervalLastCCWPos, goal, thisWorld));
 				}
 
-				if (CCPosDirectionIsBlocked(intervalLastCC, -1, dirY) &&
-				    CCPosDirectionIsBlocked(intervalLastCC, 1, reverseDirY))
+				if (CCPosDirectionIsBlocked(intervalLastCC, LEFT, dirY) &&
+				    CCPosDirectionIsBlocked(intervalLastCC, RIGHT, reverseDirY))
 				{
 					var intervalSet = GenerateSubIntervals(0, intervalLastCC.X, newRowY, 0, IntervalSide.Right, unBlockedDirY: reverseDirY);
 					AddIntervalListToStateList(intervalSet, ref successors, intervalLastCCWPos, goal);
 				}
-				else if (CCPosDirectionIsBlocked(intervalLastCC, 1, dirY))
+				else if (CCPosDirectionIsBlocked(intervalLastCC, RIGHT, dirY))
 				{
 					if (intervalLastCC.X < GetNearestCCPos(rootPos).X)
 					{
@@ -1019,7 +1036,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 						AddIntervalListToStateList(intervalSet, ref successors, intervalLastCCWPos, goal);
 					}
 				}
-				else if (CCPosDirectionIsBlocked(intervalLastCC, 1, reverseDirY))
+				else if (CCPosDirectionIsBlocked(intervalLastCC, RIGHT, reverseDirY))
 				{
 					if (newRight == intersectingRightEdge)
 					{
@@ -1046,7 +1063,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				successors.Add(new IntervalState(intervalLeft, start, goal, thisWorld));
 				for (var dirY = -1; dirY <= 1; dirY += 1)
 				{
-					if (dirY != 0 && intervalLeft.Blocked[dirY]) // Top is blocked
+					if (dirY != 0 && interval.Blocked[dirY]) // dir is blocked
 					{
 						var intervalSet = GenerateSubIntervals(dirY, intervalFirstCC, 0, IntervalSide.Left, unBlockedDirY: dirY * (-1));
 						AddIntervalListToStateList(intervalSet, ref successors, intervalFirstCCWPos, goal);
@@ -1059,7 +1076,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				successors.Add(new IntervalState(intervalRight, start, goal, thisWorld));
 				for (var dirY = -1; dirY <= 1; dirY += 1)
 				{
-					if (dirY != 0 && intervalRight.Blocked[dirY]) // Top is blocked
+					if (dirY != 0 && interval.Blocked[dirY]) // dir is blocked
 					{
 						var intervalSet = GenerateSubIntervals(dirY, intervalLastCC, 0, IntervalSide.Right, unBlockedDirY: dirY * (-1));
 						AddIntervalListToStateList(intervalSet, ref successors, intervalLastCCWPos, goal);
