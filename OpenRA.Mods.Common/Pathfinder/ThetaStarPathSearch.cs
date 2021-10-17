@@ -264,10 +264,23 @@ namespace OpenRA.Mods.Common.Pathfinder
 		{
 			ResetLists();
 
+			List<WPos> path = new List<WPos>();
 			Source = sourcePos;
 			Dest = destPos;
 
-			List<WPos> path = new List<WPos>();
+			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
+			if (IsPathObservable(sourcePos, destPos))
+			{
+				path.Add(sourcePos);
+				path.Add(destPos);
+
+				#if DEBUGWITHOVERLAY
+				RenderPath(path);
+				#endif
+
+				return path;
+			}
+
 			var sourceCCPos = GetNearestCCPos(sourcePos);
 			var destCCPos = GetNearestCCPos(destPos);
 			var startState = GetState(sourceCCPos);
@@ -277,7 +290,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			AddStateToOpen(startState);
 
 			CCState minState;
-			var maxIters = 100; // For testing only
+			var maxIters = 10000; // For testing only
 			while (OpenList.Count > 0)
 			{
 				maxIters--;
@@ -439,7 +452,39 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			return true;
 		}
-		#pragma warning restore SA1312 // Variable names should begin with lower-case letter
+#pragma warning restore SA1312 // Variable names should begin with lower-case letter
+
+		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
+		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1)
+		{
+			var startingCornerCell = thisWorld.Map.CellContaining(a0);
+			var endingCornerCell = thisWorld.Map.CellContaining(a1);
+
+			var leftMostX = Math.Min(startingCornerCell.X, endingCornerCell.X);
+			var rightMostX = Math.Max(startingCornerCell.X, endingCornerCell.X);
+			var topMostY = Math.Min(startingCornerCell.Y, endingCornerCell.Y);
+			var bottomMostY = Math.Max(startingCornerCell.Y, endingCornerCell.Y);
+
+			var cellsUnderneathLine = new List<CPos>();
+			for (var currCellX = leftMostX; currCellX <= rightMostX; currCellX += 1)
+				for (var currCellY = topMostY; currCellY <= bottomMostY; currCellY += 1)
+					cellsUnderneathLine.Add(new CPos(currCellX, currCellY));
+			return cellsUnderneathLine;
+		}
+
+		public bool AreCellsIntersectingPath(List<CPos> cells, WPos sourcePos, WPos destPos)
+		{
+			foreach (var cell in cells)
+				if (IsCellBlocked(cell) && thisWorld.Map.AnyCellEdgeIntersectsWithLine(cell, sourcePos, destPos))
+					return true;
+			return false;
+		}
+
+		public bool IsPathObservable(WPos rootPos, WPos destPos)
+		{
+			var cellsUnderneathLine = GetAllCellsUnderneathALine(rootPos, destPos);
+			return !AreCellsIntersectingPath(cellsUnderneathLine, rootPos, destPos);
+		}
 
 		private static int HeuristicFunction(CCPos cc, WPos goalPos, World world)
 		{
