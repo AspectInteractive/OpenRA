@@ -910,7 +910,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			foreach (var intervalState in OpenList)
 				intervalState.Gval = 0;
-
 		}
 
 		public CCPos FurthestCCPosFromPos(WPos sourceWPos, List<CCPos> destCCs)

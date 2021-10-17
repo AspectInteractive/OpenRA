@@ -85,6 +85,7 @@ namespace OpenRA.Mods.Common.Traits
 				funcOnLinkedPoints(currItem, nextItem);
 			}
 		}
+
 		public static void GenericLinkedPointsFunc<T1, T2>(List<T1> pointList, int pointListLen, Func<T1, T2> pointUnpacker,
 														Action<T2, T2> funcOnLinkedPoints)
 		{
@@ -166,7 +167,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void AddInterval(Interval interval)
 		{
 			currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon); // each interval has a new colour to show recency
-			// System.Console.WriteLine($"Writing Color: {currHue}, {currSat}, {currLight}");
+			/* System.Console.WriteLine($"Writing Color: {currHue}, {currSat}, {currLight}"); */
 			intervalsWithColors.Add((interval, Color.FromAhsv(currHue, currSat, currLight)));
 		}
 
