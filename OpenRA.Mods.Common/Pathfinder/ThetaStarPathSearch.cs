@@ -320,7 +320,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			Dest = destPos;
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
-			/*if (IsPathObservable(sourcePos, destPos))
+			if (IsPathObservable(sourcePos, destPos))
 			{
 				path.Add(sourcePos);
 				path.Add(destPos);
@@ -330,7 +330,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				#endif
 
 				return path;
-			}*/
+			}
 
 			var sourceCCPos = GetNearestCCPos(sourcePos);
 			var destCCPos = GetNearestCCPos(destPos);
