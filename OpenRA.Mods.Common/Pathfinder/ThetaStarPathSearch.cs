@@ -67,6 +67,14 @@ namespace OpenRA.Mods.Common.Pathfinder
 				CC = cc;
 				Hval = HeuristicFunction(cc, goal, thisWorld);
 			}
+			public CCState(CCPos cc, WPos goal, CCState parentState, World world)
+			{
+				thisWorld = world;
+				CC = cc;
+				Hval = HeuristicFunction(cc, goal, thisWorld);
+				ParentState = parentState;
+			}
+
 			public CCState(CCPos cc, WPos goal, int gVal, CCState parentState, World world)
 			{
 				thisWorld = world;
@@ -85,7 +93,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			public void RenderIn(World world)
 			{
-				world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(CC);
+				world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddState(this);
 			}
 
 			public static void Reflect(CCState fromState, ref CCState toState)
@@ -159,6 +167,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private void AddStateToOpen(CCState state)
 		{
+			UpdateState(state);
+
 			// Remove any matching state that is already in the list
 			var currItem = OpenList.First;
 			while (currItem != null)
@@ -221,6 +231,47 @@ namespace OpenRA.Mods.Common.Pathfinder
 				CCStateList.Add(ccKey, new CCState(cc, Dest, thisWorld));
 			return CCStateList[ccKey];
 		}
+
+		private void UpdateState(CCState state)
+		{
+			var cc = state.CC;
+			var ccKey = (cc.X, cc.Y);
+			if (!CCStateList.ContainsKey(ccKey))
+				CCStateList.Add(ccKey, new CCState(cc, Dest, state.Gval, state.ParentState, thisWorld));
+			CCStateList[ccKey].Gval = state.Gval;
+			CCStateList[ccKey].Hval = state.Hval;
+			CCStateList[ccKey].ParentState = state.ParentState;
+		}
+		private void UpdateState(CCPos cc, CCState parentState, int gval)
+		{
+			var ccKey = (cc.X, cc.Y);
+			if (!CCStateList.ContainsKey(ccKey))
+				CCStateList.Add(ccKey, new CCState(cc, Dest, gval, parentState, thisWorld));
+			CCStateList[ccKey].Gval = gval;
+			CCStateList[ccKey].ParentState = parentState;
+		}
+		private void UpdateState(CCState ccState, CCState parentState, int gval)
+		{ UpdateState(ccState.CC, parentState, gval); }
+
+		private void UpdateState(CCPos cc, int gval)
+		{
+			var ccKey = (cc.X, cc.Y);
+			if (!CCStateList.ContainsKey(ccKey))
+				CCStateList.Add(ccKey, new CCState(cc, Dest, gval, thisWorld));
+			CCStateList[ccKey].Gval = gval;
+		}
+		private void UpdateState(CCState ccState, int gval)
+		{ UpdateState(ccState.CC, gval); }
+
+		private void UpdateState(CCPos cc, CCState parentState)
+		{
+			var ccKey = (cc.X, cc.Y);
+			if (!CCStateList.ContainsKey(ccKey))
+				CCStateList.Add(ccKey, new CCState(cc, Dest, parentState, thisWorld));
+			CCStateList[ccKey].ParentState = parentState;
+		}
+		private void UpdateState(CCState ccState, CCState parentState)
+		{ UpdateState(ccState.CC, parentState); }
 
 		private void RemoveStateFromOpen(CCState state)
 		{
@@ -298,7 +349,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					break;
 
 				minState = PopFirstFromOpen();
-				if (goalState.Gval < minState.Fval)
+				if (GetState(goalState.CC).Gval <= minState.Fval)
 					break;
 
 				var minStateNeighbours = GetNeighbours(minState.CC);
@@ -317,7 +368,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 						CCState newParentState;
 						if (LineOfSight(minState.ParentState.CC, succState.CC))
 						{
-							newParentState = minState.ParentState;
+							newParentState = GetState(minState.ParentState.CC);
 							newGval = newParentState.Gval + newParentState.GetEuclidDistanceTo(succState);
 						}
 						else
@@ -419,8 +470,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
 							return false;
 					if (dy == 0) // If we are moving along a horizontal line, either the north or the south cell should be unblocked.
-						if (IsCellBlocked(new CPos(x1 + Xoffset, y1)) &&
-							IsCellBlocked(new CPos(x1 + Xoffset, y1 + 1)))
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 - 1)) &&
+							IsCellBlocked(new CPos(x1 + Xoffset, y1)))
 							return false;
 
 					x1 += sx;
@@ -442,8 +493,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
 							return false;
 					if (dx == 0)
-						if (IsCellBlocked(new CPos(x1, y1 + Yoffset)) &&
-							IsCellBlocked(new CPos(x1 + 1, y1 + Yoffset)))
+						if (IsCellBlocked(new CPos(x1 - 1, y1 + Yoffset)) &&
+							IsCellBlocked(new CPos(x1, y1 + Yoffset)))
 							return false;
 
 					y1 += sy;

@@ -29,7 +29,7 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		public readonly List<Command> Comms;
 
-		private List<(CCPos, Color)> pointsWithColors = new List<(CCPos, Color)>();
+		private List<(CCState, Color)> pointsWithColors = new List<(CCState, Color)>();
 		private List<List<WPos>> paths = new List<List<WPos>>();
 
 		public bool Enabled;
@@ -117,13 +117,19 @@ namespace OpenRA.Mods.Common.Traits
 			var lineThickness = 3;
 			var endPointRadius = 100;
 			var endPointThickness = 3;
+			var fontName = "TinyBold";
+			var font = Game.Renderer.Fonts[fontName];
 
 			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
 				{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true, 2); };
 
 			// Render Points
-			foreach (var (point, color) in pointsWithColors)
-				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(point), color);
+			foreach (var (ccState, color) in pointsWithColors)
+			{
+				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
+				yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
+															color, $"({ccState.Gval / 1024 / 512})", 4);
+			}
 
 			// Render Paths
 			var lineColor = Color.FromAhsv(pathHue, currSat, currLight);
@@ -135,20 +141,35 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void AddPoint(CCPos cc)
+		public void AddState(CCState ccState)
 		{
-			currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon); // each interval has a new colour to show recency
-			/* System.Console.WriteLine($"Writing Color: {currHue}, {currSat}, {currLight}"); */
-			pointsWithColors.Add((cc, Color.FromAhsv(currHue, currSat, currLight)));
+			pointsWithColors.Add((ccState, Color.FromAhsv(currHue, currSat, currLight)));
+			UpdatePointColors();
 		}
 
-		public void RemovePoint(CCPos cc)
+		public void UpdatePointColors()
 		{
-			foreach (var (currCC, currColor) in pointsWithColors)
+			var newPointsWithColor = new List<(CCState, Color)>();
+			currHue = 0.0F;
+			var currColor = Color.FromAhsv(currHue, currSat, currLight);
+			lineColorIncrement = 1.0F / pointsWithColors.Count;
+
+			for (var i = 0; i < pointsWithColors.Count; i++)
 			{
-				if (currCC == cc)
-					pointsWithColors.Remove((currCC, currColor));
+				newPointsWithColor.Add((pointsWithColors.ElementAt(i).Item1, currColor));
+				currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon);
+				currColor = Color.FromAhsv(currHue, currSat, currLight);
 			}
+
+			pointsWithColors = newPointsWithColor;
+		}
+
+		public void RemoveState(CCState ccState)
+		{
+			foreach (var (currCCstate, currColor) in pointsWithColors)
+				if (currCCstate == ccState)
+					pointsWithColors.Remove((ccState, currColor));
+			UpdatePointColors();
 		}
 
 		public void AddPath(List<WPos> path) { paths.Add(path); }
