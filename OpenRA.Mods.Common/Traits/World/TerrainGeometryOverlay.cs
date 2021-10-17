@@ -34,7 +34,7 @@ namespace OpenRA.Mods.Common.Traits
 			Comms = new List<Command>()
 			{
 				new Command("terrain-geometry", "toggles the terrain geometry overlay.", true),
-				new Command("anyall", "toggles all anya pathfinder overlays.", false)
+				new Command("thetall", "toggles all anya pathfinder overlays.", false)
 			};
 		}
 

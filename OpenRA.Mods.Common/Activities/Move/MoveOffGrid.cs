@@ -19,6 +19,8 @@ using OpenRA.Primitives;
 using OpenRA.Traits;
 
 #pragma warning disable SA1512 // SingleLineCommentsMustNotBeFollowedByBlankLine
+#pragma warning disable SA1515 // Single-line comment should be preceded by blank line
+#pragma warning disable SA1005 // Single line comments should begin with single space
 
 namespace OpenRA.Mods.Common.Activities
 {
@@ -35,16 +37,34 @@ namespace OpenRA.Mods.Common.Activities
 		bool useLastVisibleTarget;
 		readonly List<WPos> positionBuffer = new List<WPos>();
 		readonly Locomotor locomotor;
+		List<WPos> pathRemaining = new List<WPos>();
+		ThetaStarPathSearch thetaStarSearch;
+		WPos currPathTarget;
 
-		public static void TestAnyaPathSearch_SplitIntervalAtCornerPoints(Actor self, Target t)
+		private WPos PopNextTarget()
 		{
-			var anyaSearch = new AnyaPathSearch(self.World, self);
-			var startCCPos = anyaSearch.GetNearestCCPos(self.CenterPosition);
-			var destCCPos = anyaSearch.GetNearestCCPos(t.CenterPosition);
-			var intervalLeft = anyaSearch.GetFirstInterval(startCCPos, 1, AnyaPathSearch.IntervalSide.Left);
-			var intervalRight = anyaSearch.GetFirstInterval(startCCPos, 1, AnyaPathSearch.IntervalSide.Right);
-			var intervalLeftAndRight = new AnyaPathSearch.Interval(intervalLeft.CCs.Union(intervalRight.CCs).ToList());
-			var splitInterval = anyaSearch.SplitIntervalAtCornerPoints(intervalLeftAndRight);
+			var nextTarget = pathRemaining.FirstOrDefault();
+			pathRemaining.RemoveAt(0);
+			return nextTarget;
+		}
+
+		private bool GetNextTargetOrComplete()
+		{
+			if (pathRemaining.Count > 0)
+				currPathTarget = PopNextTarget();
+			else
+			{
+				System.Console.WriteLine("GetNextTargetOrComplete(): No more targets");
+				return true;
+			}
+
+			System.Console.WriteLine("GetNextTargetOrComplete(): More targets available");
+			return false;
+		}
+
+		public bool PosInRange(WPos pos, WPos origin, WDist range)
+		{
+			return (pos - origin).HorizontalLengthSquared <= range.LengthSquared;
 		}
 
 		public MoveOffGrid(Actor self, in Target t, WDist nearEnough, WPos? initialTargetPosition = null, Color? targetLineColor = null)
@@ -56,13 +76,10 @@ namespace OpenRA.Mods.Common.Activities
 
 		public MoveOffGrid(Actor self, in Target t, WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
-			// ISSUE 1: Self Actor needs to be ignored in block checks otherwise will never find a path to the right
-			// ISSUE 2: CCs are not in the right order, larger X values appear earlier than smaller X values, but sometimes
-			//          the reverse is true.
-
 			#if DEBUG || DEBUGWITHOVERLAY
-			var anyaSearch = new AnyaPathSearch(self.World, self);
-			anyaSearch.AnyaFindPath(self.CenterPosition, t.CenterPosition);
+			thetaStarSearch = new ThetaStarPathSearch(self.World, self);
+			pathRemaining = thetaStarSearch.ThetaStarFindPath(self.CenterPosition, t.CenterPosition);
+			GetNextTargetOrComplete();
 			#endif
 
 			mobileOffGrid = self.Trait<MobileOffGrid>();
@@ -170,11 +187,15 @@ namespace OpenRA.Mods.Common.Activities
 
 			var checkTarget = useLastVisibleTarget ? lastVisibleTarget : target;
 			var pos = mobileOffGrid.GetPosition();
-			var delta = checkTarget.CenterPosition - pos;
+			//var delta = checkTarget.CenterPosition - pos;
+			var delta = currPathTarget - pos;
 
 			// Inside the target annulus, so we're done
-			var insideMaxRange = maxRange.Length > 0 && checkTarget.IsInRange(pos, maxRange);
-			var insideMinRange = minRange.Length > 0 && checkTarget.IsInRange(pos, minRange);
+			//var insideMaxRange = maxRange.Length > 0 && checkTarget.IsInRange(pos, maxRange);
+			//var insideMinRange = minRange.Length > 0 && checkTarget.IsInRange(pos, minRange);
+			var insideMaxRange = maxRange.Length > 0 && PosInRange(currPathTarget, pos, maxRange);
+			var insideMinRange = minRange.Length > 0 && PosInRange(currPathTarget, pos, minRange);
+
 			if (insideMaxRange && !insideMinRange)
 				return true;
 
@@ -221,11 +242,11 @@ namespace OpenRA.Mods.Common.Activities
 					}
 				}
 
-				return true;
+				return GetNextTargetOrComplete();
 			}
 
-			if (!HasNotCollided(self, move, locomotor))
-				return false;
+			/*if (!HasNotCollided(self, move, locomotor))
+				return false;*/
 
 			if (!isSlider)
 			{
