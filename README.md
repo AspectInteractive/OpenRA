@@ -7,11 +7,13 @@ Below are a list of core features that will be developed for this purpose.
 - **(DONE)** Implement Non-grid based movement using the existing Aircraft movement as a basis
 - **(DONE)** Implement Non-grid based collision detection with other buildings and units
 - **(DONE)** Implement Non-grid based collision detection with terrain obstacles such as cliffs and rivers
-- **(IN PROGRESS)** Modify or re-implement the pathfinding module for non-grid based movement. An example of such a module can be found with [Age Of Empires II](https://www.gamasutra.com/view/feature/131720/coordinated_unit_movement.php) or StarCraft II.
-- Diamond based grid for building placement as it exists in Age Of Empires II.
+- **(HALF DONE)** Modify or re-implement the pathfinding module for non-grid based movement. An example of such a module can be found with [Age Of Empires II](https://www.gamasutra.com/view/feature/131720/coordinated_unit_movement.php) or StarCraft II.
+  - **(DONE)** Implement Theta Star Pathfinder
+  - **(IN PROGRESS)** Implement Traffic flow to allow units to hug walls and other units during movement
 
 In addition, the below are nice-to-have features that will be developed once the core features are complete.
 
+- Diamond based grid for building placement as it exists in Age Of Empires II.
 - A game balance framework and/or theory that aims to ensure a baseline level of balance among factions can easily be obtained, that avoids as much painstaking trial and error as possible.
 - Client/server architecture, with a competitive matchmaking system that uses Elo to group players into leagues (similar to StarCraft II).
 - A custom map/game module that enables people to create their own spin-off mini-games within the engine, similar to that seen in StarCraft & WarCraft custom maps.
