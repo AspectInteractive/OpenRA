@@ -288,7 +288,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					{
 						int newGval;
 						CCState newParentState;
-						if (LineOfSight(minState.ParentState, succState))
+						if (LineOfSight(minState.ParentState.CC, succState.CC))
 						{
 							newParentState = minState.ParentState;
 							newGval = newParentState.Gval + newParentState.GetEuclidDistanceTo(succState);
@@ -341,12 +341,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var x2 = cc2.X;
 			var y2 = cc2.Y;
 
-
 			var dy = cc2.Y - cc1.Y;
 			var dx = cc2.X - cc1.X;
 
 			var f = 0;
-			int sy, sx;
+			int sy;
+			int sx;
 			int Xoffset;
 			int Yoffset;
 
@@ -354,41 +354,69 @@ namespace OpenRA.Mods.Common.Pathfinder
 			{
 				dy = -dy;
 				sy = -1;
-				Yoffset = 0; // Cell is to the North
+				Yoffset = -1; // Cell is to the North
 			}
 			else
 			{
 				sy = 1;
-				Yoffset = 1; // Cell is to the South
+				Yoffset = 0; // Cell is to the South
 			}
 			if (dx < 0)
 			{
 				dx = -dx;
 				sx = -1;
-				Xoffset = 0; // Cell is to the West
+				Xoffset = -1; // Cell is to the West
 			}
 			else
 			{
 				sx = 1;
-				Xoffset = 1; // Cell is to the East
+				Xoffset = 0; // Cell is to the East
 			}
 
-			if (dx >= dy)
+			if (dx >= dy) // Move along the x axis and increment/decrement y when f >= dx.
 			{
 				while (x1 != x2)
 				{
-					f = f + dy;
-					if (f >= dx)
+					f += dy;
+					if (f >= dx) // We are changing rows, we might need to check two cells this iteration.
 					{
-
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+						y1 += sy;
+						f -= dx;
 					}
+					if (f != 0) // If f == 0, then we are crossing the row at a corner point and we don't need to check both cells.
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+					if (dy == 0) // If we are moving along a horizontal line, either the north or the south cell should be unblocked.
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1)) &&
+							IsCellBlocked(new CPos(x1 + Xoffset, y1 + 1)))
+							return false;
+
+					x1 += sx;
 				}
 			}
-			else
+			else // if (dx < dy). Move along the y axis and increment/decrement x when f >= dy.
 			{
 				while (y1 != y2)
 				{
+					f += dx;
+					if (f >= dy)
+					{
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+						x1 += sx;
+						f -= dy;
+					}
+					if (f != 0)
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+					if (dx == 0)
+						if (IsCellBlocked(new CPos(x1, y1 + Yoffset)) &&
+							IsCellBlocked(new CPos(x1 + 1, y1 + Yoffset)))
+							return false;
 
+					y1 += sy;
 				}
 			}
 
