@@ -93,7 +93,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			public int Hval = 0;
 			public World thisWorld;
 			public int Gval = int.MaxValue;
-			public int Fval = 0;
+			public int Fval => Gval + Hval;
 			public IntervalState ParentState;
 			public StateListType InList = StateListType.NoList;
 			public IntervalState() { }
@@ -135,7 +135,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			{
 				toState.Gval = fromState.Gval;
 				toState.Hval = fromState.Hval;
-				toState.Fval = fromState.Gval + fromState.Hval;
 			}
 
 			public static bool operator ==(IntervalState state1, IntervalState state2)
