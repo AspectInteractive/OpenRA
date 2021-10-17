@@ -17,21 +17,21 @@ using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Traits;
-using static OpenRA.Mods.Common.Pathfinder.AnyaPathSearch;
+using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
 
 namespace OpenRA.Mods.Common.Traits
 {
 	[TraitLocation(SystemActors.World | SystemActors.EditorWorld)]
 	[Desc("Renders a debug overlay of the Anya Pathfinder intervals and paths. Attach this to the world actor.")]
-	public class ClearAnyaPathfinderOverlayInfo : TraitInfo<ClearAnyaPathfinderOverlay> { }
+	public class ClearThetaStarPathfinderOverlayInfo : TraitInfo<ClearThetaStarPathfinderOverlay> { }
 
-	public class ClearAnyaPathfinderOverlay : IWorldLoaded, IChatCommand
+	public class ClearThetaStarPathfinderOverlay : IWorldLoaded, IChatCommand
 	{
 		public readonly List<Command> Comms;
 		public Action ClearFunc;
 		public bool Enabled;
 
-		public ClearAnyaPathfinderOverlay()
+		public ClearThetaStarPathfinderOverlay()
 		{
 			Comms = new List<Command>()
 			{
@@ -56,7 +56,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			ClearFunc = () =>
 			{
-				var anyaPathFinderTrait = w.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault();
+				var anyaPathFinderTrait = w.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault();
 				anyaPathFinderTrait.ClearIntervals();
 				anyaPathFinderTrait.ClearPaths();
 			};

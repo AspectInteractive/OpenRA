@@ -42,7 +42,7 @@ namespace OpenRA.Mods.Common.Traits
 			Comms = new List<Command>()
 			{
 				new Command("cpos-coords", "toggles the cpos coordinates debug overlay.", true),
-				new Command("anyall", "toggles all anya pathfinder overlays.", false)
+				new Command("thetall", "toggles all anya pathfinder overlays.", false)
 			};
 		}
 

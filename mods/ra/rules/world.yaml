@@ -8,8 +8,8 @@
 		VictoryMusic: score
 		DefeatMusic: map
 	TerrainGeometryOverlay:
-    ClearAnyaPathfinderOverlay:
-	AnyaPathfinderOverlay:
+    ClearThetaStarPathfinderOverlay:
+	ThetaStarPathfinderOverlay:
 	CPosCoordsDebugOverlay:
 	DebugVisualizations:
 	Locomotor@FOOT:

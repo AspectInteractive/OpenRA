@@ -39,8 +39,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		public void RenderPath(List<WPos> path)
 		{
+			var renderPath = new List<WPos>();
+			foreach (var pos in path)
+				renderPath.Add(pos);
+
 			if (path.Count > 1) // cannot render a path of length 1
-				thisWorld.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPath(path);
+				thisWorld.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPath(renderPath);
 		}
 
 		public bool AtStart = true;
@@ -77,6 +81,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 				CC = cc;
 				Hval = HeuristicFunction(cc, goal, thisWorld);
 				Gval = gVal;
+			}
+
+			public void RenderIn(World world)
+			{
+				world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(CC);
 			}
 
 			public static void Reflect(CCState fromState, ref CCState toState)
@@ -133,7 +142,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private LinkedList<CCState> OpenList { get; set; }
 		private LinkedList<CCState> ClosedList { get; set; }
-		private Dictionary<(int x, int y), CCState> CCStateList { get; set; }
+		private Dictionary<(int x, int y), CCState> CCStateList = new Dictionary<(int x, int y), CCState>();
 		public enum StateListType : byte { OpenList, ClosedList, NoList }
 
 		private readonly World thisWorld;
@@ -284,6 +293,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 				for (var i = 0; i < minStateNeighbours.Count; i++)
 				{
 					var succState = GetState(minStateNeighbours[i]);
+
+					#if DEBUGWITHOVERLAY
+					succState.RenderIn(thisWorld);
+					#endif
+
 					if (!ClosedList.Any(state => state == succState))
 					{
 						int newGval;
@@ -313,14 +327,17 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			if (goalState.Gval < int.MaxValue)
 			{
+				Func<CCState, CCState> incrementFunc = state => state.ParentState;
 				var currState = goalState;
+				path.Add(destPos); // We add the goal first since it is a WPos, then increment first initially
+				currState = incrementFunc(currState);
 				while (currState != startState)
 				{
 					path.Add(thisWorld.Map.WPosFromCCPos(currState.CC));
-					currState = currState.ParentState;
+					currState = incrementFunc(currState);
 				}
 				// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC));
-				path.Add(thisWorld.Map.WPosFromCCPos(startState.CC));
+				path.Add(sourcePos);
 				path.Reverse();
 
 				#if DEBUGWITHOVERLAY
@@ -426,8 +443,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private static int HeuristicFunction(CCPos cc, WPos goalPos, World world)
 		{
-			// To be implemented
-			return int.MinValue;
+			var ccPos = world.Map.WPosFromCCPos(cc);
+			return (int)(goalPos - ccPos).HorizontalLengthSquared;
+		}
+		private static int HeuristicFunction(WPos startPos, WPos goalPos)
+		{
+			return (int)(goalPos - startPos).HorizontalLengthSquared;
 		}
 
 		private bool CcXinMap(int x) { return x >= ccPosMinSizeX && x <= ccPosMaxSizeX; } // 1 larger than CPos bounds which is MapSize.X - 1
