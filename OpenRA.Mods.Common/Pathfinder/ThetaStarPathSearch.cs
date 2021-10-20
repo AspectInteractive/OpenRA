@@ -167,6 +167,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private void AddStateToOpen(CCState state)
 		{
+			RemoveStateFromOpen(state);
 			UpdateState(state);
 
 			// Remove any matching state that is already in the list
@@ -195,8 +196,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 			else
 				OpenList.AddFirst(state);
 		}
+
 		private void AddStateToClosed(CCState state)
 		{
+			RemoveStateFromClosed(state);
+			UpdateState(state);
+
 			// Remove any matching state that is already in the list
 			var currItem = ClosedList.First;
 			while (currItem != null)
@@ -237,10 +242,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var cc = state.CC;
 			var ccKey = (cc.X, cc.Y);
 			if (!CCStateList.ContainsKey(ccKey))
-				CCStateList.Add(ccKey, new CCState(cc, Dest, state.Gval, state.ParentState, thisWorld));
-			CCStateList[ccKey].Gval = state.Gval;
-			CCStateList[ccKey].Hval = state.Hval;
-			CCStateList[ccKey].ParentState = state.ParentState;
+				CCStateList.Add(ccKey, state);
+			CCStateList[ccKey] = state;
 		}
 		private void UpdateState(CCPos cc, CCState parentState, int gval)
 		{
@@ -311,6 +314,52 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return firstState;
 		}
 
+
+		// This will pad the ccPos in a path with a set amount of padding based on the actor's radius
+		// Four cases: Note that only one direction is shown below, but other directions are simply mirrors
+		//
+		// XO                    OX                   XO                    XO
+		// XX - move point TR    OO - move point BL   XO - move point R     OX - should not happen (to be tested)
+		public WPos PadCC(CCPos cc)
+		{
+			var ccPos = thisWorld.Map.WPosFromCCPos(cc);
+			var tempRadius = 700; // This needs to be updated once the unit's radius can be determined
+
+			var topLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
+			var topRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
+			var botLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
+			var botRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
+
+			var blockedList = new List<bool>() { topLeftBlocked, topRightBlocked, botLeftBlocked, botRightBlocked };
+			var areBlocked = blockedList.Where(c => c == true).ToList();
+
+			if (areBlocked.Count == 1 || areBlocked.Count == 3)
+			{
+				if (topLeftBlocked || (topLeftBlocked && botLeftBlocked && topRightBlocked))
+					return new WPos(ccPos.X + tempRadius, ccPos.Y + tempRadius, ccPos.Z);
+				if (topRightBlocked || (topRightBlocked && topLeftBlocked && botRightBlocked))
+					return new WPos(ccPos.X - tempRadius, ccPos.Y + tempRadius, ccPos.Z);
+				if (botLeftBlocked || (botLeftBlocked && topLeftBlocked && botRightBlocked))
+					return new WPos(ccPos.X + tempRadius, ccPos.Y - tempRadius, ccPos.Z);
+				if (botRightBlocked || (botRightBlocked && botLeftBlocked && topRightBlocked))
+					return new WPos(ccPos.X - tempRadius, ccPos.Y - tempRadius, ccPos.Z);
+			}
+			else if (areBlocked.Count == 2)
+			{
+				if (topLeftBlocked && topRightBlocked)
+					return new WPos(ccPos.X, ccPos.Y + tempRadius, ccPos.Z);
+				if (topLeftBlocked && botLeftBlocked)
+					return new WPos(ccPos.X + tempRadius, ccPos.Y, ccPos.Z);
+				if (botLeftBlocked && botRightBlocked)
+					return new WPos(ccPos.X, ccPos.Y - tempRadius, ccPos.Z);
+				if (topRightBlocked && botRightBlocked)
+					return new WPos(ccPos.X - tempRadius, ccPos.Y, ccPos.Z);
+				return ccPos; // This is the case where the 2 blocked cells are diagonally adjacent, and should never happen.
+			}
+
+			return ccPos;
+		}
+
 		public List<WPos> ThetaStarFindPath(WPos sourcePos, WPos destPos)
 		{
 			ResetLists();
@@ -349,7 +398,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					break;
 
 				minState = PopFirstFromOpen();
-				if (GetState(goalState.CC).Gval <= minState.Fval)
+				if (goalState.Gval <= minState.Fval)
 					break;
 
 				var minStateNeighbours = GetNeighbours(minState.CC);
@@ -368,7 +417,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 						CCState newParentState;
 						if (LineOfSight(minState.ParentState.CC, succState.CC))
 						{
-							newParentState = GetState(minState.ParentState.CC);
+							newParentState = minState.ParentState;
 							newGval = newParentState.Gval + newParentState.GetEuclidDistanceTo(succState);
 						}
 						else
@@ -397,7 +446,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 				currState = incrementFunc(currState);
 				while (currState != startState)
 				{
-					path.Add(thisWorld.Map.WPosFromCCPos(currState.CC));
+					var paddedCCpos = PadCC(currState.CC);
+					// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC)); // Swap above line with this if not using padding
+					path.Add(paddedCCpos);
 					currState = incrementFunc(currState);
 				}
 				// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC));
@@ -494,7 +545,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 							return false;
 					if (dx == 0)
 						if (IsCellBlocked(new CPos(x1 - 1, y1 + Yoffset)) &&
-							IsCellBlocked(new CPos(x1, y1 + Yoffset)))
+							IsCellBlocked(new CPos(x1,     y1 + Yoffset)))
 							return false;
 
 					y1 += sy;

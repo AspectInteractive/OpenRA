@@ -23,6 +23,16 @@ namespace OpenRA
 
 		public WVec(int x, int y, int z) { X = x; Y = y; Z = z; }
 		public WVec(WDist x, WDist y, WDist z) { X = x.Length; Y = y.Length; Z = z.Length; }
+		public WVec(WDist dist, WRot rot)
+		{
+			rot.AsMatrix(out var mtx);
+			var lx = 0L;
+			var ly = (long)-dist.Length;
+			var lz = 0L;
+			X = (int)((lx * mtx.M11 + ly * mtx.M21 + lz * mtx.M31) / mtx.M44);
+			Y = (int)((lx * mtx.M12 + ly * mtx.M22 + lz * mtx.M32) / mtx.M44);
+			Z = (int)((lx * mtx.M13 + ly * mtx.M23 + lz * mtx.M33) / mtx.M44);
+		}
 
 		public static readonly WVec Zero = new WVec(0, 0, 0);
 
@@ -37,6 +47,7 @@ namespace OpenRA
 		public static bool operator !=(in WVec me, in WVec other) { return !(me == other); }
 
 		public static int Dot(in WVec a, in WVec b) { return a.X * b.X + a.Y * b.Y + a.Z * b.Z; }
+
 		public long LengthSquared => (long)X * X + (long)Y * Y + (long)Z * Z;
 		public int Length => (int)Exts.ISqrt(LengthSquared);
 		public long HorizontalLengthSquared => (long)X * X + (long)Y * Y;

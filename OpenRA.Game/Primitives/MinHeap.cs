@@ -30,6 +30,8 @@ namespace OpenRA.Primitives
 			this.comparer = comparer;
 		}
 
+		public int Count => items.Count;
+
 		public bool Empty => items.Count == 0;
 
 		public T Peek()
