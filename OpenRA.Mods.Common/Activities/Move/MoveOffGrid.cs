@@ -21,9 +21,26 @@ using OpenRA.Traits;
 #pragma warning disable SA1512 // SingleLineCommentsMustNotBeFollowedByBlankLine
 #pragma warning disable SA1515 // Single-line comment should be preceded by blank line
 #pragma warning disable SA1005 // Single line comments should begin with single space
+#pragma warning disable SA1513 // Closing brace should be followed by blank line
 
 namespace OpenRA.Mods.Common.Activities
 {
+	public class WVecRotComparer : IComparer<(WVec, int)>
+	{
+		public int Compare((WVec, int) x, (WVec, int) y)
+		{
+			var xRotOffset = x.Item2 > 180 ? 360 - x.Item2 : x.Item2;
+			var yRotOffset = y.Item2 > 180 ? 360 - y.Item2 : y.Item2;
+
+			if (xRotOffset == yRotOffset)
+				return 0;
+			else if (xRotOffset > yRotOffset)
+				return 1;
+			else // <
+				return -1;
+		}
+	}
+
 	public class MoveOffGrid : Activity
 	{
 		readonly MobileOffGrid mobileOffGrid;
@@ -35,11 +52,24 @@ namespace OpenRA.Mods.Common.Activities
 		Target target;
 		Target lastVisibleTarget;
 		bool useLastVisibleTarget;
+		bool searchingForNextTarget = false;
+		bool usePathFinder = true;
+		bool useLocalAvoidance = true;
+		int tickCount = 0;
+		int maxTicksBeforeLOScheck = 3;
+		int lineDefaultLength = 1024;
+		readonly int rotateAmtIfBlocked = 2;
 		readonly List<WPos> positionBuffer = new List<WPos>();
 		readonly Locomotor locomotor;
 		List<WPos> pathRemaining = new List<WPos>();
 		ThetaStarPathSearch thetaStarSearch;
 		WPos currPathTarget;
+
+		private void RequeueTargetAndSetCurrTo(WPos target)
+		{
+			pathRemaining.Insert(0, currPathTarget);
+			currPathTarget = target;
+		}
 
 		private WPos PopNextTarget()
 		{
@@ -62,10 +92,52 @@ namespace OpenRA.Mods.Common.Activities
 			return false;
 		}
 
-		public bool PosInRange(WPos pos, WPos origin, WDist range)
+		public static bool PosInRange(WPos pos, WPos origin, WDist range)
 		{
 			return (pos - origin).HorizontalLengthSquared <= range.LengthSquared;
 		}
+
+		public static WPos NearestPosInMap(Actor self, WPos pos)
+		{
+			var map = self.World.Map;
+			var topLeftPos = map.TopLeftOfCell(new CPos(0, 0));
+			var botRightPos = map.BottomRightOfCell(new CPos(map.MapSize.X - 1, map.MapSize.Y - 1));
+			return new WPos(Math.Max(topLeftPos.X, Math.Min(botRightPos.X, pos.X)),
+							Math.Max(topLeftPos.Y, Math.Min(botRightPos.Y, pos.Y)), pos.Z);
+		}
+		public static int MaxLengthInMap(Actor self)
+		{
+			var map = self.World.Map;
+			var topLeftPos = map.TopLeftOfCell(new CPos(0, 0));
+			var botRightPos = map.BottomRightOfCell(new CPos(map.MapSize.X - 1, map.MapSize.Y - 1));
+			return (botRightPos - topLeftPos).Length;
+		}
+
+
+		public static void RenderLine(Actor self, List<WPos> line)
+		{
+			var renderLine = new List<WPos>();
+			foreach (var pos in line)
+				renderLine.Add(pos);
+
+			if (line.Count > 1) // cannot render a path of length 1
+				self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
+		}
+		public static void RenderLine(Actor self, WPos pos1, WPos pos2)
+		{
+			var renderLine = new List<WPos>() { pos1, pos2 };
+			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
+		}
+
+		public static void RenderPoint(Actor self, WPos pos)
+		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
+		public static void RenderPoint(Actor self, WPos pos, Color color)
+		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color); }
+
+
+		/* --- Not Working ---
+		 * public static WVec CombineDistAndYawVecWithRotation(WDist dist, WVec yawVec, WRot rotation)
+		{ return new WVec(dist, WRot.FromYaw(yawVec.Rotate(rotation).Yaw)); }*/
 
 		public MoveOffGrid(Actor self, in Target t, WDist nearEnough, WPos? initialTargetPosition = null, Color? targetLineColor = null)
 			: this(self, t, initialTargetPosition, targetLineColor)
@@ -76,14 +148,22 @@ namespace OpenRA.Mods.Common.Activities
 
 		public MoveOffGrid(Actor self, in Target t, WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
-			#if DEBUG || DEBUGWITHOVERLAY
-			thetaStarSearch = new ThetaStarPathSearch(self.World, self);
-			pathRemaining = thetaStarSearch.ThetaStarFindPath(self.CenterPosition, t.CenterPosition);
+			usePathFinder = false;
+			useLocalAvoidance = true;
+
+			if (usePathFinder)
+			{
+				thetaStarSearch = new ThetaStarPathSearch(self.World, self);
+				pathRemaining = thetaStarSearch.ThetaStarFindPath(self.CenterPosition, t.CenterPosition);
+			}
+			else
+				pathRemaining = new List<WPos>() { t.CenterPosition };
+
 			GetNextTargetOrComplete();
-			#endif
 
 			mobileOffGrid = self.Trait<MobileOffGrid>();
 			target = t;
+
 			this.targetLineColor = targetLineColor;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 
@@ -108,10 +188,17 @@ namespace OpenRA.Mods.Common.Activities
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
 
+		public static WVec MoveStep(int speed, WAngle facing)
+		{
+			var dir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(facing));
+			return speed * dir / 1024;
+		}
+
 		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOffGrid, WAngle desiredFacing, WDist desiredAltitude, in WVec moveOverride, bool idleTurn = false)
 		{
 			var dat = self.World.Map.DistanceAboveTerrain(mobileOffGrid.CenterPosition);
-			var move = mobileOffGrid.Info.CanSlide ? mobileOffGrid.FlyStep(desiredFacing) : mobileOffGrid.FlyStep(mobileOffGrid.Facing);
+			var speed = mobileOffGrid.MovementSpeed;
+			var move = mobileOffGrid.Info.CanSlide ? MoveStep(speed, desiredFacing) : MoveStep(speed, mobileOffGrid.Facing);
 			if (moveOverride != WVec.Zero)
 				move = moveOverride;
 
@@ -201,7 +288,8 @@ namespace OpenRA.Mods.Common.Activities
 
 			var isSlider = mobileOffGrid.Info.CanSlide;
 			var desiredFacing = delta.HorizontalLengthSquared != 0 ? delta.Yaw : mobileOffGrid.Facing;
-			var move = isSlider ? mobileOffGrid.FlyStep(desiredFacing) : mobileOffGrid.FlyStep(mobileOffGrid.Facing);
+			var speed = mobileOffGrid.MovementSpeed;
+			var move = isSlider ? MoveStep(speed, desiredFacing) : MoveStep(speed, mobileOffGrid.Facing);
 
 			// Inside the minimum range, so reverse if we CanSlide, otherwise face away from the target.
 			if (insideMinRange)
@@ -245,8 +333,77 @@ namespace OpenRA.Mods.Common.Activities
 				return GetNextTargetOrComplete();
 			}
 
-			/*if (!HasNotCollided(self, move, locomotor))
-				return false;*/
+			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
+			if (useLocalAvoidance && !HasNotCollided(self, move, locomotor))
+			{
+				var revisedMove = move;
+				var rotation = WRot.FromYaw(move.Yaw); // will be overwritten, so value does not matter
+				var n = 1;
+
+				// Find a direction that isn't blocked
+				// TO DO: Make this rotation use the closest direction first
+				// TO DO IMPORTANT: This cannot be a while loop, has to run simultaneously or using a global variable
+				var availableMoves = new MinHeap<(WVec, int)>(new WVecRotComparer());
+				while (rotateAmtIfBlocked * n < 360)
+				{
+					rotation = new WRot(WAngle.Zero, WAngle.Zero, WAngle.FromDegrees(rotateAmtIfBlocked * n));
+					revisedMove = move.Rotate(rotation);
+					if (HasNotCollided(self, revisedMove, locomotor))
+					{
+						availableMoves.Add((revisedMove, rotateAmtIfBlocked * n));
+						RenderPoint(self, mobileOffGrid.CenterPosition + revisedMove);
+					}
+					n++;
+				}
+
+				// TO DO: Need a way to reset units that get stuck. Maybe set a flag?
+
+				var candidateMove = move;
+				var movesAdded = 0;
+				// Create a maximum length target in the direction of
+				if (availableMoves.Count > 0 && !HasNotCollided(self, candidateMove, locomotor))
+				{
+					movesAdded++;
+					candidateMove = availableMoves.Pop().Item1;
+					var maxLengthInMap = MaxLengthInMap(self);
+					var newTargDistScalar = maxLengthInMap / candidateMove.Length;
+					var renderLineDistScalar = lineDefaultLength / candidateMove.Length;
+					var newTargDelta = candidateMove * newTargDistScalar;
+
+					#if DEBUGWITHOVERLAY
+					var renderLineDelta = candidateMove * renderLineDistScalar;
+					System.Console.WriteLine($"newTargDelta.Yaw deg: {newTargDelta.Yaw.RendererDegrees()}" +
+											 $",revisedMove.Yaw deg: {candidateMove.Yaw.RendererDegrees()}");
+					RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + renderLineDelta);
+					RenderPoint(self, mobileOffGrid.CenterPosition + candidateMove, Color.LightGreen);
+					#endif
+
+					var newTarget = NearestPosInMap(self, mobileOffGrid.CenterPosition + newTargDelta);
+					if (movesAdded <= 0)
+						RequeueTargetAndSetCurrTo(newTarget);
+					else
+						currPathTarget = newTarget; // If we are already retargeting, do not keep adding targets, replace existing
+					searchingForNextTarget = true;
+				}
+				else if (!HasNotCollided(self, candidateMove, locomotor)) // No more moves left yet still blocked, so return false
+					return false;
+			}
+
+			if (useLocalAvoidance && searchingForNextTarget)
+			{
+				if (tickCount >= maxTicksBeforeLOScheck)
+					tickCount = 0;
+				else if (tickCount == 0)
+				{
+					// We can abandon the local avoidance strategy 
+					if (TargetInLOS(self, move, locomotor, pathRemaining.FirstOrDefault()))
+					{
+						searchingForNextTarget = false;
+						return GetNextTargetOrComplete();
+					}
+				}
+				tickCount++;
+			}
 
 			if (!isSlider)
 			{
@@ -277,6 +434,21 @@ namespace OpenRA.Mods.Common.Activities
 			return false;
 		}
 
+		// Cheap LOS checking to validate whether we can see the next target or not (and cancel any existing local avoidance strategy)
+		private bool TargetInLOS(Actor self, WVec move, Locomotor locomotor, WPos targPos)
+		{
+			var stepsToTarg = (int)((mobileOffGrid.CenterPosition - targPos).HorizontalLengthSquared / move.HorizontalLengthSquared);
+			var stepDelta = (mobileOffGrid.CenterPosition - targPos) / stepsToTarg;
+			var n = 1;
+			while (n < stepsToTarg)
+			{
+				if (!HasNotCollided(self, stepDelta * n, locomotor))
+					return false;
+				n++;
+			}
+			return true;
+		}
+
 		public override IEnumerable<Target> GetTargets(Actor self)
 		{
 			yield return target;
@@ -292,7 +464,8 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			var destActorsWithinRange = self.World.FindActorsOnCircle(self.CenterPosition, new WDist(move.Length * 2)); // we double move length to widen search radius
 			var selfCenterPos = self.CenterPosition.XYToInt2();
-			var selfCenterPosWithMove = (self.CenterPosition + move * 2).XYToInt2();
+			var selfCenterPosWithMove = (self.CenterPosition + move).XYToInt2();
+			var selfCenterPosWithMoveTwo = (self.CenterPosition + move * 2).XYToInt2();
 			/*var cellsToCheck = Util.ExpandFootprint(self.World.Map.CellContaining(selfCenterPosWithMove_WPos), true);*/
 
 			// for each actor we are potentially colliding with
@@ -305,9 +478,11 @@ namespace OpenRA.Mods.Common.Activities
 					var cornerWithMove = corner + move * 2;
 					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
 					var cell = self.World.Map.CellContaining(corner);
-					var cellWithMove = self.World.Map.CellContaining(corner + move * 2);
+					var cellWithMove = self.World.Map.CellContaining(corner + move);
+					var cellWithMoveTwo = self.World.Map.CellContaining(corner + move * 2);
 					if (locomotor.MovementCostToEnterCell(default, cell, BlockedByActor.None, self) == short.MaxValue &&
-						locomotor.MovementCostToEnterCell(default, cellWithMove, BlockedByActor.None, self) == short.MaxValue)
+						locomotor.MovementCostToEnterCell(default, cellWithMove, BlockedByActor.None, self) == short.MaxValue &&
+						locomotor.MovementCostToEnterCell(default, cellWithMoveTwo, BlockedByActor.None, self) == short.MaxValue)
 					{
 						/*System.Console.WriteLine($"collided with cell {cell} with value {short.MaxValue}");*/
 						return false;
@@ -325,7 +500,9 @@ namespace OpenRA.Mods.Common.Activities
 						{
 							var hasCollision = destShape.Info.Type.IntersectsWithHitShape(selfCenterPos, destActorCenterPos, selfShape);
 							var hasCollisionWithMove = destShape.Info.Type.IntersectsWithHitShape(selfCenterPosWithMove, destActorCenterPos, selfShape);
-							if (hasCollision && hasCollisionWithMove) // checking hasCollisionWithMove ensures we don't get stuck if moving out/away from the collision
+							var hasCollisionWithMoveTwo = destShape.Info.Type.IntersectsWithHitShape(selfCenterPosWithMoveTwo, destActorCenterPos, selfShape);
+							// checking hasCollisionWithMove ensures we don't get stuck if moving out/away from the collision
+							if (hasCollision && hasCollisionWithMove && hasCollisionWithMoveTwo)
 								return false;
 						}
 					}

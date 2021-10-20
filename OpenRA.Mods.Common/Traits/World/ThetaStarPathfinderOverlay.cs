@@ -29,12 +29,18 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		public readonly List<Command> Comms;
 
-		private List<(CCState, Color)> pointsWithColors = new List<(CCState, Color)>();
+		private List<(WPos, Color)> pointsWithColors = new List<(WPos, Color)>();
+		private List<(CCState, Color)> statesWithColors = new List<(CCState, Color)>();
 		private List<List<WPos>> paths = new List<List<WPos>>();
+		private List<List<WPos>> lines = new List<List<WPos>>();
+
+		private bool showCosts = false;
 
 		public bool Enabled;
 		private float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
+		private float pointHue = Color.Red.ToAhsv().H; // 0.0 - 1.0
 		private float pathHue = Color.Yellow.ToAhsv().H; // 0.0 - 1.0
+		private float lineHue = Color.LightBlue.ToAhsv().H; // 0.0 - 1.0
 		private float currSat = 1.0F; // 0.0 - 1.0
 		private float currLight = 0.7F; // 0.0 - 1.0 with 1.0 being brightest
 		private float lineColorIncrement = 0.05F;
@@ -119,32 +125,41 @@ namespace OpenRA.Mods.Common.Traits
 			var endPointThickness = 3;
 			var fontName = "TinyBold";
 			var font = Game.Renderer.Fonts[fontName];
+			Color lineColor;
 
 			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
 				{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true, 2); };
 
-			// Render Points
-			foreach (var (ccState, color) in pointsWithColors)
+			// Render States
+			foreach (var (ccState, color) in statesWithColors)
 			{
 				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
-				yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
+				if (showCosts)
+					yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
 															color, $"({ccState.Gval / 1024 / 512})", 4);
 			}
 
+			// Render Points
+			foreach (var (point, color) in pointsWithColors)
+				yield return pointRenderFunc(point, color);
+
 			// Render Paths
-			var lineColor = Color.FromAhsv(pathHue, currSat, currLight);
+			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
 			foreach (var path in paths)
 			{
 				var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
 				foreach (var line in linesToRender)
 					yield return line;
 			}
-		}
 
-		public void AddState(CCState ccState)
-		{
-			pointsWithColors.Add((ccState, Color.FromAhsv(currHue, currSat, currLight)));
-			UpdatePointColors();
+			// Render Lines
+			lineColor = Color.FromAhsv(lineHue, currSat, currLight);
+			foreach (var line in lines)
+			{
+				var linesToRender = GetPathRenderableSet(line, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
+				foreach (var l in linesToRender)
+					yield return l;
+			}
 		}
 
 		public void UpdatePointColors()
@@ -152,23 +167,48 @@ namespace OpenRA.Mods.Common.Traits
 			var newPointsWithColor = new List<(CCState, Color)>();
 			currHue = 0.0F;
 			var currColor = Color.FromAhsv(currHue, currSat, currLight);
-			lineColorIncrement = 1.0F / pointsWithColors.Count;
+			lineColorIncrement = 1.0F / statesWithColors.Count;
 
-			for (var i = 0; i < pointsWithColors.Count; i++)
+			for (var i = 0; i < statesWithColors.Count; i++)
 			{
-				newPointsWithColor.Add((pointsWithColors.ElementAt(i).Item1, currColor));
+				newPointsWithColor.Add((statesWithColors.ElementAt(i).Item1, currColor));
 				currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon);
 				currColor = Color.FromAhsv(currHue, currSat, currLight);
 			}
 
-			pointsWithColors = newPointsWithColor;
+			statesWithColors = newPointsWithColor;
+		}
+
+		public void AddState(CCState ccState)
+		{
+			statesWithColors.Add((ccState, Color.FromAhsv(currHue, currSat, currLight)));
+			UpdatePointColors();
 		}
 
 		public void RemoveState(CCState ccState)
 		{
-			foreach (var (currCCstate, currColor) in pointsWithColors)
+			foreach (var (currCCstate, currColor) in statesWithColors)
 				if (currCCstate == ccState)
-					pointsWithColors.Remove((ccState, currColor));
+					statesWithColors.Remove((ccState, currColor));
+			UpdatePointColors();
+		}
+
+		public void AddPoint(WPos pos)
+		{
+			pointsWithColors.Add((pos, Color.FromAhsv(pointHue, currSat, currLight)));
+			UpdatePointColors();
+		}
+		public void AddPoint(WPos pos, Color color)
+		{
+			pointsWithColors.Add((pos, color));
+			UpdatePointColors();
+		}
+
+		public void RemovePoint(WPos pos)
+		{
+			foreach (var (currPos, currColor) in pointsWithColors)
+				if (currPos == pos)
+					pointsWithColors.Remove((pos, currColor));
 			UpdatePointColors();
 		}
 
@@ -179,9 +219,19 @@ namespace OpenRA.Mods.Common.Traits
 				if (currPath == path)
 					paths.Remove(currPath);
 		}
+		public void AddLine(List<WPos> line) { lines.Add(line); }
+		public void RemoveLine(List<WPos> line)
+		{
+			foreach (var currLine in lines)
+				if (currLine == line)
+					lines.Remove(currLine);
+		}
 
-		public void ClearIntervals() { pointsWithColors.Clear(); }
+		public void ClearIntervals() { statesWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
+		public void ClearLines() { lines.Clear(); }
+		public void ClearStates() { statesWithColors.Clear(); }
+		public void ClearPoints() { pointsWithColors.Clear(); }
 
 		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}
