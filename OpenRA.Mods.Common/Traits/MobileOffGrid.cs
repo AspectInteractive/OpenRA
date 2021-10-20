@@ -996,16 +996,6 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Activity ScriptedMove(CPos cell) { return new Move(self, cell); }
 		public Activity MoveTo(Func<BlockedByActor, List<CPos>> pathFunc) { return new Move(self, pathFunc); }
-		public WVec FlyStep(WAngle facing)
-		{
-			return FlyStep(MovementSpeed, facing);
-		}
-
-		public WVec FlyStep(int speed, WAngle facing)
-		{
-			var dir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(facing));
-			return speed * dir / 1024;
-		}
 
 		Activity LocalMove(Actor self, WPos fromPos, WPos toPos, CPos cell)
 		{

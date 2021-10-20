@@ -56,9 +56,12 @@ namespace OpenRA.Mods.Common.Traits
 
 			ClearFunc = () =>
 			{
-				var anyaPathFinderTrait = w.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault();
-				anyaPathFinderTrait.ClearIntervals();
-				anyaPathFinderTrait.ClearPaths();
+				var thetaStarPathFinderTrait = w.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault();
+				thetaStarPathFinderTrait.ClearIntervals();
+				thetaStarPathFinderTrait.ClearPaths();
+				thetaStarPathFinderTrait.ClearLines();
+				thetaStarPathFinderTrait.ClearStates();
+				thetaStarPathFinderTrait.ClearPoints();
 			};
 		}
 
