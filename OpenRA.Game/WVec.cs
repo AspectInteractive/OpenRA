@@ -84,6 +84,9 @@ namespace OpenRA
 			}
 		}
 
+		public int CrossProduct(WPos p) { return Yaw.Cos() * (Yaw.Sin() * p.Y - Yaw.Cos() * p.X); }
+		public static int CrossProduct(WVec vec, WPos p) { return vec.Yaw.Cos() * (vec.Yaw.Sin() * p.Y - vec.Yaw.Cos() * p.X); }
+
 		public static WVec Lerp(in WVec a, in WVec b, int mul, int div) { return a + (b - a) * mul / div; }
 
 		public static WVec LerpQuadratic(in WVec a, in WVec b, WAngle pitch, int mul, int div)

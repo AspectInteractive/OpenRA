@@ -55,10 +55,11 @@ namespace OpenRA.Mods.Common.Activities
 		bool searchingForNextTarget = false;
 		bool usePathFinder = true;
 		bool useLocalAvoidance = true;
+		int rightAngleTurns = 0;
 		int tickCount = 0;
 		int maxTicksBeforeLOScheck = 3;
-		int lineDefaultLength = 1024;
-		readonly int rotateAmtIfBlocked = 2;
+		int lineDefaultLength = 10240;
+		readonly int rotateAmtIfBlocked = 5;
 		readonly List<WPos> positionBuffer = new List<WPos>();
 		readonly Locomotor locomotor;
 		List<WPos> pathRemaining = new List<WPos>();
@@ -95,6 +96,19 @@ namespace OpenRA.Mods.Common.Activities
 		public static bool PosInRange(WPos pos, WPos origin, WDist range)
 		{
 			return (pos - origin).HorizontalLengthSquared <= range.LengthSquared;
+		}
+
+		public static int Nearest90Deg(int deg)
+		{
+			var midPoint = 128; // Use this to avoid division to preserve fixed point math
+			var degMod = deg < 0 ? deg + 1024 : deg % 1024;
+			var angles = new List<int>() { 0, 256, 512, 768, 1024 };
+
+			for (var i = 0; i < angles.Count - 1; i++)
+				if (degMod >= angles[i] && degMod < angles[i + 1])
+					return degMod < angles[i] + midPoint ? angles[i] : angles[i + 1];
+
+			return -1; // Should never happen
 		}
 
 		public static WPos NearestPosInMap(Actor self, WPos pos)
@@ -329,65 +343,45 @@ namespace OpenRA.Mods.Common.Activities
 						MoveOffGridTick(self, mobileOffGrid, desiredFacing, dat, deltaMove);
 					}
 				}
-
+				searchingForNextTarget = false;
 				return GetNextTargetOrComplete();
 			}
 
 			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			if (useLocalAvoidance && !HasNotCollided(self, move, locomotor))
+			if (useLocalAvoidance && !HasNotCollided(self, move * 3, 3, locomotor) && !searchingForNextTarget)
 			{
-				var revisedMove = move;
-				var rotation = WRot.FromYaw(move.Yaw); // will be overwritten, so value does not matter
-				var n = 1;
-
-				// Find a direction that isn't blocked
-				// TO DO: Make this rotation use the closest direction first
-				// TO DO IMPORTANT: This cannot be a while loop, has to run simultaneously or using a global variable
-				var availableMoves = new MinHeap<(WVec, int)>(new WVecRotComparer());
-				while (rotateAmtIfBlocked * n < 360)
+				// > 0 means the point is to the right of the current move angle, < 0 means the point is to the left.
+				var leftOrRightInc = move.CrossProduct(currPathTarget) > 0 ? -1 : 1;
+				WVec revisedMove;
+				var i = 0;
+				do
 				{
-					rotation = new WRot(WAngle.Zero, WAngle.Zero, WAngle.FromDegrees(rotateAmtIfBlocked * n));
-					revisedMove = move.Rotate(rotation);
-					if (HasNotCollided(self, revisedMove, locomotor))
-					{
-						availableMoves.Add((revisedMove, rotateAmtIfBlocked * n));
-						RenderPoint(self, mobileOffGrid.CenterPosition + revisedMove);
-					}
-					n++;
+					var newDegrees = move.Yaw.Angle + 256 * leftOrRightInc;
+					System.Console.WriteLine($"existing deg: {(move.Yaw.Angle)}, new deg: {newDegrees}");
+					var newAngle = new WAngle(Nearest90Deg(newDegrees));
+					revisedMove = new WVec(new WDist(move.Length), WRot.FromYaw(newAngle));
+					i++;
 				}
+				while (!HasNotCollided(self, revisedMove, 3, locomotor) && i < 4);
 
 				// TO DO: Need a way to reset units that get stuck. Maybe set a flag?
+				rightAngleTurns += leftOrRightInc;
+				var newTargDelta = revisedMove * lineDefaultLength / revisedMove.Length;
 
-				var candidateMove = move;
-				var movesAdded = 0;
-				// Create a maximum length target in the direction of
-				if (availableMoves.Count > 0 && !HasNotCollided(self, candidateMove, locomotor))
-				{
-					movesAdded++;
-					candidateMove = availableMoves.Pop().Item1;
-					var maxLengthInMap = MaxLengthInMap(self);
-					var newTargDistScalar = maxLengthInMap / candidateMove.Length;
-					var renderLineDistScalar = lineDefaultLength / candidateMove.Length;
-					var newTargDelta = candidateMove * newTargDistScalar;
+				#if DEBUGWITHOVERLAY
+				System.Console.WriteLine($"move.Yaw {move.Yaw}" +
+										 $",newTargDelta.Yaw: {newTargDelta.Yaw}" +
+									     $",revisedMove.Yaw: {revisedMove.Yaw}");
+				RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + newTargDelta);
+				RenderPoint(self, mobileOffGrid.CenterPosition + revisedMove, Color.LightGreen);
+				#endif
 
-					#if DEBUGWITHOVERLAY
-					var renderLineDelta = candidateMove * renderLineDistScalar;
-					System.Console.WriteLine($"newTargDelta.Yaw deg: {newTargDelta.Yaw.RendererDegrees()}" +
-											 $",revisedMove.Yaw deg: {candidateMove.Yaw.RendererDegrees()}");
-					RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + renderLineDelta);
-					RenderPoint(self, mobileOffGrid.CenterPosition + candidateMove, Color.LightGreen);
-					#endif
-
-					var newTarget = NearestPosInMap(self, mobileOffGrid.CenterPosition + newTargDelta);
-					if (movesAdded <= 0)
-						RequeueTargetAndSetCurrTo(newTarget);
-					else
-						currPathTarget = newTarget; // If we are already retargeting, do not keep adding targets, replace existing
-					searchingForNextTarget = true;
-				}
-				else if (!HasNotCollided(self, candidateMove, locomotor)) // No more moves left yet still blocked, so return false
-					return false;
+				var newTarget = NearestPosInMap(self, mobileOffGrid.CenterPosition + newTargDelta);
+				RequeueTargetAndSetCurrTo(newTarget); // Put existing target back in queue and set the curr target to the new one
+				searchingForNextTarget = true;
 			}
+			/*else if (!HasNotCollided(self, move, 1, locomotor)) // No more moves left yet still blocked, so return false
+				return false;*/
 
 			if (useLocalAvoidance && searchingForNextTarget)
 			{
@@ -442,7 +436,7 @@ namespace OpenRA.Mods.Common.Activities
 			var n = 1;
 			while (n < stepsToTarg)
 			{
-				if (!HasNotCollided(self, stepDelta * n, locomotor))
+				if (!HasNotCollided(self, stepDelta * n, 3, locomotor))
 					return false;
 				n++;
 			}
@@ -460,12 +454,13 @@ namespace OpenRA.Mods.Common.Activities
 				yield return new TargetLineNode(useLastVisibleTarget ? lastVisibleTarget : target, targetLineColor.Value);
 		}
 
-		public static bool HasNotCollided(Actor self, WVec move, Locomotor locomotor)
+		public static bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor)
 		{
 			var destActorsWithinRange = self.World.FindActorsOnCircle(self.CenterPosition, new WDist(move.Length * 2)); // we double move length to widen search radius
 			var selfCenterPos = self.CenterPosition.XYToInt2();
-			var selfCenterPosWithMove = (self.CenterPosition + move).XYToInt2();
-			var selfCenterPosWithMoveTwo = (self.CenterPosition + move * 2).XYToInt2();
+			var selfCenterPosWithMoves = new List<int2>();
+			for (var i = 0; i < lookAhead; i++)
+				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
 			/*var cellsToCheck = Util.ExpandFootprint(self.World.Map.CellContaining(selfCenterPosWithMove_WPos), true);*/
 
 			// for each actor we are potentially colliding with
@@ -478,11 +473,12 @@ namespace OpenRA.Mods.Common.Activities
 					var cornerWithMove = corner + move * 2;
 					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
 					var cell = self.World.Map.CellContaining(corner);
-					var cellWithMove = self.World.Map.CellContaining(corner + move);
-					var cellWithMoveTwo = self.World.Map.CellContaining(corner + move * 2);
-					if (locomotor.MovementCostToEnterCell(default, cell, BlockedByActor.None, self) == short.MaxValue &&
-						locomotor.MovementCostToEnterCell(default, cellWithMove, BlockedByActor.None, self) == short.MaxValue &&
-						locomotor.MovementCostToEnterCell(default, cellWithMoveTwo, BlockedByActor.None, self) == short.MaxValue)
+					var cellWithMovesBlocked = new List<bool>();
+					Func<CPos, bool> cellIsBlocked = c =>
+						{ return locomotor.MovementCostToEnterCell(default, c, BlockedByActor.None, self) == short.MaxValue; };
+					for (var i = 0; i < lookAhead; i++)
+						cellWithMovesBlocked.Add(cellIsBlocked(self.World.Map.CellContaining(corner + move * i)));
+					if (cellIsBlocked(cell) && cellWithMovesBlocked.Any(c => c == true))
 					{
 						/*System.Console.WriteLine($"collided with cell {cell} with value {short.MaxValue}");*/
 						return false;
@@ -499,10 +495,13 @@ namespace OpenRA.Mods.Common.Activities
 						foreach (var destShape in destShapes)
 						{
 							var hasCollision = destShape.Info.Type.IntersectsWithHitShape(selfCenterPos, destActorCenterPos, selfShape);
-							var hasCollisionWithMove = destShape.Info.Type.IntersectsWithHitShape(selfCenterPosWithMove, destActorCenterPos, selfShape);
-							var hasCollisionWithMoveTwo = destShape.Info.Type.IntersectsWithHitShape(selfCenterPosWithMoveTwo, destActorCenterPos, selfShape);
+							var posWithMovesBlocked = new List<bool>();
+							Func<int2, bool> posIsColliding = p =>
+								{ return destShape.Info.Type.IntersectsWithHitShape(p, destActorCenterPos, selfShape); };
+							for (var i = 0; i < lookAhead; i++)
+								posWithMovesBlocked.Add(posIsColliding(selfCenterPosWithMoves[i]));
 							// checking hasCollisionWithMove ensures we don't get stuck if moving out/away from the collision
-							if (hasCollision && hasCollisionWithMove && hasCollisionWithMoveTwo)
+							if (hasCollision && posWithMovesBlocked.Any(p => p == true))
 								return false;
 						}
 					}
