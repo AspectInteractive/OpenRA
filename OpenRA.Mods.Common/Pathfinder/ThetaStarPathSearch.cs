@@ -30,6 +30,7 @@ using OpenRA.Traits;
 #pragma warning disable SA1307 // AccessibleFieldsMustBeginWithUpperCaseLetter
 #pragma warning disable SA1513 // ClosingCurlyBracketMustBeFollowedByBlankLine
 #pragma warning disable SA1515 // SingleLineCommentsMustBePrecededByBlankLine
+#pragma warning disable SA1312 // Variable names should begin with lower-case letter
 
 namespace OpenRA.Mods.Common.Pathfinder
 {
@@ -409,27 +410,71 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			var sourceCCPos = GetNearestCCPos(sourcePos);
 			var destCCPos = GetNearestCCPos(destPos);
+
+			// If CCPos cannot be traversed to, find nearest one that can be
+			if (!CcinMap(destCCPos) || GetNeighbours(destCCPos).Count == 0)
+			{
+				var newCellCandidates = new List<CCPos>();
+				var candidates = new List<CCPos>();
+				var newCandidates = new List<CCPos>() { destCCPos };
+				while (newCellCandidates.Count == 0)
+				{
+					// Assign candidates to last set of new candidates and flush new candidates
+					candidates = newCandidates;
+					newCandidates = new List<CCPos>();
+					foreach (var c in candidates)
+					{
+						newCandidates = newCandidates.Union(new List<CCPos>()
+						{
+							new CCPos(c.X, c.Y - 1, c.Layer),
+							new CCPos(c.X - 1, c.Y - 1, c.Layer),
+							new CCPos(c.X + 1, c.Y - 1, c.Layer),
+							new CCPos(c.X, c.Y + 1, c.Layer),
+							new CCPos(c.X - 1, c.Y + 1, c.Layer),
+							new CCPos(c.X + 1, c.Y + 1, c.Layer),
+							new CCPos(c.X - 1, c.Y, c.Layer),
+							new CCPos(c.X + 1, c.Y, c.Layer)
+						}).ToList();
+					}
+
+					foreach (var nc in newCandidates)
+						if (GetNeighbours(nc).Count > 0)
+							newCellCandidates.Add(nc);
+				}
+
+				var distFromDest = int.MaxValue;
+				var bestCandidate = newCandidates.ElementAt(0);
+
+				foreach (var c in newCandidates)
+				{
+					var newDist = (int)(destPos - thisWorld.Map.WPosFromCCPos(c)).HorizontalLength;
+					if (newDist < distFromDest)
+					{
+						distFromDest = newDist;
+						bestCandidate = c;
+					}
+				}
+
+				destCCPos = bestCandidate;
+				destPos = thisWorld.Map.WPosFromCCPos(bestCandidate);
+			}
+
 			var startState = GetState(sourceCCPos);
 			var goalState = GetState(destCCPos);
 			startState.Gval = 0;
 			startState.ParentState = startState;
 			AddStateToOpen(startState);
 
-			#if DEBUGWITHOVERLAY
 			var numExpansions = 0;
-			#endif
-
-
-			CCState minState;
-			while (OpenList.Count > 0)
+			var maxExpansions = 1000;
+			CCState minState = startState;
+			while (OpenList.Count > 0 && numExpansions < maxExpansions)
 			{
 				minState = PopFirstFromOpen();
 				if (goalState.Gval <= minState.Fval)
 					break;
 
-				#if DEBUGWITHOVERLAY
 				numExpansions++;
-				#endif
 
 				var minStateNeighbours = GetNeighbours(minState.CC);
 
@@ -724,6 +769,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private List<CCPos> GetNeighbours(CCPos cc)
 		{
 			var neighbourList = new List<CCPos>();
+
 			var ccT = new CCPos(cc.X, cc.Y - 1, cc.Layer);
 			var ccTL = new CCPos(cc.X - 1, cc.Y - 1, cc.Layer);
 			var ccTR = new CCPos(cc.X + 1, cc.Y - 1, cc.Layer);
@@ -733,28 +779,31 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var ccL = new CCPos(cc.X - 1, cc.Y, cc.Layer);
 			var ccR = new CCPos(cc.X + 1, cc.Y, cc.Layer);
 
-			var topLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
-			var topRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
-			var botLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
-			var botRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
+			var TLBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
+			var TRBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
+			var BLBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
+			var BRBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
 
-			var topBlocked = (topLeftBlocked && topRightBlocked) || (topLeftBlocked && botRightBlocked) || (topRightBlocked && botLeftBlocked);
-			var botBlocked = (botLeftBlocked && botRightBlocked) || (botLeftBlocked && topRightBlocked) || (botRightBlocked && topLeftBlocked);
+			if ((TLBlocked && BRBlocked && !TRBlocked && !BLBlocked) ||
+				(TRBlocked && BLBlocked && !TLBlocked && !BRBlocked))
+				return neighbourList; // diagonally blocked corner so we cannot proceed
 
-			var leftBlocked = (topLeftBlocked && botLeftBlocked) || (topLeftBlocked && botRightBlocked) || (botLeftBlocked && topRightBlocked);
-			var rightBlocked = (topRightBlocked && botRightBlocked) || (topRightBlocked && botLeftBlocked) || (botRightBlocked && topLeftBlocked);
+			var topBlocked = TLBlocked && TRBlocked;
+			var botBlocked = BLBlocked && BRBlocked;
+			var leftBlocked = TLBlocked && BLBlocked;
+			var rightBlocked = TRBlocked && BRBlocked;
 
 			if (CcinMap(ccT) && !topBlocked)
 				neighbourList.Add(ccT);
-			if (CcinMap(ccTL) && !topLeftBlocked)
+			if (CcinMap(ccTL) && !TLBlocked)
 				neighbourList.Add(ccTL);
-			if (CcinMap(ccTR) && !topRightBlocked)
+			if (CcinMap(ccTR) && !TRBlocked)
 				neighbourList.Add(ccTR);
 			if (CcinMap(ccB) && !botBlocked)
 				neighbourList.Add(ccB);
-			if (CcinMap(ccBL) && !botLeftBlocked)
+			if (CcinMap(ccBL) && !BLBlocked)
 				neighbourList.Add(ccBL);
-			if (CcinMap(ccBR) && !botRightBlocked)
+			if (CcinMap(ccBR) && !BRBlocked)
 				neighbourList.Add(ccBR);
 			if (CcinMap(ccL) && !leftBlocked)
 				neighbourList.Add(ccL);

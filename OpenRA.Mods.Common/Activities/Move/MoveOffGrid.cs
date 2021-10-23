@@ -171,7 +171,8 @@ namespace OpenRA.Mods.Common.Activities
 				using (new Support.PerfTimer("ThetaStar"))
 					pathRemaining = thetaStarSearch.ThetaStarFindPath(self.CenterPosition, t.CenterPosition);
 			}
-			else
+
+			if (!usePathFinder || pathRemaining.Count == 0)
 				pathRemaining = new List<WPos>() { t.CenterPosition };
 
 			GetNextTargetOrComplete();
