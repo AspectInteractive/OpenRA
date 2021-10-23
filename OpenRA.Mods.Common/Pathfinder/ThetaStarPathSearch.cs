@@ -37,14 +37,18 @@ namespace OpenRA.Mods.Common.Pathfinder
 	{
 		static readonly List<WPos> EmptyPath = new List<WPos>(0);
 
-		public void RenderPath(List<WPos> path)
+		public void RenderPathIfOverlay(List<WPos> path)
 		{
-			var renderPath = new List<WPos>();
-			foreach (var pos in path)
-				renderPath.Add(pos);
+			var overlay = thisWorld.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault();
+			if (overlay.Enabled)
+			{
+				var renderPath = new List<WPos>();
+				foreach (var pos in path)
+					renderPath.Add(pos);
 
-			if (path.Count > 1) // cannot render a path of length 1
-				thisWorld.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPath(renderPath);
+				if (path.Count > 1) // cannot render a path of length 1
+					overlay.AddPath(renderPath);
+			}
 		}
 
 		public bool AtStart = true;
@@ -83,6 +87,15 @@ namespace OpenRA.Mods.Common.Pathfinder
 				Gval = gVal;
 				ParentState = parentState;
 			}
+			public CCState(CCState state)
+			{
+				thisWorld = state.thisWorld;
+				CC = state.CC;
+				Hval = state.Hval;
+				Gval = state.Gval;
+				ParentState = state.ParentState;
+			}
+
 			public CCState(CCPos cc, WPos goal, int gVal, World world)
 			{
 				thisWorld = world;
@@ -91,9 +104,20 @@ namespace OpenRA.Mods.Common.Pathfinder
 				Gval = gVal;
 			}
 
-			public void RenderIn(World world)
+			public void RenderInIfOverlay(World world)
 			{
-				world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddState(this);
+				var overlay = world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault();
+				if (overlay.Enabled)
+					overlay.AddState(this);
+			}
+			public void RenderInIfOverlayWithCheck(World world)
+			{
+				var overlay = world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault();
+				if (overlay.Enabled)
+				{
+					overlay.RemoveState(this);
+					overlay.AddState(this);
+				}
 			}
 
 			public static void Reflect(CCState fromState, ref CCState toState)
@@ -105,7 +129,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			{
 				var fromStatePos = thisWorld.Map.WPosFromCCPos(CC);
 				var toStatePos = thisWorld.Map.WPosFromCCPos(toState.CC);
-				return (int)(toStatePos - fromStatePos).HorizontalLengthSquared;
+				return (int)(toStatePos - fromStatePos).HorizontalLength;
 			}
 
 			public static bool operator ==(CCState state1, CCState state2) { return state1.CC == state2.CC; }
@@ -168,6 +192,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private void AddStateToOpen(CCState state)
 		{
 			RemoveStateFromOpen(state);
+			RemoveStateFromClosed(state);
 			UpdateState(state);
 
 			// Remove any matching state that is already in the list
@@ -199,6 +224,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private void AddStateToClosed(CCState state)
 		{
+			RemoveStateFromOpen(state);
 			RemoveStateFromClosed(state);
 			UpdateState(state);
 
@@ -369,7 +395,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			Dest = destPos;
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
-			if (IsPathObservable(sourcePos, destPos))
+			/*if (IsPathObservable(sourcePos, destPos))
 			{
 				path.Add(sourcePos);
 				path.Add(destPos);
@@ -379,7 +405,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				#endif
 
 				return path;
-			}
+			}*/
 
 			var sourceCCPos = GetNearestCCPos(sourcePos);
 			var destCCPos = GetNearestCCPos(destPos);
@@ -389,33 +415,37 @@ namespace OpenRA.Mods.Common.Pathfinder
 			startState.ParentState = startState;
 			AddStateToOpen(startState);
 
+			#if DEBUGWITHOVERLAY
+			var numExpansions = 0;
+			#endif
+
+
 			CCState minState;
-			var maxIters = 10000; // For testing only
 			while (OpenList.Count > 0)
 			{
-				maxIters--;
-				if (maxIters <= 0)
-					break;
-
 				minState = PopFirstFromOpen();
 				if (goalState.Gval <= minState.Fval)
 					break;
+
+				#if DEBUGWITHOVERLAY
+				numExpansions++;
+				#endif
 
 				var minStateNeighbours = GetNeighbours(minState.CC);
 
 				for (var i = 0; i < minStateNeighbours.Count; i++)
 				{
-					var succState = GetState(minStateNeighbours[i]);
+					var succState = GetState(minStateNeighbours.ElementAt(i));
 
-					#if DEBUGWITHOVERLAY
-					succState.RenderIn(thisWorld);
-					#endif
+					/*#if DEBUGWITHOVERLAY
+					succState.RenderInIfOverlay(thisWorld);
+					#endif*/
 
-					if (!ClosedList.Any(state => state == succState))
+					if (!ClosedList.Any(state => state.CC == succState.CC))
 					{
 						int newGval;
 						CCState newParentState;
-						if (LineOfSight(minState.ParentState.CC, succState.CC))
+						if (IsPathObservable(minState.ParentState.CC, succState.CC))
 						{
 							newParentState = minState.ParentState;
 							newGval = newParentState.Gval + newParentState.GetEuclidDistanceTo(succState);
@@ -433,6 +463,18 @@ namespace OpenRA.Mods.Common.Pathfinder
 						}
 					}
 				}
+
+				#if DEBUGWITHOVERLAY
+				Func<CCState, CCState> incrementFunc = state => state.ParentState;
+				var currState = new CCState(minState);
+				while (currState != startState)
+				{
+					System.Console.WriteLine($"CurrentMinStateCC: {currState.CC}, OpenList.Count: {OpenList.Count}" +
+											 $", numExpansion: {numExpansions}");
+					currState.RenderInIfOverlayWithCheck(thisWorld);
+					currState = incrementFunc(currState);
+				}
+				#endif
 			}
 
 			if (sourcePos == destPos)
@@ -451,12 +493,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 					path.Add(paddedCCpos);
 					currState = incrementFunc(currState);
 				}
-				// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC));
 				path.Add(sourcePos);
 				path.Reverse();
 
 				#if DEBUGWITHOVERLAY
-				RenderPath(path);
+				RenderPathIfOverlay(path);
 				#endif
 
 				return path;
@@ -587,15 +628,19 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var cellsUnderneathLine = GetAllCellsUnderneathALine(rootPos, destPos);
 			return !AreCellsIntersectingPath(cellsUnderneathLine, rootPos, destPos);
 		}
+		public bool IsPathObservable(CCPos rootCC, CCPos destCC)
+		{ return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), thisWorld.Map.WPosFromCCPos(destCC)); }
+		public bool IsPathObservable(WPos rootPos, CCPos destCC) { return IsPathObservable(rootPos, thisWorld.Map.WPosFromCCPos(destCC)); }
+		public bool IsPathObservable(CCPos rootCC, WPos destPos) { return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), destPos); }
 
 		private static int HeuristicFunction(CCPos cc, WPos goalPos, World world)
 		{
 			var ccPos = world.Map.WPosFromCCPos(cc);
-			return (int)(goalPos - ccPos).HorizontalLengthSquared;
+			return (int)(goalPos - ccPos).HorizontalLength;
 		}
 		private static int HeuristicFunction(WPos startPos, WPos goalPos)
 		{
-			return (int)(goalPos - startPos).HorizontalLengthSquared;
+			return (int)(goalPos - startPos).HorizontalLength;
 		}
 
 		private bool CcXinMap(int x) { return x >= ccPosMinSizeX && x <= ccPosMaxSizeX; } // 1 larger than CPos bounds which is MapSize.X - 1
@@ -624,10 +669,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private static CCPos GetNearestCCPos(WPos pos, World world)
 		{
 			var cellContainingPos = world.Map.CellContaining(pos);
-			var distToTopLeft = (pos - world.Map.TopLeftOfCell(cellContainingPos)).HorizontalLengthSquared;
-			var distToTopRight = (pos - world.Map.TopRightOfCell(cellContainingPos)).HorizontalLengthSquared;
-			var distToBottomLeft = (pos - world.Map.BottomLeftOfCell(cellContainingPos)).HorizontalLengthSquared;
-			var distToBottomRight = (pos - world.Map.BottomRightOfCell(cellContainingPos)).HorizontalLengthSquared;
+			var distToTopLeft = (pos - world.Map.TopLeftOfCell(cellContainingPos)).HorizontalLength;
+			var distToTopRight = (pos - world.Map.TopRightOfCell(cellContainingPos)).HorizontalLength;
+			var distToBottomLeft = (pos - world.Map.BottomLeftOfCell(cellContainingPos)).HorizontalLength;
+			var distToBottomRight = (pos - world.Map.BottomRightOfCell(cellContainingPos)).HorizontalLength;
 			var minDist = Math.Min(Math.Min(Math.Min(distToTopLeft, distToTopRight), distToBottomLeft), distToBottomRight);
 
 			CCPos nearestCC;
@@ -688,20 +733,16 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var ccL = new CCPos(cc.X - 1, cc.Y, cc.Layer);
 			var ccR = new CCPos(cc.X + 1, cc.Y, cc.Layer);
 
-			var topBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft) &&
-							 CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
 			var topLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
 			var topRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
-
-			var botBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft) &&
-							 CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
 			var botLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
 			var botRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
 
-			var leftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft) &&
-							  CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
-			var rightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight) &&
-							   CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
+			var topBlocked = (topLeftBlocked && topRightBlocked) || (topLeftBlocked && botRightBlocked) || (topRightBlocked && botLeftBlocked);
+			var botBlocked = (botLeftBlocked && botRightBlocked) || (botLeftBlocked && topRightBlocked) || (botRightBlocked && topLeftBlocked);
+
+			var leftBlocked = (topLeftBlocked && botLeftBlocked) || (topLeftBlocked && botRightBlocked) || (botLeftBlocked && topRightBlocked);
+			var rightBlocked = (topRightBlocked && botRightBlocked) || (topRightBlocked && botLeftBlocked) || (botRightBlocked && topLeftBlocked);
 
 			if (CcinMap(ccT) && !topBlocked)
 				neighbourList.Add(ccT);

@@ -1128,10 +1128,6 @@ namespace OpenRA
 			foreach (var edge in cellEdges)
 				if (CellEdgeIntersectsWithLine(edge, b0, b1))
 				{
-					#if DEBUGWITHOVERLAY || DEBUG
-					System.Console.WriteLine($"{edge} is intersecting with ({b0},{b1})");
-					#endif
-
 					return true; // at least one edge has intersected
 				}
 

@@ -162,13 +162,14 @@ namespace OpenRA.Mods.Common.Activities
 
 		public MoveOffGrid(Actor self, in Target t, WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
-			usePathFinder = false;
-			useLocalAvoidance = true;
+			usePathFinder = true;
+			useLocalAvoidance = false;
 
 			if (usePathFinder)
 			{
 				thetaStarSearch = new ThetaStarPathSearch(self.World, self);
-				pathRemaining = thetaStarSearch.ThetaStarFindPath(self.CenterPosition, t.CenterPosition);
+				using (new Support.PerfTimer("ThetaStar"))
+					pathRemaining = thetaStarSearch.ThetaStarFindPath(self.CenterPosition, t.CenterPosition);
 			}
 			else
 				pathRemaining = new List<WPos>() { t.CenterPosition };
@@ -348,7 +349,7 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			if (useLocalAvoidance && !HasNotCollided(self, move * 3, 3, locomotor) && !searchingForNextTarget)
+			if (useLocalAvoidance && !HasNotCollided(self, move, 3, locomotor) && !searchingForNextTarget)
 			{
 				// > 0 means the point is to the right of the current move angle, < 0 means the point is to the left.
 				var leftOrRightInc = move.CrossProduct(currPathTarget) > 0 ? -1 : 1;
@@ -356,32 +357,36 @@ namespace OpenRA.Mods.Common.Activities
 				var i = 0;
 				do
 				{
-					var newDegrees = move.Yaw.Angle + 256 * leftOrRightInc;
+					var newDegrees = move.Yaw.Angle + 256 * leftOrRightInc * i;
 					System.Console.WriteLine($"existing deg: {(move.Yaw.Angle)}, new deg: {newDegrees}");
 					var newAngle = new WAngle(Nearest90Deg(newDegrees));
 					revisedMove = new WVec(new WDist(move.Length), WRot.FromYaw(newAngle));
+					RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMove);
 					i++;
 				}
 				while (!HasNotCollided(self, revisedMove, 3, locomotor) && i < 4);
 
-				// TO DO: Need a way to reset units that get stuck. Maybe set a flag?
-				rightAngleTurns += leftOrRightInc;
-				var newTargDelta = revisedMove * lineDefaultLength / revisedMove.Length;
+				if (HasNotCollided(self, revisedMove, 3, locomotor))
+				{
+					// TO DO: Need a way to reset units that get stuck. Maybe set a flag?
+					rightAngleTurns += leftOrRightInc;
+					var newTargDelta = revisedMove * lineDefaultLength / revisedMove.Length;
 
-				#if DEBUGWITHOVERLAY
-				System.Console.WriteLine($"move.Yaw {move.Yaw}" +
-										 $",newTargDelta.Yaw: {newTargDelta.Yaw}" +
-									     $",revisedMove.Yaw: {revisedMove.Yaw}");
-				RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + newTargDelta);
-				RenderPoint(self, mobileOffGrid.CenterPosition + revisedMove, Color.LightGreen);
-				#endif
+					#if DEBUGWITHOVERLAY
+					System.Console.WriteLine($"move.Yaw {move.Yaw}" +
+											 $",newTargDelta.Yaw: {newTargDelta.Yaw}" +
+											 $",revisedMove.Yaw: {revisedMove.Yaw}");
+					RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + newTargDelta);
+					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMove, Color.LightGreen);
+					#endif
 
-				var newTarget = NearestPosInMap(self, mobileOffGrid.CenterPosition + newTargDelta);
-				RequeueTargetAndSetCurrTo(newTarget); // Put existing target back in queue and set the curr target to the new one
-				searchingForNextTarget = true;
+					var newTarget = NearestPosInMap(self, mobileOffGrid.CenterPosition + newTargDelta);
+					RequeueTargetAndSetCurrTo(newTarget); // Put existing target back in queue and set the curr target to the new one
+					searchingForNextTarget = true;
+				}
 			}
-			/*else if (!HasNotCollided(self, move, 1, locomotor)) // No more moves left yet still blocked, so return false
-				return false;*/
+			else if (useLocalAvoidance && !HasNotCollided(self, move, 1, locomotor)) // No more moves left yet still blocked, so return false
+				return false;
 
 			if (useLocalAvoidance && searchingForNextTarget)
 			{
@@ -454,12 +459,14 @@ namespace OpenRA.Mods.Common.Activities
 				yield return new TargetLineNode(useLastVisibleTarget ? lastVisibleTarget : target, targetLineColor.Value);
 		}
 
-		public static bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor)
+		public static bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
+											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
 			var destActorsWithinRange = self.World.FindActorsOnCircle(self.CenterPosition, new WDist(move.Length * 2)); // we double move length to widen search radius
 			var selfCenterPos = self.CenterPosition.XYToInt2();
 			var selfCenterPosWithMoves = new List<int2>();
-			for (var i = 0; i < lookAhead; i++)
+			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
+			for (var i = startI; i < lookAhead; i++)
 				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
 			/*var cellsToCheck = Util.ExpandFootprint(self.World.Map.CellContaining(selfCenterPosWithMove_WPos), true);*/
 
@@ -476,9 +483,9 @@ namespace OpenRA.Mods.Common.Activities
 					var cellWithMovesBlocked = new List<bool>();
 					Func<CPos, bool> cellIsBlocked = c =>
 						{ return locomotor.MovementCostToEnterCell(default, c, BlockedByActor.None, self) == short.MaxValue; };
-					for (var i = 0; i < lookAhead; i++)
+					for (var i = startI; i < lookAhead; i++)
 						cellWithMovesBlocked.Add(cellIsBlocked(self.World.Map.CellContaining(corner + move * i)));
-					if (cellIsBlocked(cell) && cellWithMovesBlocked.Any(c => c == true))
+					if ((!incOrigin || cellIsBlocked(cell)) && cellWithMovesBlocked.Any(c => c == true))
 					{
 						/*System.Console.WriteLine($"collided with cell {cell} with value {short.MaxValue}");*/
 						return false;
@@ -499,9 +506,9 @@ namespace OpenRA.Mods.Common.Activities
 							Func<int2, bool> posIsColliding = p =>
 								{ return destShape.Info.Type.IntersectsWithHitShape(p, destActorCenterPos, selfShape); };
 							for (var i = 0; i < lookAhead; i++)
-								posWithMovesBlocked.Add(posIsColliding(selfCenterPosWithMoves[i]));
+								posWithMovesBlocked.Add(posIsColliding(selfCenterPosWithMoves.ElementAt(i)));
 							// checking hasCollisionWithMove ensures we don't get stuck if moving out/away from the collision
-							if (hasCollision && posWithMovesBlocked.Any(p => p == true))
+							if ((!incOrigin || hasCollision) && posWithMovesBlocked.Any(p => p == true))
 								return false;
 						}
 					}
