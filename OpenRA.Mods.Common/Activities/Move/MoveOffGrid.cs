@@ -162,24 +162,8 @@ namespace OpenRA.Mods.Common.Activities
 
 		public MoveOffGrid(Actor self, in Target t, WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
-			usePathFinder = true;
-			useLocalAvoidance = false;
-
-			if (usePathFinder)
-			{
-				thetaStarSearch = new ThetaStarPathSearch(self.World, self);
-				using (new Support.PerfTimer("ThetaStar"))
-					pathRemaining = thetaStarSearch.ThetaStarFindPath(self.CenterPosition, t.CenterPosition);
-			}
-
-			if (!usePathFinder || pathRemaining.Count == 0)
-				pathRemaining = new List<WPos>() { t.CenterPosition };
-
-			GetNextTargetOrComplete();
-
 			mobileOffGrid = self.Trait<MobileOffGrid>();
 			target = t;
-
 			this.targetLineColor = targetLineColor;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 
@@ -250,6 +234,23 @@ namespace OpenRA.Mods.Common.Activities
 		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOffGrid, WAngle desiredFacing, WDist desiredAltitude, bool idleTurn = false)
 		{
 			MoveOffGridTick(self, mobileOffGrid, desiredFacing, desiredAltitude, WVec.Zero, idleTurn);
+		}
+		protected override void OnFirstRun(Actor self)
+		{
+			usePathFinder = true;
+			useLocalAvoidance = false;
+
+			if (usePathFinder)
+			{
+				thetaStarSearch = new ThetaStarPathSearch(self.World, self);
+				using (new Support.PerfTimer("ThetaStar"))
+					pathRemaining = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition, target.CenterPosition);
+			}
+
+			if (!usePathFinder || pathRemaining.Count == 0)
+				pathRemaining = new List<WPos>() { target.CenterPosition };
+
+			GetNextTargetOrComplete();
 		}
 
 		public override bool Tick(Actor self)
