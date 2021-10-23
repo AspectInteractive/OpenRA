@@ -34,7 +34,8 @@ namespace OpenRA.Mods.Common.Traits
 		private List<List<WPos>> paths = new List<List<WPos>>();
 		private List<List<WPos>> lines = new List<List<WPos>>();
 
-		private bool showCosts = false;
+		// Set this to true to display annotations showing the cost at each cell
+		private readonly bool showCosts = true;
 
 		public bool Enabled;
 		private float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
@@ -137,7 +138,7 @@ namespace OpenRA.Mods.Common.Traits
 				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
 				if (showCosts)
 					yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
-															color, $"({ccState.Gval / 1024 / 512})", 4);
+															color, $"({ccState.Gval})", 4);
 			}
 
 			// Render Points
@@ -188,9 +189,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void RemoveState(CCState ccState)
 		{
-			foreach (var (currCCstate, currColor) in statesWithColors)
-				if (currCCstate == ccState)
-					statesWithColors.Remove((ccState, currColor));
+			statesWithColors.RemoveAll(stateWithColor => stateWithColor.Item1 == ccState);
 			UpdatePointColors();
 		}
 
