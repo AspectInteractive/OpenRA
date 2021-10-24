@@ -391,6 +391,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 		{
 			ResetLists();
 
+			if (sourcePos == destPos)
+				return new List<WPos>();
+
 			List<WPos> path = new List<WPos>();
 			Source = sourcePos;
 			Dest = destPos;
@@ -522,9 +525,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 				#endif
 			}
 
-			if (sourcePos == destPos)
-				return new List<WPos>();
-
 			if (goalState.Gval < int.MaxValue)
 			{
 				Func<CCState, CCState> incrementFunc = state => state.ParentState;
@@ -538,11 +538,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 					path.Add(paddedCCpos);
 					currState = incrementFunc(currState);
 				}
-				path.Add(sourcePos);
+				// path.Add(sourcePos);
 				path.Reverse();
 
 				#if DEBUGWITHOVERLAY
-				RenderPathIfOverlay(path);
+				RenderPathIfOverlay(new List<WPos>() { sourcePos }.Union(path).ToList());
 				#endif
 
 				return path;

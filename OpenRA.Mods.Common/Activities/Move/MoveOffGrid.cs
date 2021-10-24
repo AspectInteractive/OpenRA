@@ -53,15 +53,17 @@ namespace OpenRA.Mods.Common.Activities
 		Target lastVisibleTarget;
 		bool useLastVisibleTarget;
 		bool searchingForNextTarget = false;
+
+		// Options for pathfinder (chosen in the constructor)
 		bool usePathFinder = true;
 		bool useLocalAvoidance = true;
-		int rightAngleTurns = 0;
+
+		// LOS Checking interval
 		int tickCount = 0;
 		int maxTicksBeforeLOScheck = 3;
-		int lineDefaultLength = 10240;
-		readonly int rotateAmtIfBlocked = 5;
 		readonly List<WPos> positionBuffer = new List<WPos>();
 		readonly Locomotor locomotor;
+
 		List<WPos> pathRemaining = new List<WPos>();
 		ThetaStarPathSearch thetaStarSearch;
 		WPos currPathTarget;
@@ -188,53 +190,65 @@ namespace OpenRA.Mods.Common.Activities
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
 
-		public static WVec MoveStep(int speed, WAngle facing)
+		public static WVec GenFinalVector(MobileOffGrid mobileOG)
 		{
-			var dir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(facing));
-			return speed * dir / 1024;
+			var finalVec = WVec.Zero;
+			foreach (var vec in mobileOG.SeekVectors)
+				finalVec += vec;
+			foreach (var vec in mobileOG.FleeVectors)
+				finalVec += vec;
+			return finalVec;
 		}
 
-		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOffGrid, WAngle desiredFacing, WDist desiredAltitude, in WVec moveOverride, bool idleTurn = false)
+		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOG, WAngle desiredFacing, WDist desiredAltitude,
+										   in WVec moveOverride, bool idleTurn = false, bool ignoreZVec = false)
 		{
-			var dat = self.World.Map.DistanceAboveTerrain(mobileOffGrid.CenterPosition);
-			var speed = mobileOffGrid.MovementSpeed;
-			var move = mobileOffGrid.Info.CanSlide ? MoveStep(speed, desiredFacing) : MoveStep(speed, mobileOffGrid.Facing);
-			if (moveOverride != WVec.Zero)
-				move = moveOverride;
 
-			var oldFacing = mobileOffGrid.Facing;
-			var turnSpeed = mobileOffGrid.GetTurnSpeed(idleTurn);
-			mobileOffGrid.Facing = Util.TickFacing(mobileOffGrid.Facing, desiredFacing, turnSpeed);
+			var dat = self.World.Map.DistanceAboveTerrain(mobileOG.CenterPosition);
+			var speed = mobileOG.MovementSpeed;
 
-			var roll = idleTurn ? mobileOffGrid.Info.IdleRoll ?? mobileOffGrid.Info.Roll : mobileOffGrid.Info.Roll;
+			var move = moveOverride == WVec.Zero ? GenFinalVector(mobileOG) : moveOverride;
+			if (ignoreZVec)
+				move = new WVec(move.X, move.Y, 0);
+
+			var oldFacing = mobileOG.Facing;
+			var turnSpeed = mobileOG.GetTurnSpeed(idleTurn);
+			mobileOG.Facing = Util.TickFacing(mobileOG.Facing, (desiredFacing == WAngle.Zero ? move.Yaw : desiredFacing), turnSpeed);
+
+			var roll = idleTurn ? mobileOG.Info.IdleRoll ?? mobileOG.Info.Roll : mobileOG.Info.Roll;
 			if (roll != WAngle.Zero)
 			{
-				var desiredRoll = mobileOffGrid.Facing == desiredFacing ? WAngle.Zero :
-					new WAngle(roll.Angle * Util.GetTurnDirection(mobileOffGrid.Facing, oldFacing));
+				var desiredRoll = mobileOG.Facing == desiredFacing ? WAngle.Zero :
+					new WAngle(roll.Angle * Util.GetTurnDirection(mobileOG.Facing, oldFacing));
 
-				mobileOffGrid.Roll = Util.TickFacing(mobileOffGrid.Roll, desiredRoll, mobileOffGrid.Info.RollSpeed);
+				mobileOG.Roll = Util.TickFacing(mobileOG.Roll, desiredRoll, mobileOG.Info.RollSpeed);
 			}
 
-			if (mobileOffGrid.Info.Pitch != WAngle.Zero)
-				mobileOffGrid.Pitch = Util.TickFacing(mobileOffGrid.Pitch, mobileOffGrid.Info.Pitch, mobileOffGrid.Info.PitchSpeed);
+			if (mobileOG.Info.Pitch != WAngle.Zero)
+				mobileOG.Pitch = Util.TickFacing(mobileOG.Pitch, mobileOG.Info.Pitch, mobileOG.Info.PitchSpeed);
 
 			// Note: we assume that if move.Z is not zero, it's intentional and we want to move in that vertical direction instead of towards desiredAltitude.
 			// If that is not desired, the place that calls this should make sure moveOverride.Z is zero.
 			if (dat != desiredAltitude || move.Z != 0)
 			{
-				var maxDelta = move.HorizontalLength * mobileOffGrid.Info.MaximumPitch.Tan() / 1024;
+				var maxDelta = move.HorizontalLength * mobileOG.Info.MaximumPitch.Tan() / 1024;
 				var moveZ = move.Z != 0 ? move.Z : (desiredAltitude.Length - dat.Length);
 				var deltaZ = moveZ.Clamp(-maxDelta, maxDelta);
 				move = new WVec(move.X, move.Y, deltaZ);
 			}
 
-			mobileOffGrid.SetPosition(self, mobileOffGrid.CenterPosition + move);
+			System.Console.WriteLine($"move: {move}, moveHLS: {move.HorizontalLengthSquared}");
+			mobileOG.SetPosition(self, mobileOG.CenterPosition + move);
 		}
-
 		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOffGrid, WAngle desiredFacing, WDist desiredAltitude, bool idleTurn = false)
 		{
 			MoveOffGridTick(self, mobileOffGrid, desiredFacing, desiredAltitude, WVec.Zero, idleTurn);
 		}
+		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOffGrid, WDist desiredAltitude)
+		{
+			MoveOffGridTick(self, mobileOffGrid, WAngle.Zero, desiredAltitude, WVec.Zero);
+		}
+
 		protected override void OnFirstRun(Actor self)
 		{
 			usePathFinder = true;
@@ -255,6 +269,7 @@ namespace OpenRA.Mods.Common.Activities
 
 		public override bool Tick(Actor self)
 		{
+
 			// Refuse to take off if it would land immediately again.
 			if (mobileOffGrid.ForceLanding)
 				Cancel(self);
@@ -276,6 +291,7 @@ namespace OpenRA.Mods.Common.Activities
 				// TODO: Remove this after fixing all activities to work properly with arbitrary starting altitudes.
 				var landWhenIdle = mobileOffGrid.Info.IdleBehavior == IdleBehaviorType.Land;
 				var skipHeightAdjustment = landWhenIdle && self.CurrentActivity.IsCanceling && self.CurrentActivity.NextActivity == null;
+				mobileOffGrid.SeekVectors.Clear();
 				return true;
 			}
 
@@ -287,37 +303,36 @@ namespace OpenRA.Mods.Common.Activities
 
 			// Target is hidden or dead, and we don't have a fallback position to move towards
 			if (useLastVisibleTarget && !lastVisibleTarget.IsValidFor(self))
+			{
+				mobileOffGrid.SeekVectors.Clear();
 				return true;
+			}
 
 			var checkTarget = useLastVisibleTarget ? lastVisibleTarget : target;
 			var pos = mobileOffGrid.GetPosition();
-			//var delta = checkTarget.CenterPosition - pos;
 			var delta = currPathTarget - pos;
 
 			// Inside the target annulus, so we're done
-			//var insideMaxRange = maxRange.Length > 0 && checkTarget.IsInRange(pos, maxRange);
-			//var insideMinRange = minRange.Length > 0 && checkTarget.IsInRange(pos, minRange);
 			var insideMaxRange = maxRange.Length > 0 && PosInRange(currPathTarget, pos, maxRange);
 			var insideMinRange = minRange.Length > 0 && PosInRange(currPathTarget, pos, minRange);
 
 			if (insideMaxRange && !insideMinRange)
+			{
+				mobileOffGrid.SeekVectors.Clear();
 				return true;
+			}
 
-			var isSlider = mobileOffGrid.Info.CanSlide;
-			var desiredFacing = delta.HorizontalLengthSquared != 0 ? delta.Yaw : mobileOffGrid.Facing;
-			var speed = mobileOffGrid.MovementSpeed;
-			var move = isSlider ? MoveStep(speed, desiredFacing) : MoveStep(speed, mobileOffGrid.Facing);
+			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(delta.Yaw)) / 1024;
+			var maxVecs = 5;
+			if (delta != WVec.Zero && mobileOffGrid.SeekVectors.Count < maxVecs)
+				mobileOffGrid.SeekVectors.Add(moveVec / maxVecs);
+
+			var move = GenFinalVector(mobileOffGrid);
 
 			// Inside the minimum range, so reverse if we CanSlide, otherwise face away from the target.
 			if (insideMinRange)
 			{
-				if (isSlider)
-					MoveOffGridTick(self, mobileOffGrid, desiredFacing, mobileOffGrid.Info.CruiseAltitude, -move);
-				else
-				{
-					MoveOffGridTick(self, mobileOffGrid, desiredFacing + new WAngle(512), mobileOffGrid.Info.CruiseAltitude, move);
-				}
-
+				MoveOffGridTick(self, mobileOffGrid, mobileOffGrid.Facing, mobileOffGrid.Info.CruiseAltitude);
 				return false;
 			}
 
@@ -325,70 +340,32 @@ namespace OpenRA.Mods.Common.Activities
 			// Stop if we are blocked and close enough
 			if (positionBuffer.Count >= 5 && (positionBuffer.Last() - positionBuffer[0]).LengthSquared < 4096 &&
 				delta.HorizontalLengthSquared <= nearEnough.LengthSquared)
+			{
+				mobileOffGrid.SeekVectors.Clear();
 				return true;
+			}
 
-			// The next move would overshoot, so consider it close enough or set final position if we CanSlide
+			// The next move would overshoot, so consider it close enough and set final position
+			System.Console.WriteLine($"delta.HorizontalLengthSquared: {delta.HorizontalLengthSquared}, " +
+									 $"move.HorizontalLengthSquared: {move.HorizontalLengthSquared}");
 			if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared)
 			{
-				#if DEBUG
+				#if DEBUG || DEBUGWITHOVERLAY
 				System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
 				#endif
 
-				// For VTOL landing to succeed, it must reach the exact target position,
-				// so for the final move it needs to behave as if it had CanSlide.
-				if (isSlider || mobileOffGrid.Info.VTOL)
+				if (delta.HorizontalLengthSquared != 0)
 				{
-					// Set final (horizontal) position
-					if (delta.HorizontalLengthSquared != 0)
-					{
-						// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
-						var deltaMove = new WVec(delta.X, delta.Y, 0);
-						MoveOffGridTick(self, mobileOffGrid, desiredFacing, dat, deltaMove);
-					}
+					// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
+					var deltaMove = new WVec(delta.X, delta.Y, 0);
+					mobileOffGrid.SeekVectors.Clear();
+					MoveOffGridTick(self, mobileOffGrid, mobileOffGrid.Facing, dat, deltaMove, ignoreZVec: true);
 				}
+
+				mobileOffGrid.SeekVectors.Clear();
 				searchingForNextTarget = false;
 				return GetNextTargetOrComplete();
 			}
-
-			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			if (useLocalAvoidance && !HasNotCollided(self, move, 3, locomotor) && !searchingForNextTarget)
-			{
-				// > 0 means the point is to the right of the current move angle, < 0 means the point is to the left.
-				var leftOrRightInc = move.CrossProduct(currPathTarget) > 0 ? -1 : 1;
-				WVec revisedMove;
-				var i = 0;
-				do
-				{
-					var newDegrees = move.Yaw.Angle + 256 * leftOrRightInc * i;
-					System.Console.WriteLine($"existing deg: {(move.Yaw.Angle)}, new deg: {newDegrees}");
-					var newAngle = new WAngle(Nearest90Deg(newDegrees));
-					revisedMove = new WVec(new WDist(move.Length), WRot.FromYaw(newAngle));
-					RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMove);
-					i++;
-				}
-				while (!HasNotCollided(self, revisedMove, 3, locomotor) && i < 4);
-
-				if (HasNotCollided(self, revisedMove, 3, locomotor))
-				{
-					// TO DO: Need a way to reset units that get stuck. Maybe set a flag?
-					rightAngleTurns += leftOrRightInc;
-					var newTargDelta = revisedMove * lineDefaultLength / revisedMove.Length;
-
-					#if DEBUGWITHOVERLAY
-					System.Console.WriteLine($"move.Yaw {move.Yaw}" +
-											 $",newTargDelta.Yaw: {newTargDelta.Yaw}" +
-											 $",revisedMove.Yaw: {revisedMove.Yaw}");
-					RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + newTargDelta);
-					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMove, Color.LightGreen);
-					#endif
-
-					var newTarget = NearestPosInMap(self, mobileOffGrid.CenterPosition + newTargDelta);
-					RequeueTargetAndSetCurrTo(newTarget); // Put existing target back in queue and set the curr target to the new one
-					searchingForNextTarget = true;
-				}
-			}
-			else if (useLocalAvoidance && !HasNotCollided(self, move, 1, locomotor)) // No more moves left yet still blocked, so return false
-				return false;
 
 			if (useLocalAvoidance && searchingForNextTarget)
 			{
@@ -406,31 +383,11 @@ namespace OpenRA.Mods.Common.Activities
 				tickCount++;
 			}
 
-			if (!isSlider)
-			{
-				// Using the turn rate, compute a hypothetical circle traced by a continuous turn.
-				// If it contains the destination point, it's unreachable without more complex manuvering.
-				var turnRadius = CalculateTurnRadius(mobileOffGrid.MovementSpeed, mobileOffGrid.TurnSpeed);
-
-				// The current facing is a tangent of the minimal turn circle.
-				// Make a perpendicular vector, and use it to locate the turn's center.
-				var turnCenterFacing = mobileOffGrid.Facing + new WAngle(Util.GetTurnDirection(mobileOffGrid.Facing, desiredFacing) * 256);
-
-				var turnCenterDir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(turnCenterFacing));
-				turnCenterDir *= turnRadius;
-				turnCenterDir /= 1024;
-
-				// Compare with the target point, and keep flying away if it's inside the circle.
-				var turnCenter = mobileOffGrid.CenterPosition + turnCenterDir;
-				if ((checkTarget.CenterPosition - turnCenter).HorizontalLengthSquared < turnRadius * turnRadius)
-					desiredFacing = mobileOffGrid.Facing;
-			}
-
 			positionBuffer.Add(self.CenterPosition);
 			if (positionBuffer.Count > 5)
 				positionBuffer.RemoveAt(0);
 
-			MoveOffGridTick(self, mobileOffGrid, desiredFacing, mobileOffGrid.Info.CruiseAltitude);
+			MoveOffGridTick(self, mobileOffGrid, mobileOffGrid.Info.CruiseAltitude);
 
 			return false;
 		}
@@ -459,6 +416,12 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			if (targetLineColor.HasValue)
 				yield return new TargetLineNode(useLastVisibleTarget ? lastVisibleTarget : target, targetLineColor.Value);
+		}
+
+		public static WVec MoveStep(int speed, WAngle facing)
+		{
+			var dir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(facing));
+			return speed * dir / 1024;
 		}
 
 		public static bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
