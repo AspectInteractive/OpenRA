@@ -263,6 +263,15 @@ namespace OpenRA.Mods.Common.Traits
 	public class MobileOffGrid : PausableConditionalTrait<MobileOffGridInfo>, IOrderVoice, IPositionable, IMove, ITick, ICreationActivity,
 		IFacing, IDeathActorInitModifier, IIssueDeployOrder, IIssueOrder, IResolveOrder, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyBlockingMove, IActorPreviewInitModifier, INotifyBecomingIdle
 	{
+		public class MvVec
+		{
+			public WVec Vec;
+			public int TickTimer = -1; // How long the movement vector should be applied for. 1 tick = 40 ms. -1 means indefinite.
+
+			public MvVec(WVec newVec) { Vec = newVec; }
+			public MvVec(WVec newVec, int tickTimer) { Vec = newVec; TickTimer = tickTimer; }
+		}
+
 		readonly Actor self;
 		/*readonly Lazy<IEnumerable<int>> speedModifiers;*/
 
@@ -301,8 +310,8 @@ namespace OpenRA.Mods.Common.Traits
 		WPos cachedPosition;
 		WAngle cachedFacing;
 
-		public List<WVec> SeekVectors = new List<WVec>();
-		public List<WVec> FleeVectors = new List<WVec>();
+		public List<MvVec> SeekVectors = new List<MvVec>();
+		public List<MvVec> FleeVectors = new List<MvVec>();
 
 		Repairable repairable;
 		Rearmable rearmable;
@@ -484,26 +493,44 @@ namespace OpenRA.Mods.Common.Traits
 			Tick(self);
 		}
 
-		public WVec GenFinalVector()
+		public WVec GenFinalWVec()
 		{
 			var finalVec = WVec.Zero;
-			foreach (var vec in SeekVectors)
-				finalVec += vec;
-			foreach (var vec in FleeVectors)
-				finalVec += vec;
+			foreach (var mvVec in SeekVectors)
+				finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
+			foreach (var mvVec in FleeVectors)
+				finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
 			return finalVec;
 		}
+
+		public void RemoveTickFleeVectors()
+		{
+			foreach (var mvVec in FleeVectors)
+				if (mvVec.TickTimer > 0)
+					mvVec.TickTimer--;
+		}
+
+		public void RemoveTickSeekVectors()
+		{
+			foreach (var mvVec in SeekVectors)
+				if (mvVec.TickTimer > 0)
+					mvVec.TickTimer--;
+		}
+
 		public void SetDesiredFacing(WAngle desiredFacing) { DesiredFacing = desiredFacing; }
 		public void SetDesiredFacingToFacing() { DesiredFacing = Facing; }
 		public void SetDesiredMove(WVec desiredMove) { DesiredMove = desiredMove; }
 		public void SetDesiredAltitude(WDist desiredAltitude) { DesiredAltitude = desiredAltitude; }
 		public void SetIgnoreZVec(bool ignoreZVec) { IgnoreZVec = ignoreZVec; }
 
-		public void MobileOffGridTickMove(Actor self)
+		public void MobileOffGridMoveTick(Actor self)
 		{
-			var move = DesiredMove == WVec.Zero ? GenFinalVector() : DesiredMove;
+			var move = DesiredMove == WVec.Zero ? GenFinalWVec() : DesiredMove;
 			if (move == WVec.Zero)
 				return;
+
+			RemoveTickFleeVectors();
+			RemoveTickSeekVectors();
 
 			var dat = self.World.Map.DistanceAboveTerrain(CenterPosition);
 
@@ -575,7 +602,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// Update unit position
-			MobileOffGridTickMove(self);
+			MobileOffGridMoveTick(self);
 
 			// Update unit's cell as it moves
 			var cell = self.World.Map.CellContaining(CenterPosition);

@@ -175,7 +175,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private LinkedList<CCState> OpenList { get; set; }
 		private LinkedList<CCState> ClosedList { get; set; }
-		private Dictionary<(int x, int y), CCState> CCStateList = new Dictionary<(int x, int y), CCState>();
+		private Dictionary<(int x, int y), CCState> ccStateList = new Dictionary<(int x, int y), CCState>();
 		public enum StateListType : byte { OpenList, ClosedList, NoList }
 
 		private readonly World thisWorld;
@@ -259,26 +259,26 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private CCState GetState(CCPos cc)
 		{
 			var ccKey = (cc.X, cc.Y);
-			if (!CCStateList.ContainsKey(ccKey))
-				CCStateList.Add(ccKey, new CCState(cc, Dest, thisWorld));
-			return CCStateList[ccKey];
+			if (!ccStateList.ContainsKey(ccKey))
+				ccStateList.Add(ccKey, new CCState(cc, Dest, thisWorld));
+			return ccStateList[ccKey];
 		}
 
 		private void UpdateState(CCState state)
 		{
 			var cc = state.CC;
 			var ccKey = (cc.X, cc.Y);
-			if (!CCStateList.ContainsKey(ccKey))
-				CCStateList.Add(ccKey, state);
-			CCStateList[ccKey] = state;
+			if (!ccStateList.ContainsKey(ccKey))
+				ccStateList.Add(ccKey, state);
+			ccStateList[ccKey] = state;
 		}
 		private void UpdateState(CCPos cc, CCState parentState, int gval)
 		{
 			var ccKey = (cc.X, cc.Y);
-			if (!CCStateList.ContainsKey(ccKey))
-				CCStateList.Add(ccKey, new CCState(cc, Dest, gval, parentState, thisWorld));
-			CCStateList[ccKey].Gval = gval;
-			CCStateList[ccKey].ParentState = parentState;
+			if (!ccStateList.ContainsKey(ccKey))
+				ccStateList.Add(ccKey, new CCState(cc, Dest, gval, parentState, thisWorld));
+			ccStateList[ccKey].Gval = gval;
+			ccStateList[ccKey].ParentState = parentState;
 		}
 		private void UpdateState(CCState ccState, CCState parentState, int gval)
 		{ UpdateState(ccState.CC, parentState, gval); }
@@ -286,9 +286,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private void UpdateState(CCPos cc, int gval)
 		{
 			var ccKey = (cc.X, cc.Y);
-			if (!CCStateList.ContainsKey(ccKey))
-				CCStateList.Add(ccKey, new CCState(cc, Dest, gval, thisWorld));
-			CCStateList[ccKey].Gval = gval;
+			if (!ccStateList.ContainsKey(ccKey))
+				ccStateList.Add(ccKey, new CCState(cc, Dest, gval, thisWorld));
+			ccStateList[ccKey].Gval = gval;
 		}
 		private void UpdateState(CCState ccState, int gval)
 		{ UpdateState(ccState.CC, gval); }
@@ -296,9 +296,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private void UpdateState(CCPos cc, CCState parentState)
 		{
 			var ccKey = (cc.X, cc.Y);
-			if (!CCStateList.ContainsKey(ccKey))
-				CCStateList.Add(ccKey, new CCState(cc, Dest, parentState, thisWorld));
-			CCStateList[ccKey].ParentState = parentState;
+			if (!ccStateList.ContainsKey(ccKey))
+				ccStateList.Add(ccKey, new CCState(cc, Dest, parentState, thisWorld));
+			ccStateList[ccKey].ParentState = parentState;
 		}
 		private void UpdateState(CCState ccState, CCState parentState)
 		{ UpdateState(ccState.CC, parentState); }
@@ -340,7 +340,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			AddStateToClosed(firstState);
 			return firstState;
 		}
-
 
 		// This will pad the ccPos in a path with a set amount of padding based on the actor's radius
 		// Four cases: Note that only one direction is shown below, but other directions are simply mirrors
@@ -551,7 +550,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return EmptyPath;
 		}
 
-		#pragma warning disable SA1312 // Variable names should begin with lower-case letter
 		private bool LineOfSight(CCPos cc1, CCPos cc2)
 		{
 			var x1 = cc1.X;
@@ -640,7 +638,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			return true;
 		}
-#pragma warning restore SA1312 // Variable names should begin with lower-case letter
 
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
 		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1)
