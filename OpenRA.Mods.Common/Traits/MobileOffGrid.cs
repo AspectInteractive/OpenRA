@@ -353,6 +353,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		[Sync]
 		public WPos CenterPosition { get; private set; }
+
+		public WDist unitRadius;
 		public WAngle TurnSpeed => IsTraitDisabled || IsTraitPaused ? WAngle.Zero : Info.TurnSpeed;
 		public WAngle? IdleTurnSpeed => IsTraitDisabled || IsTraitPaused ? null : Info.IdleTurnSpeed;
 		public WAngle GetTurnSpeed(bool isIdleTurn)
@@ -468,6 +470,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected override void Created(Actor self)
 		{
+			unitRadius = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled).FirstOrDefault().Info.Type.OuterRadius;
 			notifyCustomLayerChanged = self.TraitsImplementing<INotifyCustomLayerChanged>().ToArray();
 			notifyCenterPositionChanged = self.TraitsImplementing<INotifyCenterPositionChanged>().ToArray();
 			notifyMoving = self.TraitsImplementing<INotifyMoving>().ToArray();
@@ -503,25 +506,42 @@ namespace OpenRA.Mods.Common.Traits
 			return finalVec;
 		}
 
-		public void RemoveTickFleeVectors()
+		public void DecrementMoveVectorSet(List<MvVec> mvVecList)
 		{
-			foreach (var mvVec in FleeVectors)
-				if (mvVec.TickTimer > 0)
-					mvVec.TickTimer--;
+			foreach (var mvVec in mvVecList.Where(v => v.TickTimer > 0))
+				mvVec.TickTimer--;
+			mvVecList.RemoveAll(v => v.TickTimer == 0);
 		}
 
-		public void RemoveTickSeekVectors()
-		{
-			foreach (var mvVec in SeekVectors)
-				if (mvVec.TickTimer > 0)
-					mvVec.TickTimer--;
-		}
-
+		public void DecrementTickFleeVectors() { DecrementMoveVectorSet(FleeVectors); }
+		public void DecrementTickSeekVectors() { DecrementMoveVectorSet(SeekVectors); }
 		public void SetDesiredFacing(WAngle desiredFacing) { DesiredFacing = desiredFacing; }
 		public void SetDesiredFacingToFacing() { DesiredFacing = Facing; }
 		public void SetDesiredMove(WVec desiredMove) { DesiredMove = desiredMove; }
 		public void SetDesiredAltitude(WDist desiredAltitude) { DesiredAltitude = desiredAltitude; }
 		public void SetIgnoreZVec(bool ignoreZVec) { IgnoreZVec = ignoreZVec; }
+
+		public void RepelNearbyUnitsTick(Actor self)
+		{
+			var nearbyActorRange = unitRadius * 2;
+			var nearbyActors = self.World.FindActorsInCircle(CenterPosition, nearbyActorRange);
+
+			foreach (var actor in nearbyActors)
+			{
+				if (actor != self)
+				{
+					var actorMobileOGs = actor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
+					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
+					{
+						var actorMobileOG = actorMobileOGs.FirstOrDefault();
+						var ticksNeeded = unitRadius.Length / actorMobileOG.MovementSpeed;
+						var repulsionVec = -new WVec(new WDist(actorMobileOG.MovementSpeed),
+													WRot.FromYaw((CenterPosition - actorMobileOG.CenterPosition).Yaw));
+						actorMobileOG.FleeVectors = new List<MvVec>() { new MvVec(repulsionVec, ticksNeeded) };
+					}
+				}
+			}
+		}
 
 		public void MobileOffGridMoveTick(Actor self)
 		{
@@ -529,8 +549,8 @@ namespace OpenRA.Mods.Common.Traits
 			if (move == WVec.Zero)
 				return;
 
-			RemoveTickFleeVectors();
-			RemoveTickSeekVectors();
+			DecrementTickFleeVectors();
+			DecrementTickSeekVectors();
 
 			var dat = self.World.Map.DistanceAboveTerrain(CenterPosition);
 
@@ -603,6 +623,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Update unit position
 			MobileOffGridMoveTick(self);
+			RepelNearbyUnitsTick(self);
 
 			// Update unit's cell as it moves
 			var cell = self.World.Map.CellContaining(CenterPosition);
