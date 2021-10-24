@@ -17,6 +17,7 @@ using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
+using static OpenRA.Mods.Common.Traits.MobileOffGrid;
 
 #pragma warning disable SA1512 // SingleLineCommentsMustNotBeFollowedByBlankLine
 #pragma warning disable SA1515 // Single-line comment should be preceded by blank line
@@ -128,8 +129,6 @@ namespace OpenRA.Mods.Common.Activities
 			var botRightPos = map.BottomRightOfCell(new CPos(map.MapSize.X - 1, map.MapSize.Y - 1));
 			return (botRightPos - topLeftPos).Length;
 		}
-
-
 		public static void RenderLine(Actor self, List<WPos> line)
 		{
 			var renderLine = new List<WPos>();
@@ -149,7 +148,6 @@ namespace OpenRA.Mods.Common.Activities
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
 		public static void RenderPoint(Actor self, WPos pos, Color color)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color); }
-
 
 		/* --- Not Working ---
 		 * public static WVec CombineDistAndYawVecWithRotation(WDist dist, WVec yawVec, WRot rotation)
@@ -190,7 +188,6 @@ namespace OpenRA.Mods.Common.Activities
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
 
-
 		protected override void OnFirstRun(Actor self)
 		{
 			usePathFinder = true;
@@ -211,7 +208,6 @@ namespace OpenRA.Mods.Common.Activities
 
 		public override bool Tick(Actor self)
 		{
-
 			// Refuse to take off if it would land immediately again.
 			if (mobileOffGrid.ForceLanding)
 				Cancel(self);
@@ -265,11 +261,33 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(delta.Yaw)) / 1024;
+
+			// Acceleration logic
 			var maxVecs = 5;
 			if (delta != WVec.Zero && mobileOffGrid.SeekVectors.Count < maxVecs)
-				mobileOffGrid.SeekVectors.Add(moveVec / maxVecs);
+				mobileOffGrid.SeekVectors.Add(new MvVec(moveVec / maxVecs));
 
-			var move = mobileOffGrid.GenFinalVector();
+			var move = mobileOffGrid.GenFinalWVec();
+			var nearbyActorRange = new WDist(move.Length * 2);
+			var nearbyActors = self.World.FindActorsOnCircle(self.CenterPosition, nearbyActorRange);
+
+			// Repelling force
+			foreach (var actor in nearbyActors)
+			{
+				if (actor != self)
+				{
+					var actorMobileOGs = actor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
+					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
+					{
+						var actorMobileOG = actorMobileOGs.FirstOrDefault();
+						var tempRadius = 700;
+						var ticksNeeded = tempRadius / actorMobileOG.MovementSpeed;
+						var repulsionVec = -new WVec(new WDist(actorMobileOG.MovementSpeed),
+												    WRot.FromYaw((mobileOffGrid.CenterPosition - actorMobileOG.CenterPosition).Yaw));
+						actorMobileOG.FleeVectors = new List<MvVec>() { new MvVec(repulsionVec, ticksNeeded) };
+					}
+				}
+			}
 
 			// Inside the minimum range, so reverse if we CanSlide, otherwise face away from the target.
 			if (insideMinRange)
@@ -318,7 +336,7 @@ namespace OpenRA.Mods.Common.Activities
 					tickCount = 0;
 				else if (tickCount == 0)
 				{
-					// We can abandon the local avoidance strategy 
+					// We can abandon the local avoidance strategy
 					if (TargetInLOS(self, move, locomotor, pathRemaining.FirstOrDefault()))
 					{
 						searchingForNextTarget = false;

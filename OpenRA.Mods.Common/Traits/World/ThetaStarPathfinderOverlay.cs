@@ -197,6 +197,7 @@ namespace OpenRA.Mods.Common.Traits
 			pointsWithColors.Add((pos, Color.FromAhsv(pointHue, currSat, currLight)));
 			UpdatePointColors();
 		}
+
 		public void AddPoint(WPos pos, Color color)
 		{
 			pointsWithColors.Add((pos, color));
@@ -218,6 +219,7 @@ namespace OpenRA.Mods.Common.Traits
 				if (currPath == path)
 					paths.Remove(currPath);
 		}
+
 		public void AddLine(List<WPos> line) { lines.Add(line); }
 		public void RemoveLine(List<WPos> line)
 		{
