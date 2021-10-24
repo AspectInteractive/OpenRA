@@ -14,10 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Commands;
-using OpenRA.Mods.Common.Graphics;
-using OpenRA.Primitives;
 using OpenRA.Traits;
-using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
 
 namespace OpenRA.Mods.Common.Traits
 {

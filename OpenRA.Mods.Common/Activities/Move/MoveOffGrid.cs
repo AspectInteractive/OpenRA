@@ -45,6 +45,7 @@ namespace OpenRA.Mods.Common.Activities
 	public class MoveOffGrid : Activity
 	{
 		readonly MobileOffGrid mobileOffGrid;
+		WVec Delta => currPathTarget - mobileOffGrid.CenterPosition;
 		readonly WDist maxRange;
 		readonly WDist minRange;
 		readonly Color? targetLineColor;
@@ -85,7 +86,10 @@ namespace OpenRA.Mods.Common.Activities
 		private bool GetNextTargetOrComplete()
 		{
 			if (pathRemaining.Count > 0)
+			{
 				currPathTarget = PopNextTarget();
+				mobileOffGrid.CurrPathTarget = currPathTarget;
+			}
 			else
 			{
 				System.Console.WriteLine("GetNextTargetOrComplete(): No more targets");
@@ -257,7 +261,7 @@ namespace OpenRA.Mods.Common.Activities
 
 			var checkTarget = useLastVisibleTarget ? lastVisibleTarget : target;
 			var pos = mobileOffGrid.GetPosition();
-			var delta = currPathTarget - pos;
+			//var delta = currPathTarget - pos;
 
 			// Inside the target annulus, so we're done
 			var insideMaxRange = maxRange.Length > 0 && PosInRange(currPathTarget, pos, maxRange);
@@ -269,11 +273,11 @@ namespace OpenRA.Mods.Common.Activities
 				return true;
 			}
 
-			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(delta.Yaw)) / 1024;
+			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
 
 			// Acceleration logic
 			var maxVecs = 5;
-			if (delta != WVec.Zero && mobileOffGrid.SeekVectors.Count < maxVecs)
+			if (Delta != WVec.Zero && mobileOffGrid.SeekVectors.Count < maxVecs)
 				mobileOffGrid.SeekVectors.Add(new MvVec(moveVec / maxVecs));
 
 			var move = mobileOffGrid.GenFinalWVec();
@@ -285,6 +289,7 @@ namespace OpenRA.Mods.Common.Activities
 				return false;
 			}
 
+			// -- TEMPORARILY DISABLED, UNCOMMENT OUT LATER --
 			// HACK: Consider ourselves blocked if we have moved by less than 64 WDist in the last five ticks
 			// Stop if we are blocked and close enough, or if the current delta to the next target is larger than it was previously
 			if (positionBuffer.Count >= 10)
@@ -292,37 +297,63 @@ namespace OpenRA.Mods.Common.Activities
 				var lengthMoved = (positionBuffer.Last() - positionBuffer.ElementAt(0)).LengthSquared;
 				var deltaFirst = currPathTarget - positionBuffer.ElementAt(0);
 				var deltaLast = currPathTarget - positionBuffer.Last();
-				System.Console.WriteLine($"nearEnough.LengthSquared: {nearEnough.LengthSquared}");
+
+				/*System.Console.WriteLine($"nearEnough.LengthSquared: {nearEnough.LengthSquared}");
 				System.Console.WriteLine($"lengthMoved: {lengthMoved}");
 				System.Console.WriteLine($"deltaFirst: {deltaFirst}");
-				System.Console.WriteLine($"deltaLast: {deltaLast}");
-				if ((positionBuffer.Count >= 10 && lengthMoved < 4096 && delta.HorizontalLengthSquared <= nearEnough.LengthSquared) ||
-					deltaLast.LengthSquared > deltaFirst.LengthSquared)
+				System.Console.WriteLine($"deltaLast: {deltaLast}");*/
+
+				if (positionBuffer.Count >= 10 && lengthMoved < 4096 && Delta.HorizontalLengthSquared <= nearEnough.LengthSquared)
 				{
 					endingActions();
 					return true;
 				}
+
+				if (deltaLast.LengthSquared > deltaFirst.LengthSquared)
+				{
+					endingActions();
+					positionBuffer.Clear();
+				}
 			}
 
 			// The next move would overshoot, so consider it close enough and set final position
-			System.Console.WriteLine($"delta.HorizontalLengthSquared: {delta.HorizontalLengthSquared}, " +
-									 $"move.HorizontalLengthSquared: {move.HorizontalLengthSquared}");
-			if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared)
+			/*System.Console.WriteLine($"delta.HorizontalLengthSquared: {Delta.HorizontalLengthSquared}, " +
+									 $"move.HorizontalLengthSquared: {move.HorizontalLengthSquared}");*/
+
+			// Find actors that are owned by the same player and sharing the same target
+			var nearbyActorRange = mobileOffGrid.UnitRadius * 10; // Adjust this depending on how wide a net of nearby units to consider
+			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, nearbyActorRange);
+			var actorMobileOgsSharingTarg = new List<MobileOffGrid>();
+			foreach (var actor in nearbyActors)
+				if (actor != self && actor.Owner == self.Owner && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
+				{
+					var actorMobileOGs = actor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
+					if (actorMobileOGs.Any() && actorMobileOGs.FirstOrDefault().CurrPathTarget == currPathTarget)
+						actorMobileOgsSharingTarg.Add(actorMobileOGs.FirstOrDefault());
+				}
+
+			System.Console.WriteLine($"Found {actorMobileOgsSharingTarg.Count} actors sharing target");
+
+			var selfHasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared;
+			if (selfHasReachedGoal ||
+				actorMobileOgsSharingTarg.Where(a => a.Delta.HorizontalLengthSquared < a.GenFinalWVec().HorizontalLengthSquared).Any())
 			{
 				#if DEBUG || DEBUGWITHOVERLAY
-				System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
+				/*System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");*/
 				#endif
 
-				if (delta.HorizontalLengthSquared != 0)
+				if (Delta.HorizontalLengthSquared != 0 && selfHasReachedGoal)
 				{
 					// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
-					var deltaMove = new WVec(delta.X, delta.Y, 0);
+					var deltaMove = new WVec(Delta.X, Delta.Y, 0);
 					mobileOffGrid.SeekVectors.Clear();
 					mobileOffGrid.SetDesiredFacingToFacing();
 					mobileOffGrid.SetDesiredAltitude(dat);
 					mobileOffGrid.SetDesiredMove(deltaMove);
 					mobileOffGrid.SetIgnoreZVec(true);
 				}
+				else if (Delta.HorizontalLengthSquared != 0)
+					mobileOffGrid.SeekVectors.Clear();
 
 				endingActions();
 				searchingForNextTarget = false;
@@ -384,10 +415,10 @@ namespace OpenRA.Mods.Common.Activities
 			return speed * dir / 1024;
 		}
 
-		public static bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
+		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
-			var destActorsWithinRange = self.World.FindActorsOnCircle(self.CenterPosition, new WDist(move.Length * 2)); // we double move length to widen search radius
+			var destActorsWithinRange = self.World.FindActorsInCircle(self.CenterPosition, mobileOffGrid.UnitRadius); // we double move length to widen search radius
 			var selfCenterPos = self.CenterPosition.XYToInt2();
 			var selfCenterPosWithMoves = new List<int2>();
 			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
