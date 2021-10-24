@@ -11,12 +11,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
-using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
@@ -310,6 +308,9 @@ namespace OpenRA.Mods.Common.Traits
 		WPos cachedPosition;
 		WAngle cachedFacing;
 
+		public WPos CurrPathTarget;
+		public WVec Delta => CurrPathTarget - CenterPosition;
+
 		public List<MvVec> SeekVectors = new List<MvVec>();
 		public List<MvVec> FleeVectors = new List<MvVec>();
 
@@ -354,7 +355,7 @@ namespace OpenRA.Mods.Common.Traits
 		[Sync]
 		public WPos CenterPosition { get; private set; }
 
-		public WDist unitRadius;
+		public WDist UnitRadius;
 		public WAngle TurnSpeed => IsTraitDisabled || IsTraitPaused ? WAngle.Zero : Info.TurnSpeed;
 		public WAngle? IdleTurnSpeed => IsTraitDisabled || IsTraitPaused ? null : Info.IdleTurnSpeed;
 		public WAngle GetTurnSpeed(bool isIdleTurn)
@@ -470,7 +471,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected override void Created(Actor self)
 		{
-			unitRadius = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled).FirstOrDefault().Info.Type.OuterRadius;
+			UnitRadius = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled).FirstOrDefault().Info.Type.OuterRadius;
 			notifyCustomLayerChanged = self.TraitsImplementing<INotifyCustomLayerChanged>().ToArray();
 			notifyCenterPositionChanged = self.TraitsImplementing<INotifyCenterPositionChanged>().ToArray();
 			notifyMoving = self.TraitsImplementing<INotifyMoving>().ToArray();
@@ -523,7 +524,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void RepelNearbyUnitsTick(Actor self)
 		{
-			var nearbyActorRange = unitRadius * 2;
+			var nearbyActorRange = UnitRadius * 2;
 			var nearbyActors = self.World.FindActorsInCircle(CenterPosition, nearbyActorRange);
 
 			foreach (var actor in nearbyActors)
@@ -534,7 +535,7 @@ namespace OpenRA.Mods.Common.Traits
 					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
 					{
 						var actorMobileOG = actorMobileOGs.FirstOrDefault();
-						var ticksNeeded = unitRadius.Length / actorMobileOG.MovementSpeed;
+						var ticksNeeded = UnitRadius.Length / actorMobileOG.MovementSpeed;
 						var repulsionVec = -new WVec(new WDist(actorMobileOG.MovementSpeed),
 													WRot.FromYaw((CenterPosition - actorMobileOG.CenterPosition).Yaw));
 						actorMobileOG.FleeVectors = new List<MvVec>() { new MvVec(repulsionVec, ticksNeeded) };
@@ -582,7 +583,6 @@ namespace OpenRA.Mods.Common.Traits
 				move = new WVec(move.X, move.Y, deltaZ);
 			}
 
-			System.Console.WriteLine($"move: {move}, moveHLS: {move.HorizontalLengthSquared}");
 			SetPosition(self, CenterPosition + move);
 
 			// Reset temporary adjustments
