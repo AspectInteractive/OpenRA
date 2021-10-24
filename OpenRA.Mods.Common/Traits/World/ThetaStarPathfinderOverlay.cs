@@ -28,7 +28,7 @@ namespace OpenRA.Mods.Common.Traits
 	public class ThetaStarPathfinderOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
 	{
 		public readonly List<Command> Comms;
-
+		private List<((WPos, WDist), Color)> circlesWithColors = new List<((WPos, WDist), Color)>();
 		private List<(WPos, Color)> pointsWithColors = new List<(WPos, Color)>();
 		private List<(CCState, Color)> statesWithColors = new List<(CCState, Color)>();
 		private List<List<WPos>> paths = new List<List<WPos>>();
@@ -40,6 +40,7 @@ namespace OpenRA.Mods.Common.Traits
 		public bool Enabled;
 		private float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
 		private float pointHue = Color.Red.ToAhsv().H; // 0.0 - 1.0
+		private float circleHue = Color.LightGreen.ToAhsv().H; // 0.0 - 1.0
 		private float pathHue = Color.Yellow.ToAhsv().H; // 0.0 - 1.0
 		private float lineHue = Color.LightBlue.ToAhsv().H; // 0.0 - 1.0
 		private float currSat = 1.0F; // 0.0 - 1.0
@@ -130,6 +131,8 @@ namespace OpenRA.Mods.Common.Traits
 
 			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
 				{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true, 2); };
+			Func<(WPos, WDist), Color, CircleAnnotationRenderable> circleRenderFunc = (c, color) =>
+			{ return new CircleAnnotationRenderable(c.Item1, c.Item2, pointThickness, color, false, 2); };
 
 			// Render States
 			foreach (var (ccState, color) in statesWithColors)
@@ -143,6 +146,10 @@ namespace OpenRA.Mods.Common.Traits
 			// Render Points
 			foreach (var (point, color) in pointsWithColors)
 				yield return pointRenderFunc(point, color);
+
+			// Render Circles
+			foreach (var (circle, color) in circlesWithColors)
+				yield return circleRenderFunc(circle, color);
 
 			// Render Paths
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
@@ -213,26 +220,18 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public void AddPath(List<WPos> path) { paths.Add(path); }
-		public void RemovePath(List<WPos> path)
-		{
-			foreach (var currPath in paths)
-				if (currPath == path)
-					paths.Remove(currPath);
-		}
-
+		public void RemovePath(List<WPos> path)	{ paths.RemoveAll(p => p == path); }
 		public void AddLine(List<WPos> line) { lines.Add(line); }
-		public void RemoveLine(List<WPos> line)
-		{
-			foreach (var currLine in lines)
-				if (currLine == line)
-					lines.Remove(currLine);
-		}
-
+		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l == line); }
+		public void AddCircle((WPos, WDist) circle) { circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight))); }
+		public void RemoveCircle((WPos, WDist) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
 		public void ClearIntervals() { statesWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
 		public void ClearLines() { lines.Clear(); }
 		public void ClearStates() { statesWithColors.Clear(); }
 		public void ClearPoints() { pointsWithColors.Clear(); }
+		public void ClearCircles() { circlesWithColors.Clear(); }
+		public void ClearRadiuses() { circlesWithColors.Clear(); }
 
 		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}

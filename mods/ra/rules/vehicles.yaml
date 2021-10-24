@@ -386,7 +386,10 @@ MCV:
 	Health:
 		HP: 60000
 	Armor:
-		Type: Light    
+		Type: Light
+	HitShape:
+		Type: Circle
+			Radius: 426
     MobileOffGrid:
         Locomotor: wheeled
 		CanHover: True

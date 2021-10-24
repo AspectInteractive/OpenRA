@@ -31,6 +31,7 @@ namespace OpenRA.Mods.Common.Traits
 		readonly DebugVisualizations debugVis;
 		readonly IHealthInfo healthInfo;
 		readonly Lazy<BodyOrientation> coords;
+		private List<((Actor, WPos, WDist), Color)> radiusesWithColors = new List<((Actor, WPos, WDist), Color)>();
 
 		HitShape[] shapes;
 		IBlocksProjectiles[] allBlockers;

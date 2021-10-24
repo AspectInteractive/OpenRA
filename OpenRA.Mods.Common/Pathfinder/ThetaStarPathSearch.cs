@@ -349,7 +349,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public WPos PadCC(CCPos cc)
 		{
 			var ccPos = thisWorld.Map.WPosFromCCPos(cc);
-			var tempRadius = 700; // This needs to be updated once the unit's radius can be determined
+			var unitRadius = self.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault().unitRadius.Length;
 
 			var topLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
 			var topRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
@@ -362,24 +362,24 @@ namespace OpenRA.Mods.Common.Pathfinder
 			if (areBlocked.Count == 1 || areBlocked.Count == 3)
 			{
 				if (topLeftBlocked || (topLeftBlocked && botLeftBlocked && topRightBlocked))
-					return new WPos(ccPos.X + tempRadius, ccPos.Y + tempRadius, ccPos.Z);
+					return new WPos(ccPos.X + unitRadius, ccPos.Y + unitRadius, ccPos.Z);
 				if (topRightBlocked || (topRightBlocked && topLeftBlocked && botRightBlocked))
-					return new WPos(ccPos.X - tempRadius, ccPos.Y + tempRadius, ccPos.Z);
+					return new WPos(ccPos.X - unitRadius, ccPos.Y + unitRadius, ccPos.Z);
 				if (botLeftBlocked || (botLeftBlocked && topLeftBlocked && botRightBlocked))
-					return new WPos(ccPos.X + tempRadius, ccPos.Y - tempRadius, ccPos.Z);
+					return new WPos(ccPos.X + unitRadius, ccPos.Y - unitRadius, ccPos.Z);
 				if (botRightBlocked || (botRightBlocked && botLeftBlocked && topRightBlocked))
-					return new WPos(ccPos.X - tempRadius, ccPos.Y - tempRadius, ccPos.Z);
+					return new WPos(ccPos.X - unitRadius, ccPos.Y - unitRadius, ccPos.Z);
 			}
 			else if (areBlocked.Count == 2)
 			{
 				if (topLeftBlocked && topRightBlocked)
-					return new WPos(ccPos.X, ccPos.Y + tempRadius, ccPos.Z);
+					return new WPos(ccPos.X, ccPos.Y + unitRadius, ccPos.Z);
 				if (topLeftBlocked && botLeftBlocked)
-					return new WPos(ccPos.X + tempRadius, ccPos.Y, ccPos.Z);
+					return new WPos(ccPos.X + unitRadius, ccPos.Y, ccPos.Z);
 				if (botLeftBlocked && botRightBlocked)
-					return new WPos(ccPos.X, ccPos.Y - tempRadius, ccPos.Z);
+					return new WPos(ccPos.X, ccPos.Y - unitRadius, ccPos.Z);
 				if (topRightBlocked && botRightBlocked)
-					return new WPos(ccPos.X - tempRadius, ccPos.Y, ccPos.Z);
+					return new WPos(ccPos.X - unitRadius, ccPos.Y, ccPos.Z);
 				return ccPos; // This is the case where the 2 blocked cells are diagonally adjacent, and should never happen.
 			}
 
