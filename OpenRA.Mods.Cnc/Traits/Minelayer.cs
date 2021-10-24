@@ -200,7 +200,7 @@ namespace OpenRA.Mods.Cnc.Traits
 			if (Info.TerrainTypes.Count == 0)
 				return true;
 
-			var terrainType = self.World.Map.GetTerrainInfo(cell).Type;
+			var terrainType = self.World.Map.GetTerrainTileInfo(cell).Type;
 			return Info.TerrainTypes.Contains(terrainType);
 		}
 
@@ -362,7 +362,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
 			{
-				if (target.Type != TargetType.Terrain)
+				if (!target.SelfIsTerrainType())
 					return false;
 
 				var location = self.World.Map.CellContaining(target.CenterPosition);

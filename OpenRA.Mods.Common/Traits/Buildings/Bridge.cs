@@ -154,17 +154,17 @@ namespace OpenRA.Mods.Common.Traits
 			var i = 0;
 			foreach (var c in footprint.Keys)
 			{
-				var tileInfo = GetTerrainInfo(c);
+				var tileInfo = GetTerrainTileInfo(c);
 				self.World.Map.CustomTerrain[c] = tileInfo.TerrainType;
 				radarSignature[i++] = (c, tileInfo.GetColor(self.World.LocalRandom));
 			}
 		}
 
-		TerrainTileInfo GetTerrainInfo(CPos cell)
+		TerrainTileInfo GetTerrainTileInfo(CPos cell)
 		{
 			var dx = cell - self.Location;
 			var index = dx.X + terrainInfo.Templates[template].Size.X * dx.Y;
-			return terrainInfo.GetTerrainInfo(new TerrainTile(template, (byte)index));
+			return terrainInfo.GetTerrainTileInfo(new TerrainTile(template, (byte)index));
 		}
 
 		public void LinkNeighbouringBridges(World world, LegacyBridgeLayer bridges)
@@ -318,7 +318,7 @@ namespace OpenRA.Mods.Common.Traits
 			var i = 0;
 			foreach (var c in footprint.Keys)
 			{
-				var tileInfo = GetTerrainInfo(c);
+				var tileInfo = GetTerrainTileInfo(c);
 				self.World.Map.CustomTerrain[c] = tileInfo.TerrainType;
 				radarSignature[i++] = (c, tileInfo.GetColor(self.World.LocalRandom));
 			}

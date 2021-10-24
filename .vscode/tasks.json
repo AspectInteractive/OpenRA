@@ -4,9 +4,18 @@
 		{
 			"label": "build",
 			"command": "make",
-			"args": ["all", "CONFIGURATION=Debug"],
+			"args": [
+				"all",
+				"CONFIGURATION=Debug",
+				"/p:DefineConstants=DEBUG"
+			],
 			"windows": {
 				"command": "make.cmd"
+			},
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
 			}
 		}
 	]

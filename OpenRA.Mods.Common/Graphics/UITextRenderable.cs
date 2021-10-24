@@ -25,8 +25,9 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly Color bgDark;
 		readonly Color bgLight;
 		readonly string text;
-
-		public UITextRenderable(SpriteFont font, WPos effectiveWorldPos, int2 screenPos, int zOffset, Color color, Color bgDark, Color bgLight, string text)
+		readonly int layer;
+		public UITextRenderable(SpriteFont font, WPos effectiveWorldPos, int2 screenPos, int zOffset, Color color, Color bgDark, Color bgLight,
+								string text, int layer = 0)
 		{
 			this.font = font;
 			this.effectiveWorldPos = effectiveWorldPos;
@@ -36,20 +37,22 @@ namespace OpenRA.Mods.Common.Graphics
 			this.bgDark = bgDark;
 			this.bgLight = bgLight;
 			this.text = text;
+			this.layer = layer;
 		}
 
-		public UITextRenderable(SpriteFont font, WPos effectiveWorldPos, int2 screenPos, int zOffset, Color color, string text)
+		public UITextRenderable(SpriteFont font, WPos effectiveWorldPos, int2 screenPos, int zOffset, Color color, string text, int layer = 0)
 			: this(font, effectiveWorldPos, screenPos, zOffset, color,
 				ChromeMetrics.Get<Color>("TextContrastColorDark"),
 				ChromeMetrics.Get<Color>("TextContrastColorLight"),
-				text) { }
+				text, layer) { }
 
 		public WPos Pos => effectiveWorldPos;
 		public int ZOffset => zOffset;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new UITextRenderable(font, effectiveWorldPos, screenPos, zOffset, color, text); }
-		public IRenderable OffsetBy(in WVec vec) { return new UITextRenderable(font, effectiveWorldPos + vec, screenPos, zOffset, color, text); }
+		public IRenderable WithZOffset(int newOffset) { return new UITextRenderable(font, effectiveWorldPos, screenPos, zOffset, color, text, layer); }
+		public IRenderable OffsetBy(in WVec vec) { return new UITextRenderable(font, effectiveWorldPos + vec, screenPos, zOffset, color, text, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

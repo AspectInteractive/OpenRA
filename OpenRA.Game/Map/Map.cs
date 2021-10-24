@@ -359,7 +359,7 @@ namespace OpenRA
 							var tile = s.ReadUInt16();
 							var index = s.ReadUInt8();
 
-							// TODO: Remember to remove this when rewriting tile variants / PickAny
+							// TODO: Remember to remove this when rewriting type variants / PickAny
 							if (index == byte.MaxValue)
 								index = (byte)(i % 4 + (j % 4) * 4);
 
@@ -438,11 +438,11 @@ namespace OpenRA
 			var terrainInfo = Rules.TerrainInfo;
 			foreach (var uv in AllCells.MapCoords)
 			{
-				if (!terrainInfo.TryGetTerrainInfo(Tiles[uv], out var info))
+				if (!terrainInfo.TryGetTerrainTileInfo(Tiles[uv], out var info))
 				{
 					ReplacedInvalidTerrainTiles[uv.ToCPos(this)] = Tiles[uv];
 					Tiles[uv] = terrainInfo.DefaultTerrainTile;
-					info = terrainInfo.GetTerrainInfo(terrainInfo.DefaultTerrainTile);
+					info = terrainInfo.GetTerrainTileInfo(terrainInfo.DefaultTerrainTile);
 				}
 
 				Ramp[uv] = info.RampType;
@@ -453,7 +453,7 @@ namespace OpenRA
 
 		void UpdateRamp(CPos cell)
 		{
-			Ramp[cell] = Rules.TerrainInfo.GetTerrainInfo(Tiles[cell]).RampType;
+			Ramp[cell] = Rules.TerrainInfo.GetTerrainTileInfo(Tiles[cell]).RampType;
 		}
 
 		void InitializeCellProjection()
@@ -540,7 +540,7 @@ namespace OpenRA
 					// The original games treat the top of cliffs the same way as the bottom
 					// This information isn't stored in the map data, so query the offset from the tileset
 					var temp = inverse.MaxBy(uv => uv.V);
-					return (byte)(Height[temp] - Rules.TerrainInfo.GetTerrainInfo(Tiles[temp]).Height);
+					return (byte)(Height[temp] - Rules.TerrainInfo.GetTerrainTileInfo(Tiles[temp]).Height);
 				}
 
 				// Try the next cell down if this is a cliff face
@@ -677,7 +677,7 @@ namespace OpenRA
 		public (Color Left, Color Right) GetTerrainColorPair(MPos uv)
 		{
 			var terrainInfo = Rules.TerrainInfo;
-			var type = terrainInfo.GetTerrainInfo(Tiles[uv]);
+			var type = terrainInfo.GetTerrainTileInfo(Tiles[uv]);
 			var left = type.GetColor(Game.CosmeticRandom);
 			var right = type.GetColor(Game.CosmeticRandom);
 
@@ -884,6 +884,179 @@ namespace OpenRA
 			return new WPos(724 * (cell.X - cell.Y + 1), 724 * (cell.X + cell.Y + 1), z);
 		}
 
+		public static CCPos TopLeftCCPos(CPos cell) { return new CCPos(cell.X, cell.Y, cell.Layer); }
+		public static CCPos TopRightCCPos(CPos cell) { return new CCPos(cell.X + 1, cell.Y, cell.Layer); }
+		public static CCPos BottomLeftCCPos(CPos cell) { return new CCPos(cell.X, cell.Y + 1, cell.Layer); }
+		public static CCPos BottomRightCCPos(CPos cell) { return new CCPos(cell.X + 1, cell.Y + 1, cell.Layer); }
+
+		public CPos? CellTopLeftOfCCPos(CCPos ccPos)
+		{
+			return ccPos.X != 0 && ccPos.Y != 0 ? new CPos(ccPos.X - 1, ccPos.Y - 1, ccPos.Layer) : (CPos?)null;
+		}
+
+		public CPos? CellTopRightOfCCPos(CCPos ccPos)
+		{
+			return ccPos.X != MapSize.X && ccPos.Y != 0 ? new CPos(ccPos.X, ccPos.Y - 1, ccPos.Layer) : (CPos?)null;
+		}
+
+		public CPos? CellBottomLeftOfCCPos(CCPos ccPos)
+		{
+			return ccPos.X != 0 && ccPos.Y != MapSize.Y ? new CPos(ccPos.X - 1, ccPos.Y, ccPos.Layer) : (CPos?)null;
+		}
+
+		public CPos? CellBottomRightOfCCPos(CCPos ccPos)
+		{
+			return ccPos.X != MapSize.X && ccPos.Y != MapSize.Y ? new CPos(ccPos.X, ccPos.Y, ccPos.Layer) : (CPos?)null;
+		}
+
+		public struct CellsSurroundingCCPos
+		{
+			public CPos? TopLeft;
+			public CPos? TopRight;
+			public CPos? BottomLeft;
+			public CPos? BottomRight;
+		}
+
+		public CellsSurroundingCCPos GetCellsSurroundingCCPos(CCPos ccPos)
+		{
+			CellsSurroundingCCPos cellsSurroundingCCPos;
+			cellsSurroundingCCPos.TopLeft = CellTopLeftOfCCPos(ccPos);
+			cellsSurroundingCCPos.TopRight = CellTopRightOfCCPos(ccPos);
+			cellsSurroundingCCPos.BottomLeft = CellBottomLeftOfCCPos(ccPos);
+			cellsSurroundingCCPos.BottomRight = CellBottomRightOfCCPos(ccPos);
+			return cellsSurroundingCCPos;
+		}
+
+		public static List<CPos> CellsSurroundingCCPosToList(CellsSurroundingCCPos cellsSurroundingCCPos)
+		{
+			var cellList = new List<CPos>();
+			if (cellsSurroundingCCPos.TopLeft != null)
+				cellList.Add((CPos)cellsSurroundingCCPos.TopLeft);
+			if (cellsSurroundingCCPos.TopRight != null)
+				cellList.Add((CPos)cellsSurroundingCCPos.TopRight);
+			if (cellsSurroundingCCPos.BottomLeft != null)
+				cellList.Add((CPos)cellsSurroundingCCPos.BottomLeft);
+			if (cellsSurroundingCCPos.BottomRight != null)
+				cellList.Add((CPos)cellsSurroundingCCPos.BottomRight);
+			return cellList;
+		}
+
+		// note that this loses the corner placement
+		public CPos CPosFromCCPos(CCPos ccPos)
+		{
+			if (ccPos.X <= MapSize.X - 1)
+				if (ccPos.Y <= MapSize.Y - 1)
+					return new CPos(ccPos.X, ccPos.Y, ccPos.Layer);
+				else
+					return new CPos(ccPos.X, ccPos.Y - 1, ccPos.Layer); // since ccPos is at the bottom edge we take the cell directly before it
+			else // since ccPos is at the right edge we take the cell at X-1
+				if (ccPos.Y <= MapSize.Y - 1)
+					return new CPos(ccPos.X - 1, ccPos.Y, ccPos.Layer);
+				else
+					return new CPos(ccPos.X - 1, ccPos.Y - 1, ccPos.Layer); // since ccPos is at the bottom right corner we take the cell at X-1,Y-1
+		}
+
+		public WPos WPosFromCCPos(CCPos ccPos)
+		{
+			(var cPos, var cornerFunc) = CPosWithCornerFuncFromCCPos(ccPos);
+			return cornerFunc(cPos);
+		}
+
+		public (CPos, Func<CPos, WPos>) CPosWithCornerFuncFromCCPos(CCPos ccPos)
+		{
+			Func<CPos, WPos> cornerFunc = TopLeftOfCell;
+			if (ccPos.X <= MapSize.X - 1)
+			{
+				if (ccPos.Y <= MapSize.Y - 1)
+				{
+					return (new CPos(ccPos.X, ccPos.Y, ccPos.Layer), cornerFunc);
+				}
+				else
+				{
+					cornerFunc = BottomLeftOfCell; // since we are at the bottom left edge, we take the bottom corner instead of the top
+					return (new CPos(ccPos.X, ccPos.Y - 1, ccPos.Layer), cornerFunc); // since ccPos is at the bottom edge we take the cell directly before it
+				}
+			}
+			else
+			{ // since ccPos is at the right edge we take the cell at X-1
+				if (ccPos.Y <= MapSize.Y - 1)
+				{
+					cornerFunc = TopRightOfCell; // since we are at the top right edge, we take the right corner instead of the left
+					return (new CPos(ccPos.X - 1, ccPos.Y, ccPos.Layer), cornerFunc);
+				}
+				else
+				{
+					cornerFunc = BottomRightOfCell; // since we are at the bottom right corner (MapSize.X, MapSize.Y), corner is bottom right
+					return (new CPos(ccPos.X - 1, ccPos.Y - 1, ccPos.Layer), cornerFunc); // since ccPos is at the bottom right corner we take the cell at X-1,Y-1
+				}
+			}
+		}
+
+		public WPos TopLeftOfCell(CPos cell)
+		{
+			if (Grid.Type == MapGridType.Rectangular)
+				return new WPos(1024 * cell.X, 1024 * cell.Y, 0);
+
+			var z = Height.Contains(cell) ? 724 * Height[cell] + Grid.Ramps[Ramp[cell]].CenterHeightOffset : 0;
+			return new WPos(724 * (cell.X - cell.Y), 724 * (cell.X + cell.Y), z);
+		}
+
+		public WPos TopRightOfCell(CPos cell)
+		{
+			if (Grid.Type == MapGridType.Rectangular)
+				return new WPos(1024 * cell.X + 1024, 1024 * cell.Y, 0);
+
+			var z = Height.Contains(cell) ? 724 * Height[cell] + Grid.Ramps[Ramp[cell]].CenterHeightOffset : 0;
+			return new WPos(724 * (cell.X - cell.Y + 2), 724 * (cell.X + cell.Y), z);
+		}
+
+		public WPos BottomLeftOfCell(CPos cell)
+		{
+			if (Grid.Type == MapGridType.Rectangular)
+				return new WPos(1024 * cell.X, 1024 * cell.Y + 1024, 0);
+
+			var z = Height.Contains(cell) ? 724 * Height[cell] + Grid.Ramps[Ramp[cell]].CenterHeightOffset : 0;
+			return new WPos(724 * (cell.X - cell.Y), 724 * (cell.X + cell.Y + 2), z);
+		}
+
+		public WPos BottomRightOfCell(CPos cell)
+		{
+			if (Grid.Type == MapGridType.Rectangular)
+				return new WPos(1024 * cell.X + 1024, 1024 * cell.Y + 1024, 0);
+
+			var z = Height.Contains(cell) ? 724 * Height[cell] + Grid.Ramps[Ramp[cell]].CenterHeightOffset : 0;
+			return new WPos(724 * (cell.X - cell.Y + 2), 724 * (cell.X + cell.Y + 2), z);
+		}
+
+		public List<WPos> TopEdgeOfCell(CPos cell) { return new List<WPos>() { TopLeftOfCell(cell),	TopRightOfCell(cell) };	}
+		public List<WPos> BottomEdgeOfCell(CPos cell) { return new List<WPos>() { BottomLeftOfCell(cell), BottomRightOfCell(cell) }; }
+		public List<WPos> LeftEdgeOfCell(CPos cell) { return new List<WPos>() { TopLeftOfCell(cell), BottomLeftOfCell(cell) }; }
+		public List<WPos> RightEdgeOfCell(CPos cell) { return new List<WPos>() { TopRightOfCell(cell), BottomRightOfCell(cell) }; }
+
+		public static bool CellEdgeIntersectsWithLine(List<WPos> cellEdge, WPos b0, WPos b1)
+		{
+			var a0 = cellEdge.ElementAt(0);
+			var a1 = cellEdge.ElementAt(1);
+			return WPos.DoTwoLinesIntersect(a0, a1, b0, b1);
+		}
+
+		public bool AnyCellEdgeIntersectsWithLine(CPos cell, WPos b0, WPos b1)
+		{
+			var cellEdges = new List<List<WPos>>()
+			{
+				TopEdgeOfCell(cell),
+				BottomEdgeOfCell(cell),
+				LeftEdgeOfCell(cell),
+				RightEdgeOfCell(cell),
+			};
+			foreach (var edge in cellEdges)
+				if (CellEdgeIntersectsWithLine(edge, b0, b1))
+					return true; // at least one edge has intersected
+
+			// none of the cell's edges intersects with the line
+			return false;
+		}
+
 		public WPos CenterOfSubCell(CPos cell, SubCell subCell)
 		{
 			var index = (int)subCell;
@@ -965,6 +1138,24 @@ namespace OpenRA
 			var u = (pos.Y + pos.X - 724) / 1448;
 			var v = (pos.Y - pos.X + (pos.Y > pos.X ? 724 : -724)) / 1448;
 			return new CPos(u, v);
+		}
+
+		public WPos MapPosOf(WPos pos)
+		{
+			if (Grid.Type == MapGridType.Rectangular)
+				return new WPos(pos.X, pos.Y, 0);
+
+			// Convert from world position to isometric cell position:
+			// (a) Subtract ([1/2 cell], [1/2 cell]) to move the rotation center to the middle of the corner cell
+			// (b) Rotate axes by -pi/4 to align the world axes with the cell axes
+			// (c) Apply an offset so that the integer division by [1 cell] rounds in the right direction:
+			//      (i) u is always positive, so add [1/2 cell] (which then partially cancels the -[1 cell] term from the rotation)
+			//     (ii) v can be negative, so we need to be careful about rounding directions.  We add [1/2 cell] *away from 0* (negative if y > x).
+			// (e) Divide by [1 cell] to bring into cell coords.
+			// The world axes are rotated relative to the cell axes, so the standard cell size (1024) is increased by a factor of sqrt(2)
+			var u = (pos.Y + pos.X);
+			var v = (pos.Y - pos.X + (pos.Y > pos.X ? 724 : -724));
+			return new WPos(u, v, 0);
 		}
 
 		public PPos ProjectedCellCovering(WPos pos)
@@ -1096,13 +1287,13 @@ namespace OpenRA
 			if (terrainIndex == InvalidCachedTerrainIndex)
 			{
 				var custom = CustomTerrain[uv];
-				terrainIndex = cachedTerrainIndexes[uv] = custom != byte.MaxValue ? custom : Rules.TerrainInfo.GetTerrainInfo(Tiles[uv]).TerrainType;
+				terrainIndex = cachedTerrainIndexes[uv] = custom != byte.MaxValue ? custom : Rules.TerrainInfo.GetTerrainTileInfo(Tiles[uv]).TerrainType;
 			}
 
 			return (byte)terrainIndex;
 		}
 
-		public TerrainTypeInfo GetTerrainInfo(CPos cell)
+		public TerrainTypeInfo GetTerrainTileInfo(CPos cell)
 		{
 			return Rules.TerrainInfo.TerrainTypes[GetTerrainIndex(cell)];
 		}

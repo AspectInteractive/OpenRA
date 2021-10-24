@@ -261,7 +261,7 @@ namespace OpenRA.Graphics
 		{
 			var world = worldRenderer.Viewport.ViewToWorldPx(view);
 			var map = worldRenderer.World.Map;
-			var candidates = CandidateMouseoverCells(world).ToList();
+			var candidates = CandidateMouseoverCells(world, worldRenderer).ToList();
 
 			foreach (var uv in candidates)
 			{
@@ -298,7 +298,7 @@ namespace OpenRA.Graphics
 		}
 
 		/// <summary> Returns an unfiltered list of all cells that could potentially contain the mouse cursor</summary>
-		IEnumerable<MPos> CandidateMouseoverCells(int2 world)
+		public static IEnumerable<MPos> CandidateMouseoverCells(int2 world, WorldRenderer worldRenderer)
 		{
 			var map = worldRenderer.World.Map;
 			var minPos = worldRenderer.ProjectedPosition(world);
@@ -313,6 +313,45 @@ namespace OpenRA.Graphics
 		}
 
 		public int2 ViewToWorldPx(int2 view) { return (graphicSettings.UIScale / Zoom * view.ToFloat2()).ToInt2() + TopLeft; }
+
+		public WPos ViewToWorldPxWithCellZ(int2 screenPx)
+		{
+			/*var view = (graphicSettings.UIScale / Zoom * screenPx.ToFloat2()).ToInt2() + TopLeft;*/
+			var view = worldRenderer.Viewport.ViewToWorldPx(screenPx);
+			var candidates = Viewport.CandidateMouseoverCells(view, worldRenderer).ToList();
+			var map = worldRenderer.World.Map;
+
+			if (map.Grid.Type == MapGridType.RectangularIsometric)
+			{
+				foreach (var uv in candidates)
+				{
+					// Coarse filter to nearby cells
+					var uvCell = uv.ToCPos(map);
+					var p = map.CenterOfCell(uv.ToCPos(map.Grid.Type));
+					var s = worldRenderer.ScreenPxPosition(p);
+					if (Math.Abs(s.X - view.X) <= tileSize.Width && Math.Abs(s.Y - view.Y) <= tileSize.Height)
+					{
+						var ramp = map.Grid.Ramps[map.Ramp.Contains(uv) ? map.Ramp[uv] : 0];
+						var pos = map.CenterOfCell(uvCell); // - new WVec(0, 0, ramp.CenterHeightOffset);
+						var screen = ramp.Corners.Select(c => worldRenderer.ScreenPxPosition(pos + c)).ToArray();
+						if (screen.PolygonContains(view))
+						{
+							var z = map.Height.Contains(uvCell) ? 724 * map.Height[uvCell] + map.Grid.Ramps[map.Ramp[uvCell]].CenterHeightOffset : 0;
+							var newPos = new WPos(worldRenderer.TileScale * view.X / tileSize.Width, worldRenderer.TileScale * view.Y / tileSize.Height + z, z);
+							var newPos2 = worldRenderer.ScreenPxPosition(newPos);
+							/*System.Console.WriteLine($"newPos {newPos}, newPos2 {newPos2}, view = {view}, ");
+							System.Console.WriteLine($"TileScale is {worldRenderer.TileScale}, TileSize.Width is {worldRenderer.TileSize.Width}, TileSize.Height is {worldRenderer.TileSize.Width}");*/
+							return newPos;
+						}
+					}
+				}
+			}
+
+			// if map is a rectangle or a valid cell could not be found for the Z coordinate above
+			/*System.Console.WriteLine($"TileScale is {worldRenderer.TileScale}, TileSize.Width is {worldRenderer.TileSize.Width}, TileSize.Height is {worldRenderer.TileSize.Width}");*/
+			return new WPos(worldRenderer.TileScale * view.X / worldRenderer.TileSize.Width, worldRenderer.TileScale * view.Y / worldRenderer.TileSize.Height, 0);
+		}
+
 		public int2 WorldToViewPx(int2 world) { return ((Zoom / graphicSettings.UIScale) * (world - TopLeft).ToFloat2()).ToInt2(); }
 		public int2 WorldToViewPx(in float3 world) { return ((Zoom / graphicSettings.UIScale) * (world - TopLeft).XY).ToInt2(); }
 

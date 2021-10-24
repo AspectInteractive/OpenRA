@@ -185,6 +185,7 @@ namespace OpenRA.Mods.Common.Widgets
 			var cell = worldRenderer.Viewport.ViewToWorld(mi.Location);
 			var worldPixel = worldRenderer.Viewport.ViewToWorldPx(mi.Location);
 			var orders = world.OrderGenerator.Order(world, cell, worldPixel, mi).ToArray();
+
 			world.PlayVoiceForOrders(orders);
 
 			var flashed = false;

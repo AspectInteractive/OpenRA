@@ -251,7 +251,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 				var item = ScrollItemWidget.Setup(preview.Uid, template, () => selectedUid == preview.Uid,
 					() => selectedUid = preview.Uid, dblClick);
-				item.IsVisible = () => item.RenderBounds.IntersectsWith(scrollpanels[tab].RenderBounds);
+				item.IsVisible = () => item.RenderBounds.IntersectsWithRectangle(scrollpanels[tab].RenderBounds);
 
 				var titleLabel = item.Get<LabelWithTooltipWidget>("TITLE");
 				if (titleLabel != null)

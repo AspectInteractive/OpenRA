@@ -261,7 +261,6 @@
 		ValidDamageStates: Light, Medium, Heavy, Critical
 	Repairable:
 		RepairActors: fix
-	Chronoshiftable:
 	Passenger:
 		CargoType: Vehicle
 	AttackMove:

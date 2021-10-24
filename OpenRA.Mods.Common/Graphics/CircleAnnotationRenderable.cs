@@ -24,22 +24,25 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly int width;
 		readonly Color color;
 		readonly bool filled;
+		readonly int layer;
 
-		public CircleAnnotationRenderable(WPos centerPosition, WDist radius, int width, Color color, bool filled = false)
+		public CircleAnnotationRenderable(WPos centerPosition, WDist radius, int width, Color color, bool filled = false, int layer = 0)
 		{
 			this.centerPosition = centerPosition;
 			this.radius = radius;
 			this.width = width;
 			this.color = color;
 			this.filled = filled;
+			this.layer = layer;
 		}
 
 		public WPos Pos => centerPosition;
 		public int ZOffset => 0;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new CircleAnnotationRenderable(centerPosition, radius, width, color, filled); }
-		public IRenderable OffsetBy(in WVec vec) { return new CircleAnnotationRenderable(centerPosition + vec, radius, width, color, filled); }
+		public IRenderable WithZOffset(int newOffset) { return new CircleAnnotationRenderable(centerPosition, radius, width, color, filled, layer); }
+		public IRenderable OffsetBy(in WVec vec) { return new CircleAnnotationRenderable(centerPosition + vec, radius, width, color, filled, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

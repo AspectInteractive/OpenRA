@@ -171,7 +171,7 @@ namespace OpenRA.GameRules
 			if (target.Type == TargetType.FrozenActor)
 				return IsValidAgainst(target.FrozenActor, firedBy);
 
-			if (target.Type == TargetType.Terrain)
+			if (target.SelfIsTerrainCellType())
 			{
 				var dat = world.Map.DistanceAboveTerrain(target.CenterPosition);
 				if (dat > AirThreshold)
@@ -181,7 +181,7 @@ namespace OpenRA.GameRules
 				if (!world.Map.Contains(cell))
 					return false;
 
-				var cellInfo = world.Map.GetTerrainInfo(cell);
+				var cellInfo = world.Map.GetTerrainTileInfo(cell);
 				if (!IsValidTarget(cellInfo.TargetTypes))
 					return false;
 
