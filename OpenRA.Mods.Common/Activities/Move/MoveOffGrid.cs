@@ -143,6 +143,10 @@ namespace OpenRA.Mods.Common.Activities
 			var renderLine = new List<WPos>() { pos1, pos2 };
 			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
 		}
+		public static void RenderCircle(Actor self, WPos pos, WDist radius)
+		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
+		public static void RemoveCircle(Actor self, WPos pos, WDist radius)
+		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
 
 		public static void RenderPoint(Actor self, WPos pos)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
@@ -208,6 +212,11 @@ namespace OpenRA.Mods.Common.Activities
 
 		public override bool Tick(Actor self)
 		{
+			Action endingActions = () =>
+			{
+				mobileOffGrid.SeekVectors.Clear();
+			};
+
 			// Refuse to take off if it would land immediately again.
 			if (mobileOffGrid.ForceLanding)
 				Cancel(self);
@@ -229,7 +238,7 @@ namespace OpenRA.Mods.Common.Activities
 				// TODO: Remove this after fixing all activities to work properly with arbitrary starting altitudes.
 				var landWhenIdle = mobileOffGrid.Info.IdleBehavior == IdleBehaviorType.Land;
 				var skipHeightAdjustment = landWhenIdle && self.CurrentActivity.IsCanceling && self.CurrentActivity.NextActivity == null;
-				mobileOffGrid.SeekVectors.Clear();
+				endingActions();
 				return true;
 			}
 
@@ -242,7 +251,7 @@ namespace OpenRA.Mods.Common.Activities
 			// Target is hidden or dead, and we don't have a fallback position to move towards
 			if (useLastVisibleTarget && !lastVisibleTarget.IsValidFor(self))
 			{
-				mobileOffGrid.SeekVectors.Clear();
+				endingActions();
 				return true;
 			}
 
@@ -256,7 +265,7 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (insideMaxRange && !insideMinRange)
 			{
-				mobileOffGrid.SeekVectors.Clear();
+				endingActions();
 				return true;
 			}
 
@@ -268,26 +277,6 @@ namespace OpenRA.Mods.Common.Activities
 				mobileOffGrid.SeekVectors.Add(new MvVec(moveVec / maxVecs));
 
 			var move = mobileOffGrid.GenFinalWVec();
-			var nearbyActorRange = new WDist(move.Length * 2);
-			var nearbyActors = self.World.FindActorsOnCircle(self.CenterPosition, nearbyActorRange);
-
-			// Repelling force
-			foreach (var actor in nearbyActors)
-			{
-				if (actor != self)
-				{
-					var actorMobileOGs = actor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
-					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
-					{
-						var actorMobileOG = actorMobileOGs.FirstOrDefault();
-						var tempRadius = 700;
-						var ticksNeeded = tempRadius / actorMobileOG.MovementSpeed;
-						var repulsionVec = -new WVec(new WDist(actorMobileOG.MovementSpeed),
-												    WRot.FromYaw((mobileOffGrid.CenterPosition - actorMobileOG.CenterPosition).Yaw));
-						actorMobileOG.FleeVectors = new List<MvVec>() { new MvVec(repulsionVec, ticksNeeded) };
-					}
-				}
-			}
 
 			// Inside the minimum range, so reverse if we CanSlide, otherwise face away from the target.
 			if (insideMinRange)
@@ -297,12 +286,22 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			// HACK: Consider ourselves blocked if we have moved by less than 64 WDist in the last five ticks
-			// Stop if we are blocked and close enough
-			if (positionBuffer.Count >= 5 && (positionBuffer.Last() - positionBuffer[0]).LengthSquared < 4096 &&
-				delta.HorizontalLengthSquared <= nearEnough.LengthSquared)
+			// Stop if we are blocked and close enough, or if the current delta to the next target is larger than it was previously
+			if (positionBuffer.Count >= 10)
 			{
-				mobileOffGrid.SeekVectors.Clear();
-				return true;
+				var lengthMoved = (positionBuffer.Last() - positionBuffer.ElementAt(0)).LengthSquared;
+				var deltaFirst = currPathTarget - positionBuffer.ElementAt(0);
+				var deltaLast = currPathTarget - positionBuffer.Last();
+				System.Console.WriteLine($"nearEnough.LengthSquared: {nearEnough.LengthSquared}");
+				System.Console.WriteLine($"lengthMoved: {lengthMoved}");
+				System.Console.WriteLine($"deltaFirst: {deltaFirst}");
+				System.Console.WriteLine($"deltaLast: {deltaLast}");
+				if ((positionBuffer.Count >= 10 && lengthMoved < 4096 && delta.HorizontalLengthSquared <= nearEnough.LengthSquared) ||
+					deltaLast.LengthSquared > deltaFirst.LengthSquared)
+				{
+					endingActions();
+					return true;
+				}
 			}
 
 			// The next move would overshoot, so consider it close enough and set final position
@@ -325,7 +324,7 @@ namespace OpenRA.Mods.Common.Activities
 					mobileOffGrid.SetIgnoreZVec(true);
 				}
 
-				mobileOffGrid.SeekVectors.Clear();
+				endingActions();
 				searchingForNextTarget = false;
 				return GetNextTargetOrComplete();
 			}
@@ -347,7 +346,7 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			positionBuffer.Add(self.CenterPosition);
-			if (positionBuffer.Count > 5)
+			if (positionBuffer.Count > 10)
 				positionBuffer.RemoveAt(0);
 
 			return false;
