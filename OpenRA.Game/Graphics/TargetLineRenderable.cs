@@ -21,6 +21,7 @@ namespace OpenRA.Graphics
 		readonly Color color;
 		readonly int width;
 		readonly int markerSize;
+		readonly int layer;
 
 		public TargetLineRenderable(IEnumerable<WPos> waypoints, Color color, int width, int markerSize)
 		{
@@ -28,10 +29,12 @@ namespace OpenRA.Graphics
 			this.color = color;
 			this.width = width;
 			this.markerSize = markerSize;
+			this.layer = layer;
 		}
 
 		public WPos Pos => waypoints.First();
 		public int ZOffset => 0;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }

@@ -128,7 +128,7 @@ namespace OpenRA.Primitives
 						// We shall track it in the set of items seen so far to avoid returning it again if it appears
 						// in another bin.
 						// PERF: If the item is wholly contained within the bin, we can avoid the cost of tracking it.
-						if (bounds.IntersectsWith(box) &&
+						if (bounds.IntersectsWithRectangle(box) &&
 							(items == null || binBounds.Contains(bounds) || items.Add(item)))
 							yield return item;
 					}

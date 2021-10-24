@@ -32,10 +32,10 @@ namespace OpenRA.Mods.Common.Graphics
 		int length;
 		readonly int skip;
 
-		public ContrailRenderable(World world, Color color, WDist width, int length, int skip, int zOffset)
-			: this(world, new WPos[length], width, 0, 0, skip, color, zOffset) { }
+		public ContrailRenderable(World world, Color color, WDist width, int length, int skip, int zOffset, int layer = 0)
+			: this(world, new WPos[length], width, 0, 0, skip, color, zOffset, layer) { }
 
-		ContrailRenderable(World world, WPos[] trail, WDist width, int next, int length, int skip, Color color, int zOffset)
+		ContrailRenderable(World world, WPos[] trail, WDist width, int next, int length, int skip, Color color, int zOffset, int layer = 0)
 		{
 			this.world = world;
 			this.trail = trail;
@@ -45,19 +45,22 @@ namespace OpenRA.Mods.Common.Graphics
 			this.skip = skip;
 			this.color = color;
 			this.zOffset = zOffset;
+			this.layer = layer;
 		}
 
 		public WPos Pos => trail[Index(next - 1)];
 		public int ZOffset => zOffset;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new ContrailRenderable(world, (WPos[])trail.Clone(), width, next, length, skip, color, newOffset); }
+		public IRenderable WithZOffset(int newOffset)
+		{ return new ContrailRenderable(world, (WPos[])trail.Clone(), width, next, length, skip, color, newOffset, layer); }
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
 			// Lambdas can't use 'in' variables, so capture a copy for later
 			var offset = vec;
-			return new ContrailRenderable(world, trail.Select(pos => pos + offset).ToArray(), width, next, length, skip, color, zOffset);
+			return new ContrailRenderable(world, trail.Select(pos => pos + offset).ToArray(), width, next, length, skip, color, zOffset, layer);
 		}
 
 		public IRenderable AsDecoration() { return this; }

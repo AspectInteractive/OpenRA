@@ -173,6 +173,7 @@ Vehicle:
 		Move: 25-i012, 25-i014, 25-i016, 25-i018, 25-i022
 		Attack: 25-i014, 25-i022, 25-i024, 25-i026
 		Unload: 25-i018
+		Action: ackno,affirm1
 
 Mech:
 	Voices:

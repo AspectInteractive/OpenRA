@@ -63,7 +63,7 @@ namespace OpenRA
 			return new CellRegion(region.gridType, tl, br);
 		}
 
-		/// <summary>Returns the minimal region that covers at least the specified cells.</summary>
+		/// <summary>Returns the minimal MPos region that covers at least the specified cells.</summary>
 		public static CellRegion BoundingRegion(MapGridType shape, IEnumerable<CPos> cells)
 		{
 			if (cells == null || !cells.Any())

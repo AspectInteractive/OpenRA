@@ -363,12 +363,25 @@ MCV:
 	Health:
 		HP: 60000
 	Armor:
-		Type: Light
-	Mobile:
+		Type: Light    
+    MobileOffGrid:
+        Locomotor: wheeled
+		CanHover: True
+		CruiseAltitude: 0
+		TurnSpeed: 80
+		Speed: 223
+		CruisingCondition: cruising
+		WaitDistanceFromResupplyBase: 4c0
+		LandableTerrainTypes: Clear, Rough, Road, Ore, Beach, Gems
+		TakeOffOnResupply: true
+		VTOL: true
+		CanSlide: True
+	-Mobile:
 		Speed: 60
 		Locomotor: heavywheeled
-	RevealsShroud:
+	RevealsShroud@GAPGEN:
 		Range: 4c0
+		Type: GroundPosition
 	Transforms:
 		IntoActor: fact
 		Offset: -1,-1

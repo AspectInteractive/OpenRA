@@ -36,7 +36,7 @@ namespace OpenRA
 		Queued = 0x08,
 		ExtraLocation = 0x10,
 		ExtraData = 0x20,
-		TargetIsCell = 0x40,
+		TargetIncludesCell = 0x40,
 		Subject = 0x80,
 		Grouped = 0x100
 	}
@@ -141,24 +141,32 @@ namespace OpenRA
 										break;
 									}
 
-								case TargetType.Terrain:
+								case TargetType.TerrainCell:
+									if (flags.HasField(OrderFields.TargetIncludesCell))
 									{
-										if (flags.HasField(OrderFields.TargetIsCell))
-										{
-											var cell = new CPos(r.ReadInt32());
-											var subCell = (SubCell)r.ReadByte();
-											if (world != null)
-												target = Target.FromCell(world, cell, subCell);
-										}
-										else
-										{
-											var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
-											target = Target.FromPos(pos);
-										}
-
-										break;
+										var cell = new CPos(r.ReadInt32());
+										var subCell = (SubCell)r.ReadByte();
+										if (world != null)
+											target = Target.FromCell(world, cell, subCell);
 									}
-							}
+
+									break;
+								case TargetType.TerrainCellPos:
+									if (flags.HasField(OrderFields.TargetIncludesCell))
+									{
+										var cell = new CPos(r.ReadInt32());
+										var subCell = (SubCell)r.ReadByte();
+										var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
+										if (world != null)
+											target = Target.FromCellWithTerrainPos(cell, subCell, pos);
+									}
+
+									break;
+								case TargetType.TerrainPos:
+									var pos2 = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
+									target = Target.FromPos(pos2);
+									break;
+								}
 						}
 
 						var targetString = flags.HasField(OrderFields.TargetString) ? r.ReadString() : null;
@@ -352,7 +360,7 @@ namespace OpenRA
 						fields |= OrderFields.ExtraLocation;
 
 					if (Target.SerializableCell != null)
-						fields |= OrderFields.TargetIsCell;
+						fields |= OrderFields.TargetIncludesCell;
 
 					w.Write((short)fields);
 
@@ -371,19 +379,29 @@ namespace OpenRA
 								w.Write(Target.FrozenActor.Viewer.PlayerActor.ActorID);
 								w.Write(Target.FrozenActor.ID);
 								break;
-							case TargetType.Terrain:
-								if (fields.HasField(OrderFields.TargetIsCell))
+							case TargetType.TerrainCell:
+								if (fields.HasField(OrderFields.TargetIncludesCell))
 								{
 									w.Write(Target.SerializableCell.Value.Bits);
 									w.Write((byte)Target.SerializableSubCell);
 								}
-								else
+
+								break;
+							case TargetType.TerrainCellPos:
+								if (fields.HasField(OrderFields.TargetIncludesCell))
 								{
+									w.Write(Target.SerializableCell.Value.Bits);
+									w.Write((byte)Target.SerializableSubCell);
 									w.Write(Target.SerializablePos.X);
 									w.Write(Target.SerializablePos.Y);
 									w.Write(Target.SerializablePos.Z);
 								}
 
+								break;
+							case TargetType.TerrainPos:
+								w.Write(Target.SerializablePos.X);
+								w.Write(Target.SerializablePos.Y);
+								w.Write(Target.SerializablePos.Z);
 								break;
 						}
 					}

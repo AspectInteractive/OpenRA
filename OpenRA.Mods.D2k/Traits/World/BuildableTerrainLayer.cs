@@ -66,7 +66,7 @@ namespace OpenRA.Mods.D2k.Traits
 				return;
 
 			var uv = cell.ToMPos(world.Map);
-			var tileInfo = world.Map.Rules.TerrainInfo.GetTerrainInfo(tile);
+			var tileInfo = world.Map.Rules.TerrainInfo.GetTerrainTileInfo(tile);
 			world.Map.CustomTerrain[uv] = tileInfo.TerrainType;
 			strength[uv] = info.MaxStrength;
 			radarColor[uv] = (tileInfo.GetColor(world.LocalRandom), tileInfo.GetColor(world.LocalRandom));

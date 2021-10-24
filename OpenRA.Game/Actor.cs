@@ -436,7 +436,10 @@ namespace OpenRA
 		public void ResolveOrder(Order order)
 		{
 			foreach (var r in resolveOrders)
+			{
+				/*System.Console.WriteLine($"Resolving order {order} with Targ Type {order.Target.Type}");*/
 				r.ResolveOrder(this, order);
+			}
 		}
 
 		// TODO: move elsewhere.

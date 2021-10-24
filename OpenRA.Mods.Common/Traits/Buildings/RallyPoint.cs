@@ -145,7 +145,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
 			{
-				if (target.Type != TargetType.Terrain)
+				if (!target.SelfIsTerrainType())
 					return false;
 
 				IsQueued = modifiers.HasModifier(TargetModifiers.ForceQueue);

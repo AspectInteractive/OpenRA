@@ -228,7 +228,7 @@ namespace OpenRA.Mods.Common.Widgets
 			drawBounds.Y -= co.Y;
 
 			foreach (var child in Children)
-				if (child.Bounds.IntersectsWith(drawBounds))
+				if (child.Bounds.IntersectsWithRectangle(drawBounds))
 					child.DrawOuter();
 
 			Game.Renderer.DisableScissor();

@@ -13,8 +13,8 @@ obj
 _ReSharper.*/
 /.vs
 
-# Visual Studio Code
-/.vscode/settings.json
+# Jire Dev Docs
+devdocs/
 
 # binaries
 IP2LOCATION-LITE-DB1.IPV6.BIN.ZIP

@@ -113,6 +113,26 @@ namespace OpenRA.Mods.Common.HitShapes
 			return DistanceFromEdge((pos - new WPos(origin.X, origin.Y, pos.Z)).Rotate(-orientation));
 		}
 
+		bool IHitShape.IntersectsWithHitShape(int2 selfCenter, int2 secondCenter, HitShape hitShape)
+		{
+			if (hitShape.Info.Type is RectangleShape rect)
+				return IntersectsWithHitShape(selfCenter, secondCenter, rect);
+			else if (hitShape.Info.Type is CircleShape circ)
+				return IntersectsWithHitShape(selfCenter, secondCenter, circ);
+			else if (hitShape.Info.Type is PolygonShape poly)
+				return IntersectsWithHitShape(selfCenter, secondCenter, poly);
+			else if (hitShape.Info.Type is CapsuleShape caps)
+				return IntersectsWithHitShape(selfCenter, secondCenter, caps);
+			else
+				return false;
+		}
+
+		WPos[] IHitShape.GetCorners(int2 selfCenter) { return new WPos[0]; }
+		bool IntersectsWithHitShape(int2 selfCenter, int2 rectCenter, RectangleShape rectHitShape) { return false; } // to be implemented
+		bool IntersectsWithHitShape(int2 selfCenter, int2 circleCenter, CircleShape circleHitShape) { return false; } // to be implemented
+		bool IntersectsWithHitShape(int2 selfCenter, int2 polygonCenter, PolygonShape polygonHitShape) { return false; } // to be implemented
+		bool IntersectsWithHitShape(int2 selfCenter, int2 capsuleCenter, CapsuleShape capsuleHitShape) { return false; } // to be implemented
+
 		IEnumerable<IRenderable> IHitShape.RenderDebugOverlay(HitShape hs, WorldRenderer wr, WPos actorPos, WRot orientation)
 		{
 			orientation += WRot.FromYaw(LocalYaw);

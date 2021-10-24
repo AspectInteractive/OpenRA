@@ -33,21 +33,21 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly float alpha;
 		readonly float3 tint;
 		readonly TintModifiers tintModifiers;
-
+		readonly int layer;
 		public ModelRenderable(
 			IEnumerable<ModelAnimation> models, WPos pos, int zOffset, in WRot camera, float scale,
 			in WRot lightSource, float[] lightAmbientColor, float[] lightDiffuseColor,
-			PaletteReference color, PaletteReference normals, PaletteReference shadow)
+			PaletteReference color, PaletteReference normals, PaletteReference shadow, int layer = 0)
 			: this(models, pos, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
 				color, normals, shadow, 1f,
-				float3.Ones, TintModifiers.None) { }
+				float3.Ones, TintModifiers.None, layer) { }
 
 		public ModelRenderable(
 			IEnumerable<ModelAnimation> models, WPos pos, int zOffset, in WRot camera, float scale,
 			in WRot lightSource, float[] lightAmbientColor, float[] lightDiffuseColor,
 			PaletteReference color, PaletteReference normals, PaletteReference shadow,
-			float alpha, in float3 tint, TintModifiers tintModifiers)
+			float alpha, in float3 tint, TintModifiers tintModifiers, int layer = 0)
 		{
 			this.models = models;
 			this.pos = pos;
@@ -63,11 +63,13 @@ namespace OpenRA.Mods.Common.Graphics
 			this.alpha = alpha;
 			this.tint = tint;
 			this.tintModifiers = tintModifiers;
+			this.layer = layer;
 		}
 
 		public WPos Pos => pos;
 		public PaletteReference Palette => palette;
 		public int ZOffset => zOffset;
+		public int Layer => layer;
 		public bool IsDecoration => false;
 
 		public float Alpha => alpha;
@@ -79,7 +81,7 @@ namespace OpenRA.Mods.Common.Graphics
 			return new ModelRenderable(
 				models, pos, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				newPalette, normalsPalette, shadowPalette, alpha, tint, tintModifiers);
+				newPalette, normalsPalette, shadowPalette, alpha, tint, tintModifiers, layer);
 		}
 
 		public IRenderable WithZOffset(int newOffset)
@@ -87,7 +89,7 @@ namespace OpenRA.Mods.Common.Graphics
 			return new ModelRenderable(
 				models, pos, newOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				palette, normalsPalette, shadowPalette, alpha, tint, tintModifiers);
+				palette, normalsPalette, shadowPalette, alpha, tint, tintModifiers, layer);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
@@ -95,7 +97,7 @@ namespace OpenRA.Mods.Common.Graphics
 			return new ModelRenderable(
 				models, pos + vec, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				palette, normalsPalette, shadowPalette, alpha, tint, tintModifiers);
+				palette, normalsPalette, shadowPalette, alpha, tint, tintModifiers, layer);
 		}
 
 		public IRenderable AsDecoration() { return this; }
@@ -105,7 +107,7 @@ namespace OpenRA.Mods.Common.Graphics
 			return new ModelRenderable(
 				models, pos, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				palette, normalsPalette, shadowPalette, newAlpha, tint, tintModifiers);
+				palette, normalsPalette, shadowPalette, newAlpha, tint, tintModifiers, layer);
 		}
 
 		public IModifyableRenderable WithTint(in float3 newTint, TintModifiers newTintModifiers)
@@ -113,7 +115,7 @@ namespace OpenRA.Mods.Common.Graphics
 			return new ModelRenderable(
 				models, pos, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				palette, normalsPalette, shadowPalette, alpha, newTint, newTintModifiers);
+				palette, normalsPalette, shadowPalette, alpha, newTint, newTintModifiers, layer);
 		}
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr)

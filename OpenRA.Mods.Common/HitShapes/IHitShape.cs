@@ -21,6 +21,8 @@ namespace OpenRA.Mods.Common.HitShapes
 
 		WDist DistanceFromEdge(in WVec v);
 		WDist DistanceFromEdge(WPos pos, WPos origin, WRot orientation);
+		WPos[] GetCorners(int2 selfCenter);
+		bool IntersectsWithHitShape(int2 selfCenter, int2 secondCenter, HitShape hitShape);
 
 		void Initialize();
 		IEnumerable<IRenderable> RenderDebugOverlay(HitShape hs, WorldRenderer wr, WPos origin, WRot orientation);

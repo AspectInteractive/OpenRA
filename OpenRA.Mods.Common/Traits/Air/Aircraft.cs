@@ -197,7 +197,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (!world.Map.Contains(cell))
 				return false;
 
-			var type = world.Map.GetTerrainInfo(cell).Type;
+			var type = world.Map.GetTerrainTileInfo(cell).Type;
 			if (!LandableTerrainTypes.Contains(type))
 				return false;
 
@@ -683,7 +683,7 @@ namespace OpenRA.Mods.Common.Traits
 				return true;
 
 			var landableTerrain = overrideAircraftLanding != null ? overrideAircraftLanding.LandableTerrainTypes : Info.LandableTerrainTypes;
-			return landableTerrain.Contains(self.World.Map.GetTerrainInfo(cell).Type);
+			return landableTerrain.Contains(self.World.Map.GetTerrainTileInfo(cell).Type);
 		}
 
 		bool IsBlockedBy(Actor self, Actor otherActor, Actor ignoreActor, bool blockedByMobile = true)
@@ -1284,7 +1284,8 @@ namespace OpenRA.Mods.Common.Traits
 
 			public virtual bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
 			{
-				if (target.Type != TargetType.Terrain || (aircraft.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+				if (!target.SelfIsTerrainType() ||
+					(aircraft.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
 					return false;
 
 				var location = self.World.Map.CellContaining(target.CenterPosition);

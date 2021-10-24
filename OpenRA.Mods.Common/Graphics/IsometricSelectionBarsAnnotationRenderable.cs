@@ -31,19 +31,22 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly bool displayHealth;
 		readonly bool displayExtra;
 		readonly Polygon bounds;
+		readonly int layer;
 
-		public IsometricSelectionBarsAnnotationRenderable(Actor actor, Polygon bounds, bool displayHealth, bool displayExtra)
+		public IsometricSelectionBarsAnnotationRenderable(Actor actor, Polygon bounds, bool displayHealth, bool displayExtra, int layer = 0)
 			: this(actor.CenterPosition, actor, bounds)
 		{
 			this.displayHealth = displayHealth;
 			this.displayExtra = displayExtra;
+			this.layer = layer;
 		}
 
-		public IsometricSelectionBarsAnnotationRenderable(WPos pos, Actor actor, Polygon bounds)
+		public IsometricSelectionBarsAnnotationRenderable(WPos pos, Actor actor, Polygon bounds, int layer = 0)
 		{
 			this.pos = pos;
 			this.actor = actor;
 			this.bounds = bounds;
+			this.layer = layer;
 		}
 
 		public WPos Pos => pos;
@@ -51,10 +54,11 @@ namespace OpenRA.Mods.Common.Graphics
 		public bool DisplayExtra => displayExtra;
 
 		public int ZOffset => 0;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }
-		public IRenderable OffsetBy(in WVec vec) { return new IsometricSelectionBarsAnnotationRenderable(pos + vec, actor, bounds); }
+		public IRenderable OffsetBy(in WVec vec) { return new IsometricSelectionBarsAnnotationRenderable(pos + vec, actor, bounds, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		void DrawExtraBars(WorldRenderer wr)

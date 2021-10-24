@@ -31,11 +31,11 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly PaletteReference normalsPalette;
 		readonly PaletteReference shadowPalette;
 		readonly float scale;
-
+		readonly int layer;
 		public UIModelRenderable(
 			IEnumerable<ModelAnimation> models, WPos effectiveWorldPos, int2 screenPos, int zOffset,
 			in WRot camera, float scale, in WRot lightSource, float[] lightAmbientColor, float[] lightDiffuseColor,
-			PaletteReference color, PaletteReference normals, PaletteReference shadow)
+			PaletteReference color, PaletteReference normals, PaletteReference shadow, int layer = 0)
 		{
 			this.models = models;
 			this.effectiveWorldPos = effectiveWorldPos;
@@ -46,6 +46,7 @@ namespace OpenRA.Mods.Common.Graphics
 			this.lightSource = lightSource;
 			this.lightAmbientColor = lightAmbientColor;
 			this.lightDiffuseColor = lightDiffuseColor;
+			this.layer = layer;
 			palette = color;
 			normalsPalette = normals;
 			shadowPalette = shadow;
@@ -54,6 +55,7 @@ namespace OpenRA.Mods.Common.Graphics
 		public WPos Pos => effectiveWorldPos;
 		public PaletteReference Palette => palette;
 		public int ZOffset => zOffset;
+		public int Layer => layer;
 		public bool IsDecoration => false;
 
 		public IPalettedRenderable WithPalette(PaletteReference newPalette)
@@ -61,7 +63,7 @@ namespace OpenRA.Mods.Common.Graphics
 			return new UIModelRenderable(
 				models, effectiveWorldPos, screenPos, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				newPalette, normalsPalette, shadowPalette);
+				newPalette, normalsPalette, shadowPalette, layer);
 		}
 
 		public IRenderable WithZOffset(int newOffset) { return this; }

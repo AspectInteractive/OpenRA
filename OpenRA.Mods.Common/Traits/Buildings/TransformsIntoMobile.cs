@@ -191,7 +191,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
 			{
-				if (rejectMove || target.Type != TargetType.Terrain || (mobile.Info.RequiresForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+				if (rejectMove || target.Type != TargetType.TerrainCell || (mobile.Info.RequiresForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
 					return false;
 
 				var location = self.World.Map.CellContaining(target.CenterPosition);
@@ -203,7 +203,7 @@ namespace OpenRA.Mods.Common.Traits
 				    || (!explored && !mobile.locomotor.Info.MoveIntoShroud)
 				    || (explored && !CanEnterCell(self, location)))
 					cursor = mobile.Info.BlockedCursor;
-				else if (!explored || !mobile.Info.TerrainCursors.TryGetValue(self.World.Map.GetTerrainInfo(location).Type, out cursor))
+				else if (!explored || !mobile.Info.TerrainCursors.TryGetValue(self.World.Map.GetTerrainTileInfo(location).Type, out cursor))
 					cursor = mobile.Info.Cursor;
 
 				return true;
