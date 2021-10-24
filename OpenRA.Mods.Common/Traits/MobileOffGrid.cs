@@ -323,6 +323,11 @@ namespace OpenRA.Mods.Common.Traits
 			set => orientation = orientation.WithYaw(value);
 		}
 
+		public WAngle DesiredFacing = WAngle.Zero;
+		public WDist DesiredAltitude = WDist.Zero;
+		public WVec DesiredMove = WVec.Zero;
+		public bool IgnoreZVec = false;
+
 		public WAngle Pitch
 		{
 			get => orientation.Pitch;
@@ -479,6 +484,67 @@ namespace OpenRA.Mods.Common.Traits
 			Tick(self);
 		}
 
+		public WVec GenFinalVector()
+		{
+			var finalVec = WVec.Zero;
+			foreach (var vec in SeekVectors)
+				finalVec += vec;
+			foreach (var vec in FleeVectors)
+				finalVec += vec;
+			return finalVec;
+		}
+		public void SetDesiredFacing(WAngle desiredFacing) { DesiredFacing = desiredFacing; }
+		public void SetDesiredFacingToFacing() { DesiredFacing = Facing; }
+		public void SetDesiredMove(WVec desiredMove) { DesiredMove = desiredMove; }
+		public void SetDesiredAltitude(WDist desiredAltitude) { DesiredAltitude = desiredAltitude; }
+		public void SetIgnoreZVec(bool ignoreZVec) { IgnoreZVec = ignoreZVec; }
+
+		public void MobileOffGridTickMove(Actor self)
+		{
+			var move = DesiredMove == WVec.Zero ? GenFinalVector() : DesiredMove;
+			if (move == WVec.Zero)
+				return;
+
+			var dat = self.World.Map.DistanceAboveTerrain(CenterPosition);
+
+			if (IgnoreZVec)
+				move = new WVec(move.X, move.Y, 0);
+
+			var oldFacing = Facing;
+			var turnSpeed = GetTurnSpeed(false);
+			Facing = Util.TickFacing(Facing, (DesiredFacing == WAngle.Zero ? move.Yaw : DesiredFacing), turnSpeed);
+
+			if (Info.Roll != WAngle.Zero)
+			{
+				var desiredRoll = Facing == DesiredFacing ? WAngle.Zero :
+					new WAngle(Info.Roll.Angle * Util.GetTurnDirection(Facing, oldFacing));
+
+				Roll = Util.TickFacing(Roll, desiredRoll, Info.RollSpeed);
+			}
+
+			if (Info.Pitch != WAngle.Zero)
+				Pitch = Util.TickFacing(Pitch, Info.Pitch, Info.PitchSpeed);
+
+			// Note: we assume that if move.Z is not zero, it's intentional and we want to move in that vertical direction instead of towards desiredAltitude.
+			// If that is not desired, the place that calls this should make sure moveOverride.Z is zero.
+			if ((DesiredAltitude != WDist.Zero && dat != DesiredAltitude) || move.Z != 0)
+			{
+				var maxDelta = move.HorizontalLength * Info.MaximumPitch.Tan() / 1024;
+				var moveZ = move.Z != 0 ? move.Z : (DesiredAltitude.Length - dat.Length);
+				var deltaZ = moveZ.Clamp(-maxDelta, maxDelta);
+				move = new WVec(move.X, move.Y, deltaZ);
+			}
+
+			System.Console.WriteLine($"move: {move}, moveHLS: {move.HorizontalLengthSquared}");
+			SetPosition(self, CenterPosition + move);
+
+			// Reset temporary adjustments
+			SetIgnoreZVec(false);
+			SetDesiredMove(WVec.Zero);
+			SetDesiredFacing(WAngle.Zero);
+			SetDesiredAltitude(WDist.Zero);
+		}
+
 		protected virtual void Tick(Actor self)
 		{
 			var oldCachedFacing = cachedFacing;
@@ -507,6 +573,9 @@ namespace OpenRA.Mods.Common.Traits
 				if (Info.Pitch != WAngle.Zero && Pitch != WAngle.Zero)
 					Pitch = Util.TickFacing(Pitch, WAngle.Zero, Info.PitchSpeed);
 			}
+
+			// Update unit position
+			MobileOffGridTickMove(self);
 
 			// Update unit's cell as it moves
 			var cell = self.World.Map.CellContaining(CenterPosition);
