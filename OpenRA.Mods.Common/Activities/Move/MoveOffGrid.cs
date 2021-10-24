@@ -190,64 +190,6 @@ namespace OpenRA.Mods.Common.Activities
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
 
-		public static WVec GenFinalVector(MobileOffGrid mobileOG)
-		{
-			var finalVec = WVec.Zero;
-			foreach (var vec in mobileOG.SeekVectors)
-				finalVec += vec;
-			foreach (var vec in mobileOG.FleeVectors)
-				finalVec += vec;
-			return finalVec;
-		}
-
-		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOG, WAngle desiredFacing, WDist desiredAltitude,
-										   in WVec moveOverride, bool idleTurn = false, bool ignoreZVec = false)
-		{
-
-			var dat = self.World.Map.DistanceAboveTerrain(mobileOG.CenterPosition);
-			var speed = mobileOG.MovementSpeed;
-
-			var move = moveOverride == WVec.Zero ? GenFinalVector(mobileOG) : moveOverride;
-			if (ignoreZVec)
-				move = new WVec(move.X, move.Y, 0);
-
-			var oldFacing = mobileOG.Facing;
-			var turnSpeed = mobileOG.GetTurnSpeed(idleTurn);
-			mobileOG.Facing = Util.TickFacing(mobileOG.Facing, (desiredFacing == WAngle.Zero ? move.Yaw : desiredFacing), turnSpeed);
-
-			var roll = idleTurn ? mobileOG.Info.IdleRoll ?? mobileOG.Info.Roll : mobileOG.Info.Roll;
-			if (roll != WAngle.Zero)
-			{
-				var desiredRoll = mobileOG.Facing == desiredFacing ? WAngle.Zero :
-					new WAngle(roll.Angle * Util.GetTurnDirection(mobileOG.Facing, oldFacing));
-
-				mobileOG.Roll = Util.TickFacing(mobileOG.Roll, desiredRoll, mobileOG.Info.RollSpeed);
-			}
-
-			if (mobileOG.Info.Pitch != WAngle.Zero)
-				mobileOG.Pitch = Util.TickFacing(mobileOG.Pitch, mobileOG.Info.Pitch, mobileOG.Info.PitchSpeed);
-
-			// Note: we assume that if move.Z is not zero, it's intentional and we want to move in that vertical direction instead of towards desiredAltitude.
-			// If that is not desired, the place that calls this should make sure moveOverride.Z is zero.
-			if (dat != desiredAltitude || move.Z != 0)
-			{
-				var maxDelta = move.HorizontalLength * mobileOG.Info.MaximumPitch.Tan() / 1024;
-				var moveZ = move.Z != 0 ? move.Z : (desiredAltitude.Length - dat.Length);
-				var deltaZ = moveZ.Clamp(-maxDelta, maxDelta);
-				move = new WVec(move.X, move.Y, deltaZ);
-			}
-
-			System.Console.WriteLine($"move: {move}, moveHLS: {move.HorizontalLengthSquared}");
-			mobileOG.SetPosition(self, mobileOG.CenterPosition + move);
-		}
-		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOffGrid, WAngle desiredFacing, WDist desiredAltitude, bool idleTurn = false)
-		{
-			MoveOffGridTick(self, mobileOffGrid, desiredFacing, desiredAltitude, WVec.Zero, idleTurn);
-		}
-		public static void MoveOffGridTick(Actor self, MobileOffGrid mobileOffGrid, WDist desiredAltitude)
-		{
-			MoveOffGridTick(self, mobileOffGrid, WAngle.Zero, desiredAltitude, WVec.Zero);
-		}
 
 		protected override void OnFirstRun(Actor self)
 		{
@@ -327,12 +269,12 @@ namespace OpenRA.Mods.Common.Activities
 			if (delta != WVec.Zero && mobileOffGrid.SeekVectors.Count < maxVecs)
 				mobileOffGrid.SeekVectors.Add(moveVec / maxVecs);
 
-			var move = GenFinalVector(mobileOffGrid);
+			var move = mobileOffGrid.GenFinalVector();
 
 			// Inside the minimum range, so reverse if we CanSlide, otherwise face away from the target.
 			if (insideMinRange)
 			{
-				MoveOffGridTick(self, mobileOffGrid, mobileOffGrid.Facing, mobileOffGrid.Info.CruiseAltitude);
+				mobileOffGrid.SetDesiredFacingToFacing();
 				return false;
 			}
 
@@ -359,7 +301,10 @@ namespace OpenRA.Mods.Common.Activities
 					// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
 					var deltaMove = new WVec(delta.X, delta.Y, 0);
 					mobileOffGrid.SeekVectors.Clear();
-					MoveOffGridTick(self, mobileOffGrid, mobileOffGrid.Facing, dat, deltaMove, ignoreZVec: true);
+					mobileOffGrid.SetDesiredFacingToFacing();
+					mobileOffGrid.SetDesiredAltitude(dat);
+					mobileOffGrid.SetDesiredMove(deltaMove);
+					mobileOffGrid.SetIgnoreZVec(true);
 				}
 
 				mobileOffGrid.SeekVectors.Clear();
@@ -386,8 +331,6 @@ namespace OpenRA.Mods.Common.Activities
 			positionBuffer.Add(self.CenterPosition);
 			if (positionBuffer.Count > 5)
 				positionBuffer.RemoveAt(0);
-
-			MoveOffGridTick(self, mobileOffGrid, mobileOffGrid.Info.CruiseAltitude);
 
 			return false;
 		}
