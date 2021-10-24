@@ -19,10 +19,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OpenRA.Graphics;
-using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Primitives;
 using OpenRA.Traits;
 
 #pragma warning disable SA1512 // SingleLineCommentsMustNotBeFollowedByBlankLine
@@ -349,7 +346,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public WPos PadCC(CCPos cc)
 		{
 			var ccPos = thisWorld.Map.WPosFromCCPos(cc);
-			var unitRadius = self.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault().unitRadius.Length;
+			var unitRadius = self.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault().UnitRadius.Length;
 
 			var topLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
 			var topRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
