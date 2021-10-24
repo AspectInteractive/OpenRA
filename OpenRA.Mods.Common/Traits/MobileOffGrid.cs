@@ -105,9 +105,6 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Can the actor hover in place mid-air? If not, then the actor will have to remain in motion (circle around).")]
 		public readonly bool CanHover = false;
 
-		[Desc("Can the actor immediately change direction without turning first (doesn't need to fly in a curve)?")]
-		public readonly bool CanSlide = false;
-
 		[Desc("Does the actor land and take off vertically?")]
 		public readonly bool VTOL = false;
 
@@ -303,6 +300,9 @@ namespace OpenRA.Mods.Common.Traits
 
 		WPos cachedPosition;
 		WAngle cachedFacing;
+
+		public List<WVec> SeekVectors = new List<WVec>();
+		public List<WVec> FleeVectors = new List<WVec>();
 
 		Repairable repairable;
 		Rearmable rearmable;
