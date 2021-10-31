@@ -23,7 +23,8 @@ namespace OpenRA.Graphics
 		readonly int markerSize;
 		readonly int layer;
 
-		public TargetLineRenderable(IEnumerable<WPos> waypoints, Color color, int width, int markerSize)
+
+		public TargetLineRenderable(IEnumerable<WPos> waypoints, Color color, int width, int markerSize, int layer)
 		{
 			this.waypoints = waypoints;
 			this.color = color;
@@ -31,6 +32,8 @@ namespace OpenRA.Graphics
 			this.markerSize = markerSize;
 			this.layer = layer;
 		}
+		public TargetLineRenderable(IEnumerable<WPos> waypoints, Color color, int width, int markerSize)
+		: this(waypoints, color, width, markerSize, 0) { }
 
 		public WPos Pos => waypoints.First();
 		public int ZOffset => 0;
@@ -43,7 +46,7 @@ namespace OpenRA.Graphics
 		{
 			// Lambdas can't use 'in' variables, so capture a copy for later
 			var offset = vec;
-			return new TargetLineRenderable(waypoints.Select(w => w + offset), color, width, markerSize);
+			return new TargetLineRenderable(waypoints.Select(w => w + offset), color, width, markerSize, layer);
 		}
 
 		public IRenderable AsDecoration() { return this; }

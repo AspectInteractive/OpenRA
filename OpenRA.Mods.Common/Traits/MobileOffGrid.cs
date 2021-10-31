@@ -310,6 +310,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public WPos CurrPathTarget;
 		public WVec Delta => CurrPathTarget - CenterPosition;
+		public List<WPos> PositionBuffer = new List<WPos>();
 
 		public List<MvVec> SeekVectors = new List<MvVec>();
 		public List<MvVec> FleeVectors = new List<MvVec>();
@@ -507,15 +508,15 @@ namespace OpenRA.Mods.Common.Traits
 			return finalVec;
 		}
 
-		public void DecrementMoveVectorSet(List<MvVec> mvVecList)
+		public void DecrementMoveVectorSet(ref List<MvVec> mvVecList)
 		{
 			foreach (var mvVec in mvVecList.Where(v => v.TickTimer > 0))
 				mvVec.TickTimer--;
 			mvVecList.RemoveAll(v => v.TickTimer == 0);
 		}
 
-		public void DecrementTickFleeVectors() { DecrementMoveVectorSet(FleeVectors); }
-		public void DecrementTickSeekVectors() { DecrementMoveVectorSet(SeekVectors); }
+		public void DecrementTickFleeVectors() { DecrementMoveVectorSet(ref FleeVectors); }
+		public void DecrementTickSeekVectors() { DecrementMoveVectorSet(ref SeekVectors); }
 		public void SetDesiredFacing(WAngle desiredFacing) { DesiredFacing = desiredFacing; }
 		public void SetDesiredFacingToFacing() { DesiredFacing = Facing; }
 		public void SetDesiredMove(WVec desiredMove) { DesiredMove = desiredMove; }
@@ -1232,9 +1233,9 @@ namespace OpenRA.Mods.Common.Traits
 					return;
 
 				var target = Target.FromPos(order.Target.CenterPosition);
-
-				// TODO: this should scale with unit selection group size.
-				self.QueueActivity(order.Queued, new MoveOffGrid(self, target, WDist.FromCells(8), targetLineColor: Info.TargetLineColor));
+				var groupedActors = self.World.Selection.Actors
+										.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
+				self.QueueActivity(order.Queued, new MoveOffGrid(self, groupedActors, target, targetLineColor: Info.TargetLineColor));
 				#if DEBUG
 				System.Console.WriteLine("ResolveOrder() with 'Move' to (" + order.Target.CenterPosition.X.ToString() + "," + order.Target.CenterPosition.Y.ToString() + ") called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
 				#endif

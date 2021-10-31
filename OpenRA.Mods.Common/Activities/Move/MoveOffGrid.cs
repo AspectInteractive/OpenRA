@@ -63,9 +63,9 @@ namespace OpenRA.Mods.Common.Activities
 		// LOS Checking interval
 		int tickCount = 0;
 		int maxTicksBeforeLOScheck = 3;
-		readonly List<WPos> positionBuffer = new List<WPos>();
 		readonly Locomotor locomotor;
 
+		List<Actor> actorsSharingMove = new List<Actor>();
 		List<WPos> pathRemaining = new List<WPos>();
 		ThetaStarPathSearch thetaStarSearch;
 		WPos currPathTarget;
@@ -161,19 +161,29 @@ namespace OpenRA.Mods.Common.Activities
 		 * public static WVec CombineDistAndYawVecWithRotation(WDist dist, WVec yawVec, WRot rotation)
 		{ return new WVec(dist, WRot.FromYaw(yawVec.Rotate(rotation).Yaw)); }*/
 
-		public MoveOffGrid(Actor self, in Target t, WDist nearEnough, WPos? initialTargetPosition = null, Color? targetLineColor = null)
-			: this(self, t, initialTargetPosition, targetLineColor)
+		public MoveOffGrid(Actor self, in List<Actor> groupedActors, in Target t, WDist nearEnough, WPos? initialTargetPosition = null,
+							Color? targetLineColor = null)
+			: this(self, groupedActors, t, initialTargetPosition, targetLineColor)
 		{
 			this.nearEnough = nearEnough;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
+		public MoveOffGrid(Actor self, in Target t, WDist nearEnough, WPos? initialTargetPosition = null,
+							Color? targetLineColor = null)
+			: this(self, new List<Actor>(), t, nearEnough, initialTargetPosition, targetLineColor) { }
 
-		public MoveOffGrid(Actor self, in Target t, WPos? initialTargetPosition = null, Color? targetLineColor = null)
+		public MoveOffGrid(Actor self, in List<Actor> groupedActors, in Target t, WPos? initialTargetPosition = null,
+							Color? targetLineColor = null)
 		{
 			mobileOffGrid = self.Trait<MobileOffGrid>();
 			target = t;
 			this.targetLineColor = targetLineColor;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
+
+			actorsSharingMove = groupedActors;
+			/*System.Console.WriteLine($"groupedActors: {groupedActors.Count}");
+			foreach (var ga in groupedActors)
+				System.Console.WriteLine($"groupedActor at {self.World.Map.CellContaining(ga.CenterPosition)}");*/
 
 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
 			// Moving to any position (even if quite stale) is still better than immediately giving up
@@ -183,10 +193,13 @@ namespace OpenRA.Mods.Common.Activities
 			else if (initialTargetPosition.HasValue)
 				lastVisibleTarget = Target.FromPos(initialTargetPosition.Value);
 		}
+		public MoveOffGrid(Actor self, in Target t, WPos? initialTargetPosition = null,
+							Color? targetLineColor = null)
+			: this(self, new List<Actor>(), t, initialTargetPosition, targetLineColor) { }
 
-		public MoveOffGrid(Actor self, in Target t, WDist minRange, WDist maxRange,
+		public MoveOffGrid(Actor self, in List<Actor> groupedActors, in Target t, WDist minRange, WDist maxRange,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
-			: this(self, t, initialTargetPosition, targetLineColor)
+			: this(self, groupedActors, t, initialTargetPosition, targetLineColor)
 		{
 			#if DEBUG
 			System.Console.WriteLine("MoveOffGrid created at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
@@ -195,6 +208,9 @@ namespace OpenRA.Mods.Common.Activities
 			this.minRange = minRange;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
+		public MoveOffGrid(Actor self, in Target t, WDist minRange, WDist maxRange,
+			WPos? initialTargetPosition = null, Color? targetLineColor = null)
+			: this(self, new List<Actor>(), t, initialTargetPosition, targetLineColor) { }
 
 		protected override void OnFirstRun(Actor self)
 		{
@@ -219,7 +235,24 @@ namespace OpenRA.Mods.Common.Activities
 			Action endingActions = () =>
 			{
 				mobileOffGrid.SeekVectors.Clear();
+				mobileOffGrid.FleeVectors.Clear();
 			};
+
+			Func<List<WVec>, WVec> avgOfVectors = wvecList =>
+			{
+				var newWvec = WVec.Zero;
+				foreach (var wvec in wvecList)
+					newWvec += wvec;
+				return newWvec / wvecList.Count;
+			};
+
+			var nearbyActorsSharingMove = GetNearbyActorsSharingMove(self, false);
+			var sharedMoveAvgDelta = WVec.Zero;
+			if (nearbyActorsSharingMove.Count >= 1)
+				sharedMoveAvgDelta = avgOfVectors(GetNearbyActorsSharingMove(self, false)
+										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
+										.Select(a => a.Delta).ToList());
+			else sharedMoveAvgDelta = Delta;
 
 			// Refuse to take off if it would land immediately again.
 			if (mobileOffGrid.ForceLanding)
@@ -274,11 +307,7 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
-
-			// Acceleration logic
-			var maxVecs = 5;
-			if (Delta != WVec.Zero && mobileOffGrid.SeekVectors.Count < maxVecs)
-				mobileOffGrid.SeekVectors.Add(new MvVec(moveVec / maxVecs));
+			mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
 
 			var move = mobileOffGrid.GenFinalWVec();
 
@@ -289,57 +318,36 @@ namespace OpenRA.Mods.Common.Activities
 				return false;
 			}
 
-			// -- TEMPORARILY DISABLED, UNCOMMENT OUT LATER --
-			// HACK: Consider ourselves blocked if we have moved by less than 64 WDist in the last five ticks
-			// Stop if we are blocked and close enough, or if the current delta to the next target is larger than it was previously
-			if (positionBuffer.Count >= 10)
+			// TO DO: Add repulsion to stationary objects so that move + repulsion = steering away from obstacles
+
+			if (mobileOffGrid.PositionBuffer.Count >= 10)
 			{
-				var lengthMoved = (positionBuffer.Last() - positionBuffer.ElementAt(0)).LengthSquared;
-				var deltaFirst = currPathTarget - positionBuffer.ElementAt(0);
-				var deltaLast = currPathTarget - positionBuffer.Last();
+				var lengthMoved = (mobileOffGrid.PositionBuffer.Last() - mobileOffGrid.PositionBuffer.ElementAt(0)).LengthSquared;
+				var deltaFirst = currPathTarget - mobileOffGrid.PositionBuffer.ElementAt(0);
+				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
 
-				/*System.Console.WriteLine($"nearEnough.LengthSquared: {nearEnough.LengthSquared}");
-				System.Console.WriteLine($"lengthMoved: {lengthMoved}");
-				System.Console.WriteLine($"deltaFirst: {deltaFirst}");
-				System.Console.WriteLine($"deltaLast: {deltaLast}");*/
-
-				if (positionBuffer.Count >= 10 && lengthMoved < 4096 && Delta.HorizontalLengthSquared <= nearEnough.LengthSquared)
+				if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 4096)
 				{
 					endingActions();
+					mobileOffGrid.PositionBuffer.Clear();
 					return true;
 				}
 
-				if (deltaLast.LengthSquared > deltaFirst.LengthSquared)
+				if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared > deltaFirst.LengthSquared)
 				{
 					endingActions();
-					positionBuffer.Clear();
+					mobileOffGrid.PositionBuffer.Clear();
 				}
 			}
 
-			// The next move would overshoot, so consider it close enough and set final position
-			/*System.Console.WriteLine($"delta.HorizontalLengthSquared: {Delta.HorizontalLengthSquared}, " +
-									 $"move.HorizontalLengthSquared: {move.HorizontalLengthSquared}");*/
-
-			// Find actors that are owned by the same player and sharing the same target
-			var nearbyActorRange = mobileOffGrid.UnitRadius * 10; // Adjust this depending on how wide a net of nearby units to consider
-			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, nearbyActorRange);
-			var actorMobileOgsSharingTarg = new List<MobileOffGrid>();
-			foreach (var actor in nearbyActors)
-				if (actor != self && actor.Owner == self.Owner && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
-				{
-					var actorMobileOGs = actor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
-					if (actorMobileOGs.Any() && actorMobileOGs.FirstOrDefault().CurrPathTarget == currPathTarget)
-						actorMobileOgsSharingTarg.Add(actorMobileOGs.FirstOrDefault());
-				}
-
-			System.Console.WriteLine($"Found {actorMobileOgsSharingTarg.Count} actors sharing target");
-
 			var selfHasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared;
-			if (selfHasReachedGoal ||
-				actorMobileOgsSharingTarg.Where(a => a.Delta.HorizontalLengthSquared < a.GenFinalWVec().HorizontalLengthSquared).Any())
+			var hasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared ||
+								 AnyActorHasReachedGoalFrom(GetNearbyActorsSharingMove(self));
+
+			if (hasReachedGoal)
 			{
 				#if DEBUG || DEBUGWITHOVERLAY
-				/*System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");*/
+				System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
 				#endif
 
 				if (Delta.HorizontalLengthSquared != 0 && selfHasReachedGoal)
@@ -352,8 +360,6 @@ namespace OpenRA.Mods.Common.Activities
 					mobileOffGrid.SetDesiredMove(deltaMove);
 					mobileOffGrid.SetIgnoreZVec(true);
 				}
-				else if (Delta.HorizontalLengthSquared != 0)
-					mobileOffGrid.SeekVectors.Clear();
 
 				endingActions();
 				searchingForNextTarget = false;
@@ -376,9 +382,9 @@ namespace OpenRA.Mods.Common.Activities
 				tickCount++;
 			}
 
-			positionBuffer.Add(self.CenterPosition);
-			if (positionBuffer.Count > 10)
-				positionBuffer.RemoveAt(0);
+			mobileOffGrid.PositionBuffer.Add(self.CenterPosition);
+			if (mobileOffGrid.PositionBuffer.Count > 10)
+				mobileOffGrid.PositionBuffer.RemoveAt(0);
 
 			return false;
 		}
@@ -413,6 +419,25 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			var dir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(facing));
 			return speed * dir / 1024;
+		}
+		public List<Actor> GetNearbyActorsSharingMove(Actor self, bool excludeSelf = true)
+		{
+			// var nearbyActorRange = mobileOffGrid.UnitRadius * Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling);
+			var nearbyActorRange = mobileOffGrid.UnitRadius * actorsSharingMove.Count / 2;
+			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, nearbyActorRange);
+			var actorsSharingMoveNearMe = new List<Actor>();
+			foreach (var actor in nearbyActors)
+				if ((actor != self || !excludeSelf) && actor.Owner == self.Owner && actorsSharingMove.Contains(actor) &&
+					!(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
+					actorsSharingMoveNearMe.Add(actor); // No need to check if MobileOffGrid exists since all actors in actorsSharingMove
+														// are moving
+			return actorsSharingMoveNearMe;
+		}
+
+		public bool AnyActorHasReachedGoalFrom(List<Actor> actorList)
+		{
+			return actorList.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
+							.Where(a => a.Delta.HorizontalLengthSquared < a.GenFinalWVec().HorizontalLengthSquared).Any();
 		}
 
 		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
