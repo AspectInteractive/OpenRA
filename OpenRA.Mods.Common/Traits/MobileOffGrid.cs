@@ -536,10 +536,9 @@ namespace OpenRA.Mods.Common.Traits
 					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
 					{
 						var actorMobileOG = actorMobileOGs.FirstOrDefault();
-						var ticksNeeded = UnitRadius.Length / actorMobileOG.MovementSpeed;
 						var repulsionVec = -new WVec(new WDist(actorMobileOG.MovementSpeed),
 													WRot.FromYaw((CenterPosition - actorMobileOG.CenterPosition).Yaw));
-						actorMobileOG.FleeVectors = new List<MvVec>() { new MvVec(repulsionVec, ticksNeeded) };
+						actorMobileOG.FleeVectors.Add(new MvVec(repulsionVec, 1));
 					}
 				}
 			}

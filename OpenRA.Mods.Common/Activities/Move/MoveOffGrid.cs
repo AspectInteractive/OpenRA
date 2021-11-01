@@ -214,7 +214,7 @@ namespace OpenRA.Mods.Common.Activities
 
 		protected override void OnFirstRun(Actor self)
 		{
-			usePathFinder = true;
+			usePathFinder = true; // temporarily setting this to false
 			useLocalAvoidance = false;
 
 			if (usePathFinder)
@@ -229,27 +229,31 @@ namespace OpenRA.Mods.Common.Activities
 
 			GetNextTargetOrComplete();
 		}
+		public void EndingActions()
+		{
+			mobileOffGrid.SeekVectors.Clear();
+			mobileOffGrid.FleeVectors.Clear();
+		}
+
+
+		public WVec AvgOfVectors(List<WVec> wvecList)
+		{
+			var newWvec = WVec.Zero;
+			foreach (var wvec in wvecList)
+				newWvec += wvec;
+			return newWvec / wvecList.Count;
+		}
+
+		public WVec RepulsionVecFunc(WPos selfPos, WPos cellPos)
+		{ return -new WVec(new WDist(mobileOffGrid.MovementSpeed), WRot.FromYaw((cellPos - selfPos).Yaw)); }
 
 		public override bool Tick(Actor self)
 		{
-			Action endingActions = () =>
-			{
-				mobileOffGrid.SeekVectors.Clear();
-				mobileOffGrid.FleeVectors.Clear();
-			};
-
-			Func<List<WVec>, WVec> avgOfVectors = wvecList =>
-			{
-				var newWvec = WVec.Zero;
-				foreach (var wvec in wvecList)
-					newWvec += wvec;
-				return newWvec / wvecList.Count;
-			};
 
 			var nearbyActorsSharingMove = GetNearbyActorsSharingMove(self, false);
 			var sharedMoveAvgDelta = WVec.Zero;
 			if (nearbyActorsSharingMove.Count >= 1)
-				sharedMoveAvgDelta = avgOfVectors(GetNearbyActorsSharingMove(self, false)
+				sharedMoveAvgDelta = AvgOfVectors(GetNearbyActorsSharingMove(self, false)
 										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
 										.Select(a => a.Delta).ToList());
 			else sharedMoveAvgDelta = Delta;
@@ -275,7 +279,7 @@ namespace OpenRA.Mods.Common.Activities
 				// TODO: Remove this after fixing all activities to work properly with arbitrary starting altitudes.
 				var landWhenIdle = mobileOffGrid.Info.IdleBehavior == IdleBehaviorType.Land;
 				var skipHeightAdjustment = landWhenIdle && self.CurrentActivity.IsCanceling && self.CurrentActivity.NextActivity == null;
-				endingActions();
+				EndingActions();
 				return true;
 			}
 
@@ -288,7 +292,7 @@ namespace OpenRA.Mods.Common.Activities
 			// Target is hidden or dead, and we don't have a fallback position to move towards
 			if (useLastVisibleTarget && !lastVisibleTarget.IsValidFor(self))
 			{
-				endingActions();
+				EndingActions();
 				return true;
 			}
 
@@ -302,11 +306,19 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (insideMaxRange && !insideMinRange)
 			{
-				endingActions();
+				EndingActions();
 				return true;
 			}
 
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
+			var cellsColliding = CellsCollidingWithActor(self, moveVec, 3, locomotor);
+			if (cellsColliding.Count > 0)
+			{
+				var fleeVecs = cellsColliding.Select(c => self.World.Map.CenterOfCell(c))
+											 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
+				var avgFleeVec = AvgOfVectors(fleeVecs);
+				mobileOffGrid.FleeVectors.Add(new MvVec(avgFleeVec, 1));
+			}
 			mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
 
 			var move = mobileOffGrid.GenFinalWVec();
@@ -326,16 +338,17 @@ namespace OpenRA.Mods.Common.Activities
 				var deltaFirst = currPathTarget - mobileOffGrid.PositionBuffer.ElementAt(0);
 				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
 
-				if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 4096)
+				/* We don't do this because in most RTS games, units will wait indefinitely if they are stuck in a move command
+				 * if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 4096)
 				{
-					endingActions();
+					EndingActions();
 					mobileOffGrid.PositionBuffer.Clear();
 					return true;
-				}
+				}*/
 
 				if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared > deltaFirst.LengthSquared)
 				{
-					endingActions();
+					EndingActions();
 					mobileOffGrid.PositionBuffer.Clear();
 				}
 			}
@@ -361,7 +374,7 @@ namespace OpenRA.Mods.Common.Activities
 					mobileOffGrid.SetIgnoreZVec(true);
 				}
 
-				endingActions();
+				EndingActions();
 				searchingForNextTarget = false;
 				return GetNextTargetOrComplete();
 			}
@@ -385,6 +398,11 @@ namespace OpenRA.Mods.Common.Activities
 			mobileOffGrid.PositionBuffer.Add(self.CenterPosition);
 			if (mobileOffGrid.PositionBuffer.Count > 10)
 				mobileOffGrid.PositionBuffer.RemoveAt(0);
+
+			// -- FOR DEBUGGING ONLY --
+			/*CellsCollidingWithActor(self, move, 3, locomotor)
+				.ForEach(c => System.Console.WriteLine($"collidingCell: {c}"));
+			System.Console.WriteLine($"HasNotCollided: {HasNotCollided(self, move, 3, locomotor)}");*/
 
 			return false;
 		}
@@ -440,6 +458,42 @@ namespace OpenRA.Mods.Common.Activities
 							.Where(a => a.Delta.HorizontalLengthSquared < a.GenFinalWVec().HorizontalLengthSquared).Any();
 		}
 
+		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor,
+											bool incOrigin = false, int skipLookAheadAmt = 0)
+		{
+			var cellsColliding = new List<CPos>();
+			var selfCenterPos = self.CenterPosition.XYToInt2();
+			var selfCenterPosWithMoves = new List<int2>();
+			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
+			for (var i = startI; i < lookAhead; i++)
+				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
+
+			// for each actor we are potentially colliding with
+			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
+			foreach (var selfShape in selfShapes)
+			{
+				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
+				foreach (var corner in hitShapeCorners)
+				{
+					var cornerWithMove = corner + move * 2;
+					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
+					var cell = self.World.Map.CellContaining(corner);
+					var cellWithMovesBlocked = new List<bool>();
+					Func<CPos, bool> cellIsBlocked = c =>
+					{ return locomotor.MovementCostToEnterCell(default, c, BlockedByActor.None, self) == short.MaxValue; };
+					for (var i = startI; i < lookAhead; i++)
+					{
+						var cellToTest = self.World.Map.CellContaining(corner + move * i);
+						if (cellIsBlocked(cellToTest) && !cellsColliding.Contains(cellToTest))
+							cellsColliding.Add(cellToTest);
+					}
+					if (incOrigin && cellIsBlocked(cell) && !cellsColliding.Contains(cell))
+						cellsColliding.Add(cell);
+				}
+			}
+			return cellsColliding;
+		}
+
 		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
@@ -449,7 +503,6 @@ namespace OpenRA.Mods.Common.Activities
 			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
 			for (var i = startI; i < lookAhead; i++)
 				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
-			/*var cellsToCheck = Util.ExpandFootprint(self.World.Map.CellContaining(selfCenterPosWithMove_WPos), true);*/
 
 			// for each actor we are potentially colliding with
 			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
@@ -495,7 +548,6 @@ namespace OpenRA.Mods.Common.Activities
 					}
 				}
 			}
-
 			return true;
 		}
 
