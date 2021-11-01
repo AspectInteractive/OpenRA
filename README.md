@@ -15,9 +15,15 @@ Below are a list of core features that will be developed for this purpose.
 
 ***Known Issues To Solve:***
 
+- The Theta Star Pathfinder is not optimised, and takes a long time to calculate even moderate to long paths (it will freeze when calculating on very large maps). A similar optimisation to OpenRA's A\* algorithm, or another optimisation needs to be sought. It also appears to expand far more than the original A\* algorithm, however this may be due to subtleties in how they were designed. The algorithm looks correct and truthful to the original C++ implementation of this algorithm, so care must be taken to not alter the correctness when optimising.
+
 - For group movement, a target is currently reached when any unit within a Radius of the unit has reached the target. This is to prevent units fighting for a single target point on the map. However, since a Radius is circular, this means units will reach a corner target before they have passed the wall, causing them to try and 'push' through the wall to the next target. One way to solve this may be to draw an invisible line at each corner, and only consider the target complete when the unit crosses this line.
 
 - For group movement, units will occasionally get stuck on each other, and 'twitch' without finding the target, even when they are very close to it, due to the repulsion effect preventing them from getting close enough. This could be avoided by adding a radius to each target that is at least as big as the unit.
+
+- For group movement involving large sets of units, there is noticeable lag. This may be alleviated through adjusting the game speed, but a better solution should be sought.
+
+- For group movement involving large sets of units, units appear to 'merge' into eachother, violating the restriction on their unit radius. Some additional rules around the repulsion vectors may solve this.
 
 - Movement appears 'jittery' despite following the correct path. Perhaps some Lerping or interpolation could be used here to make it appear more pleasing to the user.
 
