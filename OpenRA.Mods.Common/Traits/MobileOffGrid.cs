@@ -311,6 +311,8 @@ namespace OpenRA.Mods.Common.Traits
 		WAngle cachedFacing;
 
 		public WPos CurrPathTarget;
+		public WPos LastCompletedTarget;
+
 		public WVec Delta => CurrPathTarget - CenterPosition;
 		public List<WPos> PositionBuffer = new List<WPos>();
 
@@ -512,6 +514,17 @@ namespace OpenRA.Mods.Common.Traits
 					finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
 			return finalVec;
 		}
+		public WVec GenFinalWVec(List<MvVec> seekVectors, List<MvVec> fleeVectors, WVecTypes wvecTypes = WVecTypes.All)
+		{
+			var finalVec = WVec.Zero;
+			if (wvecTypes == WVecTypes.Seek || wvecTypes == WVecTypes.All)
+				foreach (var mvVec in seekVectors)
+					finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
+			if (wvecTypes == WVecTypes.Flee || wvecTypes == WVecTypes.All)
+				foreach (var mvVec in fleeVectors)
+					finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
+			return finalVec;
+		}
 
 		public void DecrementMoveVectorSet(ref List<MvVec> mvVecList)
 		{
@@ -527,6 +540,12 @@ namespace OpenRA.Mods.Common.Traits
 		public void SetDesiredMove(WVec desiredMove) { DesiredMove = desiredMove; }
 		public void SetDesiredAltitude(WDist desiredAltitude) { DesiredAltitude = desiredAltitude; }
 		public void SetIgnoreZVec(bool ignoreZVec) { IgnoreZVec = ignoreZVec; }
+		public WVec RepulsionVecFunc(MobileOffGrid actorMobileOG, WPos selfPos, WPos actorPos, int moveSpeedScalar = 1)
+		{
+			var repulsionDelta = selfPos - actorPos;
+			var distToMove = Math.Min(repulsionDelta.Length, actorMobileOG.MovementSpeed);
+			return -new WVec(new WDist(distToMove), WRot.FromYaw(repulsionDelta.Yaw));
+		}
 
 		public void RepelNearbyUnitsTick(Actor self)
 		{
@@ -541,9 +560,13 @@ namespace OpenRA.Mods.Common.Traits
 					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
 					{
 						var actorMobileOG = actorMobileOGs.FirstOrDefault();
-						var repulsionVec = -new WVec(new WDist(actorMobileOG.MovementSpeed),
-													WRot.FromYaw((CenterPosition - actorMobileOG.CenterPosition).Yaw));
-						actorMobileOG.FleeVectors.Add(new MvVec(repulsionVec, 1));
+						var repulsionMvVec = new MvVec(RepulsionVecFunc(actorMobileOG, CenterPosition, actorMobileOG.CenterPosition), 1);
+						var proposedActorMove = GenFinalWVec(actorMobileOG.SeekVectors,
+															 actorMobileOG.FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
+						if (!(CellsCollidingWithPos(actor, actor.CenterPosition, proposedActorMove, 3, Locomotor).Count > 0))
+							actorMobileOG.FleeVectors.Add(repulsionMvVec);
+						else // if collision will occur, we must apply reverse repulsion to ourselves
+							FleeVectors.Add(new MvVec(-repulsionMvVec.Vec, 1));
 					}
 				}
 			}
@@ -618,9 +641,13 @@ namespace OpenRA.Mods.Common.Traits
 
 		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
+		{ return CellsCollidingWithPos(self, self.CenterPosition, move, lookAhead, locomotor, incOrigin, skipLookAheadAmt); }
+
+		public List<CPos> CellsCollidingWithPos(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor,
+											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
 			var cellsColliding = new List<CPos>();
-			var selfCenterPos = self.CenterPosition.XYToInt2();
+			var selfCenterPos = selfPos.XYToInt2();
 			var selfCenterPosWithMoves = new List<int2>();
 			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
 			for (var i = startI; i < lookAhead; i++)

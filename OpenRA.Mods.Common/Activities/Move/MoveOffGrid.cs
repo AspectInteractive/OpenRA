@@ -23,6 +23,7 @@ using static OpenRA.Mods.Common.Traits.MobileOffGrid;
 #pragma warning disable SA1515 // Single-line comment should be preceded by blank line
 #pragma warning disable SA1005 // Single line comments should begin with single space
 #pragma warning disable SA1513 // Closing brace should be followed by blank line
+#pragma warning disable SA1108 // Block statements should not contain embedded comments
 
 namespace OpenRA.Mods.Common.Activities
 {
@@ -67,8 +68,10 @@ namespace OpenRA.Mods.Common.Activities
 
 		List<Actor> actorsSharingMove = new List<Actor>();
 		List<WPos> pathRemaining = new List<WPos>();
+		public List<WPos> PathComplete = new List<WPos>();
 		ThetaStarPathSearch thetaStarSearch;
 		WPos currPathTarget;
+		WPos lastPathTarget;
 
 		private void RequeueTargetAndSetCurrTo(WPos target)
 		{
@@ -83,10 +86,16 @@ namespace OpenRA.Mods.Common.Activities
 			return nextTarget;
 		}
 
-		private bool GetNextTargetOrComplete()
+		private bool GetNextTargetOrComplete(bool completeCurrTarg = true)
 		{
+			if (completeCurrTarg)
+			{
+				PathComplete.Add(currPathTarget);
+				mobileOffGrid.LastCompletedTarget = currPathTarget;
+			}
 			if (pathRemaining.Count > 0)
 			{
+				lastPathTarget = currPathTarget; // for validation purposes
 				currPathTarget = PopNextTarget();
 				mobileOffGrid.CurrPathTarget = currPathTarget;
 			}
@@ -235,7 +244,6 @@ namespace OpenRA.Mods.Common.Activities
 			mobileOffGrid.FleeVectors.Clear();
 		}
 
-
 		public WVec AvgOfVectors(List<WVec> wvecList)
 		{
 			var newWvec = WVec.Zero;
@@ -245,7 +253,11 @@ namespace OpenRA.Mods.Common.Activities
 		}
 
 		public WVec RepulsionVecFunc(WPos selfPos, WPos cellPos, int moveSpeedScalar = 1)
-		{ return -new WVec(new WDist(mobileOffGrid.MovementSpeed * moveSpeedScalar), WRot.FromYaw((cellPos - selfPos).Yaw)); }
+		{
+			var repulsionDelta = cellPos - selfPos;
+			var distToMove = Math.Min(repulsionDelta.Length, mobileOffGrid.MovementSpeed);
+			return -new WVec(new WDist(distToMove), WRot.FromYaw(repulsionDelta.Yaw));
+		}
 
 		public override bool Tick(Actor self)
 		{
@@ -300,16 +312,6 @@ namespace OpenRA.Mods.Common.Activities
 			var pos = mobileOffGrid.GetPosition();
 			//var delta = currPathTarget - pos;
 
-			// Inside the target annulus, so we're done
-			var insideMaxRange = maxRange.Length > 0 && PosInRange(currPathTarget, pos, maxRange);
-			var insideMinRange = minRange.Length > 0 && PosInRange(currPathTarget, pos, minRange);
-
-			if (insideMaxRange && !insideMinRange)
-			{
-				EndingActions();
-				return true;
-			}
-
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
 			var cellsCollidingSet = new List<List<CPos>>();
 			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
@@ -330,28 +332,34 @@ namespace OpenRA.Mods.Common.Activities
 
 			var move = mobileOffGrid.GenFinalWVec();
 
-			// Inside the minimum range, so reverse if we CanSlide, otherwise face away from the target.
-			if (insideMinRange)
-			{
-				mobileOffGrid.SetDesiredFacingToFacing();
-				return false;
-			}
-
 			// TO DO: Add repulsion to stationary objects so that move + repulsion = steering away from obstacles
 
 			if (mobileOffGrid.PositionBuffer.Count >= 10)
 			{
-				var lengthMoved = (mobileOffGrid.PositionBuffer.Last() - mobileOffGrid.PositionBuffer.ElementAt(0)).LengthSquared;
+				var lengthMoved = (mobileOffGrid.PositionBuffer.Last() - mobileOffGrid.PositionBuffer.ElementAt(0)).Length;
 				var deltaFirst = currPathTarget - mobileOffGrid.PositionBuffer.ElementAt(0);
 				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
 
-				/* We don't do this because in most RTS games, units will wait indefinitely if they are stuck in a move command
-				 * if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 4096)
+				// We don't do this because in most RTS games, units will wait indefinitely if they are stuck in a move command
+				if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 1024 && !searchingForNextTarget)
 				{
-					EndingActions();
-					mobileOffGrid.PositionBuffer.Clear();
-					return true;
-				}*/
+					// Create new path to the next path, then join it to the remainder of the existing path
+					if (currPathTarget != lastPathTarget) // Make sure we are not re-running this if we received the same result last time
+					{
+						searchingForNextTarget = true;
+						thetaStarSearch = new ThetaStarPathSearch(self.World, self);
+						var thetaToNextTarg = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition, currPathTarget);
+						if (thetaToNextTarg.Count > 1)
+						{
+							pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
+							GetNextTargetOrComplete(false);
+							EndingActions();
+							mobileOffGrid.PositionBuffer.Clear();
+						}
+						searchingForNextTarget = false;
+					}
+					//return true;
+				}
 
 				if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared > deltaFirst.LengthSquared)
 				{
@@ -361,8 +369,8 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			var selfHasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared;
-			var hasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared ||
-								 AnyActorHasReachedGoalFrom(GetNearbyActorsSharingMove(self));
+			var completedTargsOfNearbyActors = CompletedTargetsOfActors(GetNearbyActorsSharingMove(self));
+			var hasReachedGoal = selfHasReachedGoal || completedTargsOfNearbyActors.Contains(currPathTarget);
 
 			if (hasReachedGoal)
 			{
@@ -384,22 +392,6 @@ namespace OpenRA.Mods.Common.Activities
 				EndingActions();
 				searchingForNextTarget = false;
 				return GetNextTargetOrComplete();
-			}
-
-			if (useLocalAvoidance && searchingForNextTarget)
-			{
-				if (tickCount >= maxTicksBeforeLOScheck)
-					tickCount = 0;
-				else if (tickCount == 0)
-				{
-					// We can abandon the local avoidance strategy
-					if (TargetInLOS(self, move, locomotor, pathRemaining.FirstOrDefault()))
-					{
-						searchingForNextTarget = false;
-						return GetNextTargetOrComplete();
-					}
-				}
-				tickCount++;
 			}
 
 			mobileOffGrid.PositionBuffer.Add(self.CenterPosition);
@@ -447,8 +439,9 @@ namespace OpenRA.Mods.Common.Activities
 		}
 		public List<Actor> GetNearbyActorsSharingMove(Actor self, bool excludeSelf = true)
 		{
-			// var nearbyActorRange = mobileOffGrid.UnitRadius * Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling);
-			var nearbyActorRange = mobileOffGrid.UnitRadius * actorsSharingMove.Count / 2;
+			var nearbyActorRange = mobileOffGrid.UnitRadius * Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling);
+			/*RenderCircle(self, mobileOffGrid.CenterPosition, nearbyActorRange);*/
+			// var nearbyActorRange = mobileOffGrid.UnitRadius * actorsSharingMove.Count / 2;
 			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, nearbyActorRange);
 			var actorsSharingMoveNearMe = new List<Actor>();
 			foreach (var actor in nearbyActors)
@@ -459,10 +452,15 @@ namespace OpenRA.Mods.Common.Activities
 			return actorsSharingMoveNearMe;
 		}
 
-		public bool AnyActorHasReachedGoalFrom(List<Actor> actorList)
+		public List<WPos> CompletedTargetsOfActors(List<Actor> actorList)
 		{
-			return actorList.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
-							.Where(a => a.Delta.HorizontalLengthSquared < a.GenFinalWVec().HorizontalLengthSquared).Any();
+			var completedTargs = actorList.Select(a => a.CurrentActivity)
+							.Where(ca => ca != null).Select(ca => ca.ActivitiesImplementing<MoveOffGrid>().FirstOrDefault())
+							.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
+			completedTargs = completedTargs.Union(actorList.Select(a => a.TraitsImplementing<MobileOffGrid>()
+																		 .Where(Exts.IsTraitEnabled).FirstOrDefault()
+																		 .LastCompletedTarget)).ToList();
+			return completedTargs;
 		}
 
 		public static int CalculateTurnRadius(int speed, WAngle turnSpeed)
