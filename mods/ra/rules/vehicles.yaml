@@ -395,7 +395,7 @@ MCV:
 		CanHover: True
 		CruiseAltitude: 0
 		TurnSpeed: 80
-		Speed: 223
+		Speed: 112
 		CruisingCondition: cruising
 		WaitDistanceFromResupplyBase: 4c0
 		LandableTerrainTypes: Clear, Rough, Road, Ore, Beach, Gems
