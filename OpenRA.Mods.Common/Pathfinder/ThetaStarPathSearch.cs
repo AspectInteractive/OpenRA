@@ -177,6 +177,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private readonly World thisWorld;
 		private readonly Actor self;
+		private readonly MobileOffGrid mobileOffGrid;
+		private readonly Locomotor locomotor;
 		private readonly int ccPosMaxSizeX;
 		private readonly int ccPosMaxSizeY;
 		private readonly int ccPosMinSizeX;
@@ -346,7 +348,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public WPos PadCC(CCPos cc)
 		{
 			var ccPos = thisWorld.Map.WPosFromCCPos(cc);
-			var unitRadius = self.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault().UnitRadius.Length;
+			var unitRadius = mobileOffGrid.UnitRadius.Length;
 
 			var topLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
 			var topRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
@@ -736,11 +738,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private bool IsCellBlocked(CPos? cell)
 		{
-			if (cell == (CPos?)null || !CPosinMap((CPos)cell))
+			if (cell == null)
 				return true; // All invalid cells are blocked
-
-			var locomotor = thisWorld.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
-			return locomotor.MovementCostToEnterCell(default, (CPos)cell, BlockedByActor.None, self) == short.MaxValue;
+			return MobileOffGrid.CellIsBlocked(self, locomotor, (CPos)cell);
 		}
 
 		private bool CellSurroundingCCPosIsBlocked(CCPos ccPos, CellSurroundingCorner cellSurroundingCorner)
@@ -812,6 +812,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 		{
 			thisWorld = world;
 			this.self = self;
+			mobileOffGrid = self.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault();
+			locomotor = thisWorld.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 			ccPosMaxSizeX = thisWorld.Map.MapSize.X;
 			ccPosMinSizeX = 0;
 			ccPosMaxSizeY = thisWorld.Map.MapSize.Y;
