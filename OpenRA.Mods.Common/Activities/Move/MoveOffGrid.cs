@@ -313,15 +313,15 @@ namespace OpenRA.Mods.Common.Activities
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
 			var cellsCollidingSet = new List<List<CPos>>();
 			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
-			/*cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
-			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));*/
+			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
+			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
 			for (var i = 0; i < cellsCollidingSet.Count; i++)
 			{
 				var currCellsColliding = cellsCollidingSet.ElementAt(i);
 				if (currCellsColliding.Count > 0)
 				{
 					var fleeVecs = currCellsColliding.Select(c => self.World.Map.CenterOfCell(c))    // Note: we add scalar prop. to i
-												     .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp, i + 1)).ToList();
+												     .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
 					var fleeVecToUse = AvgOfVectors(fleeVecs);
 					mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
 				}
