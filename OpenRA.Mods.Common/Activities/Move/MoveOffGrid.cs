@@ -244,8 +244,8 @@ namespace OpenRA.Mods.Common.Activities
 			return newWvec / wvecList.Count;
 		}
 
-		public WVec RepulsionVecFunc(WPos selfPos, WPos cellPos)
-		{ return -new WVec(new WDist(mobileOffGrid.MovementSpeed), WRot.FromYaw((cellPos - selfPos).Yaw)); }
+		public WVec RepulsionVecFunc(WPos selfPos, WPos cellPos, int moveSpeedScalar = 1)
+		{ return -new WVec(new WDist(mobileOffGrid.MovementSpeed * moveSpeedScalar), WRot.FromYaw((cellPos - selfPos).Yaw)); }
 
 		public override bool Tick(Actor self)
 		{
@@ -311,13 +311,20 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
-			var cellsColliding = CellsCollidingWithActor(self, moveVec, 3, locomotor);
-			if (cellsColliding.Count > 0)
+			var cellsColliding3 = CellsCollidingWithActor(self, moveVec, 3, locomotor);
+			var cellsColliding2 = CellsCollidingWithActor(self, moveVec, 2, locomotor);
+			var cellsColliding1 = CellsCollidingWithActor(self, moveVec, 1, locomotor);
+			var cellsCollidingSet = new List<List<CPos>>() { cellsColliding3, cellsColliding2, cellsColliding1 };
+			for (var i = 0; i < cellsCollidingSet.Count; i++)
 			{
-				var fleeVecs = cellsColliding.Select(c => self.World.Map.CenterOfCell(c))
-											 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
-				var avgFleeVec = AvgOfVectors(fleeVecs);
-				mobileOffGrid.FleeVectors.Add(new MvVec(avgFleeVec, 1));
+				var currCellsColliding = cellsCollidingSet.ElementAt(i);
+				if (currCellsColliding.Count > 0)
+				{
+					var fleeVecs = currCellsColliding.Select(c => self.World.Map.CenterOfCell(c))    // Note: we add scalar prop. to i
+												     .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp, i + 1)).ToList();
+					var fleeVecToUse = AvgOfVectors(fleeVecs);
+					mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
+				}
 			}
 			mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
 
