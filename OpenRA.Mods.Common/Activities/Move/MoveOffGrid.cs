@@ -311,10 +311,10 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
-			var cellsColliding3 = CellsCollidingWithActor(self, moveVec, 3, locomotor);
-			var cellsColliding2 = CellsCollidingWithActor(self, moveVec, 2, locomotor);
-			var cellsColliding1 = CellsCollidingWithActor(self, moveVec, 1, locomotor);
-			var cellsCollidingSet = new List<List<CPos>>() { cellsColliding3, cellsColliding2, cellsColliding1 };
+			var cellsCollidingSet = new List<List<CPos>>();
+			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
+			/*cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
+			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));*/
 			for (var i = 0; i < cellsCollidingSet.Count; i++)
 			{
 				var currCellsColliding = cellsCollidingSet.ElementAt(i);
@@ -422,7 +422,7 @@ namespace OpenRA.Mods.Common.Activities
 			var n = 1;
 			while (n < stepsToTarg)
 			{
-				if (!HasNotCollided(self, stepDelta * n, 3, locomotor))
+				if (!mobileOffGrid.HasNotCollided(self, stepDelta * n, 3, locomotor))
 					return false;
 				n++;
 			}
@@ -463,99 +463,6 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			return actorList.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
 							.Where(a => a.Delta.HorizontalLengthSquared < a.GenFinalWVec().HorizontalLengthSquared).Any();
-		}
-
-		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0)
-		{
-			var cellsColliding = new List<CPos>();
-			var selfCenterPos = self.CenterPosition.XYToInt2();
-			var selfCenterPosWithMoves = new List<int2>();
-			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			for (var i = startI; i < lookAhead; i++)
-				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
-
-			// for each actor we are potentially colliding with
-			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-			foreach (var selfShape in selfShapes)
-			{
-				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
-				foreach (var corner in hitShapeCorners)
-				{
-					var cornerWithMove = corner + move * 2;
-					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
-					var cell = self.World.Map.CellContaining(corner);
-					var cellWithMovesBlocked = new List<bool>();
-					Func<CPos, bool> cellIsBlocked = c =>
-					{ return locomotor.MovementCostToEnterCell(default, c, BlockedByActor.None, self) == short.MaxValue; };
-					for (var i = startI; i < lookAhead; i++)
-					{
-						var cellToTest = self.World.Map.CellContaining(corner + move * i);
-						if (cellIsBlocked(cellToTest) && !cellsColliding.Contains(cellToTest))
-							cellsColliding.Add(cellToTest);
-					}
-					if (incOrigin && cellIsBlocked(cell) && !cellsColliding.Contains(cell))
-						cellsColliding.Add(cell);
-				}
-			}
-			return cellsColliding;
-		}
-
-		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0)
-		{
-			var destActorsWithinRange = self.World.FindActorsInCircle(self.CenterPosition, mobileOffGrid.UnitRadius); // we double move length to widen search radius
-			var selfCenterPos = self.CenterPosition.XYToInt2();
-			var selfCenterPosWithMoves = new List<int2>();
-			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			for (var i = startI; i < lookAhead; i++)
-				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
-
-			// for each actor we are potentially colliding with
-			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-			foreach (var selfShape in selfShapes)
-			{
-				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
-				foreach (var corner in hitShapeCorners)
-				{
-					var cornerWithMove = corner + move * 2;
-					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
-					var cell = self.World.Map.CellContaining(corner);
-					var cellWithMovesBlocked = new List<bool>();
-					Func<CPos, bool> cellIsBlocked = c =>
-						{ return locomotor.MovementCostToEnterCell(default, c, BlockedByActor.None, self) == short.MaxValue; };
-					for (var i = startI; i < lookAhead; i++)
-						cellWithMovesBlocked.Add(cellIsBlocked(self.World.Map.CellContaining(corner + move * i)));
-					if ((!incOrigin || cellIsBlocked(cell)) && cellWithMovesBlocked.Any(c => c == true))
-					{
-						/*System.Console.WriteLine($"collided with cell {cell} with value {short.MaxValue}");*/
-						return false;
-					}
-				}
-
-				foreach (var destActor in destActorsWithinRange)
-				{
-					var destActorCenterPos = destActor.CenterPosition.XYToInt2();
-					if ((destActor.TraitsImplementing<Building>().Any() || destActor.TraitsImplementing<Mobile>().Any())
-						 && !(self.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
-					{
-						var destShapes = destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-						foreach (var destShape in destShapes)
-						{
-							var hasCollision = destShape.Info.Type.IntersectsWithHitShape(selfCenterPos, destActorCenterPos, selfShape);
-							var posWithMovesBlocked = new List<bool>();
-							Func<int2, bool> posIsColliding = p =>
-								{ return destShape.Info.Type.IntersectsWithHitShape(p, destActorCenterPos, selfShape); };
-							for (var i = 0; i < lookAhead; i++)
-								posWithMovesBlocked.Add(posIsColliding(selfCenterPosWithMoves.ElementAt(i)));
-							// checking hasCollisionWithMove ensures we don't get stuck if moving out/away from the collision
-							if ((!incOrigin || hasCollision) && posWithMovesBlocked.Any(p => p == true))
-								return false;
-						}
-					}
-				}
-			}
-			return true;
 		}
 
 		public static int CalculateTurnRadius(int speed, WAngle turnSpeed)
