@@ -79,6 +79,8 @@ namespace OpenRA.Mods.Common.Activities
 			currPathTarget = target;
 		}
 
+		public WDist MaxRangeToTarget() => mobileOffGrid.UnitRadius * Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling);
+
 		private WPos PopNextTarget()
 		{
 			var nextTarget = pathRemaining.FirstOrDefault();
@@ -370,7 +372,13 @@ namespace OpenRA.Mods.Common.Activities
 
 			var selfHasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared;
 			var completedTargsOfNearbyActors = CompletedTargetsOfActors(GetNearbyActorsSharingMove(self));
-			var hasReachedGoal = selfHasReachedGoal || completedTargsOfNearbyActors.Contains(currPathTarget);
+			tickCount = tickCount >= maxTicksBeforeLOScheck ? tickCount = 0 : tickCount + 1;
+			var hasReachedGoal = selfHasReachedGoal ||
+								 (tickCount == 0 && completedTargsOfNearbyActors.Contains(currPathTarget) &&
+								  ((pathRemaining.Count == 0 && Delta.Length < (move.Length + MaxRangeToTarget().Length))
+								  || ThetaStarPathSearch.IsPathObservable(self.World, self, locomotor,
+																	mobileOffGrid.CenterPosition, pathRemaining.FirstOrDefault())));
+								  //TargetInLOS(self, move, locomotor, pathRemaining.FirstOrDefault()));
 
 			if (hasReachedGoal)
 			{
@@ -398,19 +406,20 @@ namespace OpenRA.Mods.Common.Activities
 			if (mobileOffGrid.PositionBuffer.Count > 10)
 				mobileOffGrid.PositionBuffer.RemoveAt(0);
 
-			// -- FOR DEBUGGING ONLY --
-			/*CellsCollidingWithActor(self, move, 3, locomotor)
-				.ForEach(c => System.Console.WriteLine($"collidingCell: {c}"));
-			System.Console.WriteLine($"HasNotCollided: {HasNotCollided(self, move, 3, locomotor)}");*/
-
 			return false;
 		}
 
 		// Cheap LOS checking to validate whether we can see the next target or not (and cancel any existing local avoidance strategy)
 		private bool TargetInLOS(Actor self, WVec move, Locomotor locomotor, WPos targPos)
 		{
+			if (move.HorizontalLengthSquared == 0 || targPos == default)
+				return false;
+
 			var stepsToTarg = (int)((mobileOffGrid.CenterPosition - targPos).HorizontalLengthSquared / move.HorizontalLengthSquared);
-			var stepDelta = (mobileOffGrid.CenterPosition - targPos) / stepsToTarg;
+
+			var stepDelta = (mobileOffGrid.CenterPosition - targPos) * (int)move.HorizontalLengthSquared /
+							(int)(mobileOffGrid.CenterPosition - targPos).HorizontalLengthSquared;
+
 			var n = 1;
 			while (n < stepsToTarg)
 			{
@@ -437,12 +446,11 @@ namespace OpenRA.Mods.Common.Activities
 			var dir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(facing));
 			return speed * dir / 1024;
 		}
+
 		public List<Actor> GetNearbyActorsSharingMove(Actor self, bool excludeSelf = true)
 		{
-			var nearbyActorRange = mobileOffGrid.UnitRadius * Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling);
 			/*RenderCircle(self, mobileOffGrid.CenterPosition, nearbyActorRange);*/
-			// var nearbyActorRange = mobileOffGrid.UnitRadius * actorsSharingMove.Count / 2;
-			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, nearbyActorRange);
+			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, MaxRangeToTarget());
 			var actorsSharingMoveNearMe = new List<Actor>();
 			foreach (var actor in nearbyActors)
 				if ((actor != self || !excludeSelf) && actor.Owner == self.Owner && actorsSharingMove.Contains(actor) &&

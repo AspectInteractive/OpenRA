@@ -638,11 +638,15 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return true;
 		}
 
+
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
-		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1)
+		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1) { return GetAllCellsUnderneathALine(thisWorld, a0, a1); }
+
+		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
+		public static List<CPos> GetAllCellsUnderneathALine(World world, WPos a0, WPos a1)
 		{
-			var startingCornerCell = thisWorld.Map.CellContaining(a0);
-			var endingCornerCell = thisWorld.Map.CellContaining(a1);
+			var startingCornerCell = world.Map.CellContaining(a0);
+			var endingCornerCell = world.Map.CellContaining(a1);
 
 			var leftMostX = Math.Min(startingCornerCell.X, endingCornerCell.X);
 			var rightMostX = Math.Max(startingCornerCell.X, endingCornerCell.X);
@@ -657,18 +661,24 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		public bool AreCellsIntersectingPath(List<CPos> cells, WPos sourcePos, WPos destPos)
+		{ return AreCellsIntersectingPath(thisWorld, self, locomotor, cells, sourcePos, destPos); }
+
+		public static bool AreCellsIntersectingPath(World world, Actor self, Locomotor locomotor,
+													List<CPos> cells, WPos sourcePos, WPos destPos)
 		{
 			foreach (var cell in cells)
-				if (IsCellBlocked(cell) && thisWorld.Map.AnyCellEdgeIntersectsWithLine(cell, sourcePos, destPos))
+				if (IsCellBlocked(self, locomotor, cell) && world.Map.AnyCellEdgeIntersectsWithLine(cell, sourcePos, destPos))
 					return true;
 			return false;
 		}
 
-		public bool IsPathObservable(WPos rootPos, WPos destPos)
+		public bool IsPathObservable(WPos rootPos, WPos destPos) { return IsPathObservable(thisWorld, self, locomotor, rootPos, destPos); }
+		public static bool IsPathObservable(World world, Actor self, Locomotor locomotor, WPos rootPos, WPos destPos)
 		{
-			var cellsUnderneathLine = GetAllCellsUnderneathALine(rootPos, destPos);
-			return !AreCellsIntersectingPath(cellsUnderneathLine, rootPos, destPos);
+			var cellsUnderneathLine = GetAllCellsUnderneathALine(world, rootPos, destPos);
+			return !AreCellsIntersectingPath(world, self, locomotor, cellsUnderneathLine, rootPos, destPos);
 		}
+
 		public bool IsPathObservable(CCPos rootCC, CCPos destCC)
 		{ return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), thisWorld.Map.WPosFromCCPos(destCC)); }
 		public bool IsPathObservable(WPos rootPos, CCPos destCC) { return IsPathObservable(rootPos, thisWorld.Map.WPosFromCCPos(destCC)); }
@@ -736,7 +746,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private CCPos GetNearestCCPos(WPos pos) { return GetNearestCCPos(pos, thisWorld); }
 
-		private bool IsCellBlocked(CPos? cell)
+		private bool IsCellBlocked(CPos? cell) { return IsCellBlocked(self, locomotor, cell);	}
+		private static bool IsCellBlocked(Actor self, Locomotor locomotor, CPos? cell)
 		{
 			if (cell == null)
 				return true; // All invalid cells are blocked
