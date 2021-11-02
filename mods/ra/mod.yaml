@@ -252,39 +252,11 @@ AssetBrowser:
 	VideoExtensions: .vqa, .wsa
 
 GameSpeeds:
-	DefaultSpeed: fastestestest
+	DefaultSpeed: default
 	Speeds:
-		slowest:
-			Name: options-game-speed.slowest
-			Timestep: 80
-			OrderLatency: 2
-		slower:
-			Name: options-game-speed.slower
-			Timestep: 50
-			OrderLatency: 3
 		default:
-			Name: options-game-speed.normal
-			Timestep: 40
-			OrderLatency: 3
-		fast:
-			Name: options-game-speed.fast
-			Timestep: 35
-			OrderLatency: 4
-		faster:
-			Name: options-game-speed.faster
-			Timestep: 30
-			OrderLatency: 4
-		fastest:
-			Name: options-game-speed.fastest
-			Timestep: 20
-			OrderLatency: 6
-		fastestest:
-			Name: Fastest
-			Timestep: 10
-			OrderLatency: 6
-		fastestestest:
-			Name: Fastest
-			Timestep: 5
+			Name: Normal
+			Timestep: 16
 			OrderLatency: 6
 
 ModContent:
