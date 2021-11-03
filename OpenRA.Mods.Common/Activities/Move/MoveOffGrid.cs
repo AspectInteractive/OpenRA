@@ -69,7 +69,6 @@ namespace OpenRA.Mods.Common.Activities
 		List<Actor> actorsSharingMove = new List<Actor>();
 		List<WPos> pathRemaining = new List<WPos>();
 		public List<WPos> PathComplete = new List<WPos>();
-		ThetaStarPathSearch thetaStarSearch;
 		WPos currPathTarget;
 		WPos lastPathTarget;
 
@@ -230,7 +229,7 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (usePathFinder)
 			{
-				thetaStarSearch = new ThetaStarPathSearch(self.World, self);
+				var thetaStarSearch = new ThetaStarPathSearch(self.World, self);
 				using (new Support.PerfTimer("ThetaStar"))
 					pathRemaining = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition, target.CenterPosition);
 			}
@@ -343,13 +342,13 @@ namespace OpenRA.Mods.Common.Activities
 				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
 
 				// We don't do this because in most RTS games, units will wait indefinitely if they are stuck in a move command
-				if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 1024 && !searchingForNextTarget)
+				if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 256 && !searchingForNextTarget)
 				{
 					// Create new path to the next path, then join it to the remainder of the existing path
 					if (currPathTarget != lastPathTarget) // Make sure we are not re-running this if we received the same result last time
 					{
 						searchingForNextTarget = true;
-						thetaStarSearch = new ThetaStarPathSearch(self.World, self);
+						var thetaStarSearch = new ThetaStarPathSearch(self.World, self);
 						var thetaToNextTarg = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition, currPathTarget);
 						if (thetaToNextTarg.Count > 1)
 						{
