@@ -175,6 +175,16 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private Dictionary<(int x, int y), CCState> ccStateList = new Dictionary<(int x, int y), CCState>();
 		public enum StateListType : byte { OpenList, ClosedList, NoList }
 
+		private Dictionary<int, bool> pathObsCache = new Dictionary<int, bool>();
+
+		public bool GetOrCreatePathObs((CCPos, CCPos) inputItem, Func<bool> createItem)
+		{
+			var key = inputItem.GetHashCode();
+			if (!pathObsCache.ContainsKey(key))
+				pathObsCache[key] = createItem();
+			return pathObsCache[key];
+		}
+
 		private readonly World thisWorld;
 		private readonly Actor self;
 		private readonly MobileOffGrid mobileOffGrid;
@@ -385,6 +395,35 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return ccPos;
 		}
 
+		public void ValidateParent(CCState ccState)
+		{
+			// Lazy Theta* assumes that there is always line-of-sight from the parent of an expanded state to a successor state.
+			// When expanding a state, check if this is true.
+			if (!IsPathObsCached(ccState.ParentState.CC, ccState.CC))
+			{
+				// Since the previous parent is invalid, set g-value to infinity.
+				ccState.Gval = int.MaxValue;
+				// Go over potential parents and update its parent to the parent that yields the lowest g-value for s.
+				var stateNeighbours = GetNeighbours(ccState.CC);
+				for (var i = 0; i < stateNeighbours.Count; i++)
+				{
+					var newParentState = GetState(stateNeighbours.ElementAt(i));
+					if (ClosedList.Any(state => state.CC == newParentState.CC))
+					{
+						var newGval = newParentState.Gval + ccState.GetEuclidDistanceTo(newParentState);
+						if (newGval < ccState.Gval)
+						{
+							ccState.Gval = newGval;
+							ccState.ParentState = newParentState;
+						}
+					}
+				}
+			}
+		}
+
+		public bool IsPathObsCached(CCPos rootCC, CCPos destCC)
+		{ return GetOrCreatePathObs((rootCC, destCC), () => IsPathObservable(rootCC, destCC)); }
+
 		public List<WPos> ThetaStarFindPath(WPos sourcePos, WPos destPos)
 		{
 			ResetLists();
@@ -397,17 +436,17 @@ namespace OpenRA.Mods.Common.Pathfinder
 			Dest = destPos;
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
-			/*if (IsPathObservable(sourcePos, destPos))
+			if (IsPathObservable(sourcePos, destPos))
 			{
 				path.Add(sourcePos);
 				path.Add(destPos);
 
 				#if DEBUGWITHOVERLAY
-				RenderPath(path);
+				RenderPathIfOverlay(path);
 				#endif
 
 				return path;
-			}*/
+			}
 
 			var sourceCCPos = GetNearestCCPos(sourcePos);
 			var destCCPos = GetNearestCCPos(destPos);
@@ -467,7 +506,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			AddStateToOpen(startState);
 
 			var numExpansions = 0;
-			var maxExpansions = 1000;
+			var maxExpansions = 10000;
 			CCState minState = startState;
 			while (OpenList.Count > 0 && numExpansions < maxExpansions)
 			{
@@ -477,8 +516,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 				numExpansions++;
 
+				ValidateParent(minState);
+				var newParentState = minState.ParentState;
 				var minStateNeighbours = GetNeighbours(minState.CC);
-
 				for (var i = 0; i < minStateNeighbours.Count; i++)
 				{
 					var succState = GetState(minStateNeighbours.ElementAt(i));
@@ -489,18 +529,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 					if (!ClosedList.Any(state => state.CC == succState.CC))
 					{
-						int newGval;
-						CCState newParentState;
-						if (IsPathObservable(minState.ParentState.CC, succState.CC))
-						{
-							newParentState = minState.ParentState;
-							newGval = newParentState.Gval + newParentState.GetEuclidDistanceTo(succState);
-						}
-						else
-						{
-							newParentState = minState;
-							newGval = newParentState.Gval + minState.GetEuclidDistanceTo(succState);
-						}
+						var newGval = newParentState.Gval + newParentState.GetEuclidDistanceTo(succState);
 						if (newGval < succState.Gval)
 						{
 							succState.Gval = newGval;
@@ -509,23 +538,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 						}
 					}
 				}
-
-				#if DEBUGWITHOVERLAY
-				Func<CCState, CCState> incrementFunc = state => state.ParentState;
-				var currState = new CCState(minState);
-				while (currState != startState)
-				{
-					System.Console.WriteLine($"CurrentMinStateCC: {currState.CC}, OpenList.Count: {OpenList.Count}" +
-											 $", numExpansion: {numExpansions}");
-					currState.RenderInIfOverlayWithCheck(thisWorld);
-					currState = incrementFunc(currState);
-				}
-				#endif
 			}
 
 			if (goalState.Gval < int.MaxValue)
 			{
 				Func<CCState, CCState> incrementFunc = state => state.ParentState;
+				ValidateParent(goalState);
 				var currState = goalState;
 				path.Add(destPos); // We add the goal first since it is a WPos, then increment first initially
 				currState = incrementFunc(currState);
