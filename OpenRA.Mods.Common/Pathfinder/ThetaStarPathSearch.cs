@@ -567,96 +567,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return EmptyPath;
 		}
 
-		private bool LineOfSight(CCPos cc1, CCPos cc2)
-		{
-			var x1 = cc1.X;
-			var y1 = cc1.Y;
-			var x2 = cc2.X;
-			var y2 = cc2.Y;
-
-			var dy = cc2.Y - cc1.Y;
-			var dx = cc2.X - cc1.X;
-
-			var f = 0;
-			int sy;
-			int sx;
-			int Xoffset;
-			int Yoffset;
-
-			if (dy < 0)
-			{
-				dy = -dy;
-				sy = -1;
-				Yoffset = -1; // Cell is to the North
-			}
-			else
-			{
-				sy = 1;
-				Yoffset = 0; // Cell is to the South
-			}
-			if (dx < 0)
-			{
-				dx = -dx;
-				sx = -1;
-				Xoffset = -1; // Cell is to the West
-			}
-			else
-			{
-				sx = 1;
-				Xoffset = 0; // Cell is to the East
-			}
-
-			if (dx >= dy) // Move along the x axis and increment/decrement y when f >= dx.
-			{
-				while (x1 != x2)
-				{
-					f += dy;
-					if (f >= dx) // We are changing rows, we might need to check two cells this iteration.
-					{
-						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
-							return false;
-						y1 += sy;
-						f -= dx;
-					}
-					if (f != 0) // If f == 0, then we are crossing the row at a corner point and we don't need to check both cells.
-						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
-							return false;
-					if (dy == 0) // If we are moving along a horizontal line, either the north or the south cell should be unblocked.
-						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 - 1)) &&
-							IsCellBlocked(new CPos(x1 + Xoffset, y1)))
-							return false;
-
-					x1 += sx;
-				}
-			}
-			else // if (dx < dy). Move along the y axis and increment/decrement x when f >= dy.
-			{
-				while (y1 != y2)
-				{
-					f += dx;
-					if (f >= dy)
-					{
-						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
-							return false;
-						x1 += sx;
-						f -= dy;
-					}
-					if (f != 0)
-						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
-							return false;
-					if (dx == 0)
-						if (IsCellBlocked(new CPos(x1 - 1, y1 + Yoffset)) &&
-							IsCellBlocked(new CPos(x1,     y1 + Yoffset)))
-							return false;
-
-					y1 += sy;
-				}
-			}
-
-			return true;
-		}
-
-
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
 		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1) { return GetAllCellsUnderneathALine(thisWorld, a0, a1); }
 
@@ -789,7 +699,18 @@ namespace OpenRA.Mods.Common.Pathfinder
 			}
 		}
 
-		private List<CCPos> GetNeighbours(CCPos cc)
+		private bool DiagBlockedCCPos(CCPos cc)
+		{
+			var TLBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
+			var TRBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
+			var BLBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
+			var BRBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
+
+			return (TLBlocked && BRBlocked && !TRBlocked && !BLBlocked) ||
+				   (TRBlocked && BLBlocked && !TLBlocked && !BRBlocked);
+		}
+
+		private List<CCPos> GetNeighbours(CCPos cc, bool excDiagBlocked = true)
 		{
 			var neighbourList = new List<CCPos>();
 
@@ -806,10 +727,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			var TRBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
 			var BLBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
 			var BRBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
-
-			if ((TLBlocked && BRBlocked && !TRBlocked && !BLBlocked) ||
-				(TRBlocked && BLBlocked && !TLBlocked && !BRBlocked))
-				return neighbourList; // diagonally blocked corner so we cannot proceed
 
 			var topBlocked = TLBlocked && TRBlocked;
 			var botBlocked = BLBlocked && BRBlocked;
@@ -833,7 +750,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 			if (CcinMap(ccR) && !rightBlocked)
 				neighbourList.Add(ccR);
 
-			return neighbourList;
+			// Exclude diagonally blocked corners if parameter used (default is that it is)
+			return excDiagBlocked ? neighbourList.Where(c => !DiagBlockedCCPos(c)).ToList() : neighbourList;
 		}
 
 		#region Constructors
