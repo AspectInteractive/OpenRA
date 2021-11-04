@@ -187,6 +187,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		private readonly World thisWorld;
 		private readonly Actor self;
+		private Func<CCPos, CCPos, bool> CCLineOfSightFunc;
+		private bool skipInitialLOSCheck = false;
 		private readonly MobileOffGrid mobileOffGrid;
 		private readonly Locomotor locomotor;
 		private readonly int ccPosMaxSizeX;
@@ -399,7 +401,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		{
 			// Lazy Theta* assumes that there is always line-of-sight from the parent of an expanded state to a successor state.
 			// When expanding a state, check if this is true.
-			if (!IsPathObsCached(ccState.ParentState.CC, ccState.CC))
+			if (!CCLineOfSightFunc(ccState.ParentState.CC, ccState.CC))
 			{
 				// Since the previous parent is invalid, set g-value to infinity.
 				ccState.Gval = int.MaxValue;
@@ -424,19 +426,19 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public bool IsPathObsCached(CCPos rootCC, CCPos destCC)
 		{ return GetOrCreatePathObs((rootCC, destCC), () => IsPathObservable(rootCC, destCC)); }
 
-		public List<WPos> ThetaStarFindPath(WPos sourcePos, WPos destPos)
+		public (List<WPos>, bool) ThetaStarFindPath(WPos sourcePos, WPos destPos)
 		{
 			ResetLists();
 
 			if (sourcePos == destPos)
-				return new List<WPos>();
+				return (new List<WPos>(), false);
 
 			List<WPos> path = new List<WPos>();
 			Source = sourcePos;
 			Dest = destPos;
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
-			if (IsPathObservable(sourcePos, destPos))
+			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos))
 			{
 				path.Add(sourcePos);
 				path.Add(destPos);
@@ -445,7 +447,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				RenderPathIfOverlay(path);
 				#endif
 
-				return path;
+				return (path, false);
 			}
 
 			var sourceCCPos = GetNearestCCPos(sourcePos);
@@ -506,7 +508,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			AddStateToOpen(startState);
 
 			var numExpansions = 0;
-			var maxExpansions = 10000;
+			var maxExpansions = 6000;
 			CCState minState = startState;
 			while (OpenList.Count > 0 && numExpansions < maxExpansions)
 			{
@@ -560,12 +562,102 @@ namespace OpenRA.Mods.Common.Pathfinder
 				#if DEBUGWITHOVERLAY
 				RenderPathIfOverlay(new List<WPos>() { sourcePos }.Union(path).ToList());
 				#endif
-
-				return path;
+				return (path, numExpansions >= maxExpansions);
 			}
 
-			return EmptyPath;
+			return (EmptyPath, numExpansions >= maxExpansions);
 		}
+
+#pragma warning disable SA1312 // Variable names should begin with lower-case letter
+		private bool LineOfSight(CCPos cc1, CCPos cc2)
+		{
+			var x1 = cc1.X;
+			var y1 = cc1.Y;
+			var x2 = cc2.X;
+			var y2 = cc2.Y;
+
+			var dy = cc2.Y - cc1.Y;
+			var dx = cc2.X - cc1.X;
+
+			var f = 0;
+			int sy;
+			int sx;
+			int Xoffset;
+			int Yoffset;
+
+			if (dy < 0)
+			{
+				dy = -dy;
+				sy = -1;
+				Yoffset = -1; // Cell is to the North
+			}
+			else
+			{
+				sy = 1;
+				Yoffset = 0; // Cell is to the South
+			}
+			if (dx < 0)
+			{
+				dx = -dx;
+				sx = -1;
+				Xoffset = -1; // Cell is to the West
+			}
+			else
+			{
+				sx = 1;
+				Xoffset = 0; // Cell is to the East
+			}
+
+			if (dx >= dy) // Move along the x axis and increment/decrement y when f >= dx.
+			{
+				while (x1 != x2)
+				{
+					f += dy;
+					if (f >= dx) // We are changing rows, we might need to check two cells this iteration.
+					{
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+						y1 += sy;
+						f -= dx;
+					}
+					if (f != 0) // If f == 0, then we are crossing the row at a corner point and we don't need to check both cells.
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+					if (dy == 0) // If we are moving along a horizontal line, either the north or the south cell should be unblocked.
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 - 1)) &&
+							IsCellBlocked(new CPos(x1 + Xoffset, y1)))
+							return false;
+
+					x1 += sx;
+				}
+			}
+			else // if (dx < dy). Move along the y axis and increment/decrement x when f >= dy.
+			{
+				while (y1 != y2)
+				{
+					f += dx;
+					if (f >= dy)
+					{
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+						x1 += sx;
+						f -= dy;
+					}
+					if (f != 0)
+						if (IsCellBlocked(new CPos(x1 + Xoffset, y1 + Yoffset)))
+							return false;
+					if (dx == 0)
+						if (IsCellBlocked(new CPos(x1 - 1, y1 + Yoffset)) &&
+							IsCellBlocked(new CPos(x1, y1 + Yoffset)))
+							return false;
+
+					y1 += sy;
+				}
+			}
+
+			return true;
+		}
+#pragma warning restore SA1312 // Variable names should begin with lower-case letter
 
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
 		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1) { return GetAllCellsUnderneathALine(thisWorld, a0, a1); }
@@ -758,6 +850,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public ThetaStarPathSearch(World world, Actor self)
 		{
 			thisWorld = world;
+			if (thisWorld.Map.Grid.Type != MapGridType.Rectangular)
+			{
+				CCLineOfSightFunc = LineOfSight;
+				skipInitialLOSCheck = true;
+			}
+			else
+				CCLineOfSightFunc = IsPathObsCached;
 			this.self = self;
 			mobileOffGrid = self.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault();
 			locomotor = thisWorld.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
