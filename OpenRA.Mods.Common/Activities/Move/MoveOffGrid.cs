@@ -68,6 +68,9 @@ namespace OpenRA.Mods.Common.Activities
 
 		List<Actor> actorsSharingMove = new List<Actor>();
 		List<WPos> pathRemaining = new List<WPos>();
+		bool reachedMaxExpansions = false;
+		int thetaIters = 0;
+		int maxThetaIters = 3;
 		public List<WPos> PathComplete = new List<WPos>();
 		WPos currPathTarget;
 		WPos lastPathTarget;
@@ -231,7 +234,9 @@ namespace OpenRA.Mods.Common.Activities
 			{
 				var thetaStarSearch = new ThetaStarPathSearch(self.World, self);
 				using (new Support.PerfTimer("ThetaStar"))
-					pathRemaining = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition, target.CenterPosition);
+					(pathRemaining, reachedMaxExpansions) = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition,
+																							  target.CenterPosition);
+				thetaIters++;
 			}
 
 			if (!usePathFinder || pathRemaining.Count == 0)
@@ -345,21 +350,28 @@ namespace OpenRA.Mods.Common.Activities
 				if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 256 && !searchingForNextTarget)
 				{
 					// Create new path to the next path, then join it to the remainder of the existing path
-					if (currPathTarget != lastPathTarget) // Make sure we are not re-running this if we received the same result last time
+					// Make sure we are not re-running this if we received the same result last time
+					// Also do not re-run if max expansions were reached last time
+					if (currPathTarget != lastPathTarget)
 					{
-						searchingForNextTarget = true;
-						var thetaStarSearch = new ThetaStarPathSearch(self.World, self);
-						var thetaToNextTarg = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition, currPathTarget);
-						if (thetaToNextTarg.Count > 1)
+						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
-							pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
-							GetNextTargetOrComplete(false);
-							EndingActions();
-							mobileOffGrid.PositionBuffer.Clear();
+							searchingForNextTarget = true;
+							var thetaStarSearch = new ThetaStarPathSearch(self.World, self);
+							List<WPos> thetaToNextTarg;
+							(thetaToNextTarg, reachedMaxExpansions) = thetaStarSearch.ThetaStarFindPath(mobileOffGrid.CenterPosition,
+																											currPathTarget);
+							thetaIters++;
+							if (thetaToNextTarg.Count > 1)
+							{
+								pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
+								GetNextTargetOrComplete(false);
+								EndingActions();
+								mobileOffGrid.PositionBuffer.Clear();
+							}
+							searchingForNextTarget = false;
 						}
-						searchingForNextTarget = false;
 					}
-					//return true;
 				}
 
 				if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared > deltaFirst.LengthSquared)
