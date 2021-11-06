@@ -438,19 +438,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			Source = sourcePos;
 			Dest = destPos;
 
-			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
-			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos))
-			{
-				// path.Add(sourcePos);
-				path.Add(destPos);
-
-				#if DEBUGWITHOVERLAY
-				RenderPathIfOverlay(path);
-				#endif
-
-				return (path, false);
-			}
-
 			var sourceCCPos = GetNearestCCPos(sourcePos);
 			var destCCPos = GetNearestCCPos(destPos);
 
@@ -488,9 +475,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 				var distFromDest = int.MaxValue;
 				var bestCandidate = newCandidates.ElementAt(0);
 
-				foreach (var c in newCandidates)
+				foreach (var c in newCellCandidates)
 				{
-					var newDist = (int)(destPos - thisWorld.Map.WPosFromCCPos(c)).HorizontalLength;
+					var newDist = (destPos - thisWorld.Map.WPosFromCCPos(c)).HorizontalLength;
 					if (newDist < distFromDest)
 					{
 						distFromDest = newDist;
@@ -500,6 +487,19 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 				destCCPos = bestCandidate;
 				destPos = thisWorld.Map.WPosFromCCPos(bestCandidate);
+			}
+
+			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
+			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos))
+			{
+				// path.Add(sourcePos);
+				path.Add(destPos);
+
+				#if DEBUGWITHOVERLAY
+				RenderPathIfOverlay(path);
+				#endif
+
+				return (path, false);
 			}
 
 			var startState = GetState(sourceCCPos);
