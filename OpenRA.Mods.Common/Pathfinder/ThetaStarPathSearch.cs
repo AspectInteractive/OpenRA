@@ -186,6 +186,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		private readonly World thisWorld;
+		private readonly ThetaStarCache thisThetaCache;
 		private readonly Actor self;
 		private Func<CCPos, CCPos, bool> CCLineOfSightFunc;
 		private bool skipInitialLOSCheck = false;
@@ -440,7 +441,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
 			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos))
 			{
-				path.Add(sourcePos);
+				// path.Add(sourcePos);
 				path.Add(destPos);
 
 				#if DEBUGWITHOVERLAY
@@ -515,6 +516,15 @@ namespace OpenRA.Mods.Common.Pathfinder
 				minState = PopFirstFromOpen();
 				if (goalState.Gval <= minState.Fval)
 					break;
+				else if (thisThetaCache.CheckIfInCache(minState, destPos))
+					if (minState.Gval + thisThetaCache.Get(minState, destPos).FinalHval <= minState.Fval)
+						break;
+
+				/* ---------------
+				 * In this case pastGoalState is a previously found path with the same goalState
+				 * So we find its Gval at the current point and replace it with our Gval, to compare if less than minState.Fval
+				 * --------------- */
+				// else if (pastGoalState.Gval - pastGoalState[minState.CC].Gval + minState.Gval <= minState.Fval)
 
 				numExpansions++;
 
@@ -523,6 +533,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 				var minStateNeighbours = GetNeighbours(minState.CC);
 				for (var i = 0; i < minStateNeighbours.Count; i++)
 				{
+					// if (minStateNeighbours.ElementAt(i) not in solved CCs) continue, otherwise skip this cell and check full path later
+					// Full path logic: All H-values should be stored distinctly from G-values. Subtract the G-value of the other unit,
+					// and add your own. This will let you re-use costs found earlier.
 					var succState = GetState(minStateNeighbours.ElementAt(i));
 
 					/*#if DEBUGWITHOVERLAY
@@ -532,7 +545,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					if (!ClosedList.Any(state => state.CC == succState.CC))
 					{
 						var newGval = newParentState.Gval + newParentState.GetEuclidDistanceTo(succState);
-						if (newGval < succState.Gval)
+						if (newGval < succState.Gval) // && less than bestSavedGval
 						{
 							succState.Gval = newGval;
 							succState.ParentState = newParentState;
@@ -554,6 +567,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 					var paddedCCpos = PadCC(currState.CC);
 					// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC)); // Swap above line with this if not using padding
 					path.Add(paddedCCpos);
+					thisThetaCache.Add(currState, destPos, goalState.Gval); // add to cache for future look-ups
 					currState = incrementFunc(currState);
 				}
 				// path.Add(sourcePos);
@@ -850,6 +864,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public ThetaStarPathSearch(World world, Actor self)
 		{
 			thisWorld = world;
+			thisThetaCache = world.WorldActor.TraitsImplementing<ThetaStarCache>().FirstEnabledTraitOrDefault();
 			if (thisWorld.Map.Grid.Type != MapGridType.Rectangular)
 			{
 				CCLineOfSightFunc = LineOfSight;

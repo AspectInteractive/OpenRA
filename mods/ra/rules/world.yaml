@@ -10,9 +10,10 @@
 		DefeatMusic: map
 	TerrainGeometryOverlay:
     ClearThetaStarPathfinderOverlay:
-	ThetaStarPathfinderOverlay:
+	ThetaStarPathfinderOverlay:    
 	CPosCoordsDebugOverlay:
 	DebugVisualizations:
+    ThetaStarCache:
 	Locomotor@FOOT:
 		Name: foot
 		Crushes: mine, crate

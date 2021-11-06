@@ -314,6 +314,7 @@ namespace OpenRA.Mods.Common.Traits
 		public WPos LastCompletedTarget;
 
 		public WVec Delta => CurrPathTarget - CenterPosition;
+		public List<WPos> PathComplete = new List<WPos>();
 		public List<WPos> PositionBuffer = new List<WPos>();
 
 		public List<MvVec> SeekVectors = new List<MvVec>();
@@ -1056,14 +1057,17 @@ namespace OpenRA.Mods.Common.Traits
 		public Activity MoveWithinRange(in Target target, WDist range,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
-			return new MoveOffGrid(self, target, WDist.Zero, range, initialTargetPosition, targetLineColor);
+			var groupedActors = self.World.Selection.Actors
+									.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
+			return new MoveOffGrid(self, groupedActors, target, WDist.Zero, range, initialTargetPosition, targetLineColor);
 		}
 
 		public Activity MoveWithinRange(in Target target, WDist minRange, WDist maxRange,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
-			return new MoveOffGrid(self, target, minRange, maxRange,
-				initialTargetPosition, targetLineColor);
+			var groupedActors = self.World.Selection.Actors
+									.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
+			return new MoveOffGrid(self, groupedActors, target, minRange, maxRange, initialTargetPosition, targetLineColor);
 		}
 
 		public Activity MoveFollow(Actor self, in Target target, WDist minRange, WDist maxRange,
