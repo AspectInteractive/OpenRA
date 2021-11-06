@@ -71,7 +71,6 @@ namespace OpenRA.Mods.Common.Activities
 		bool reachedMaxExpansions = false;
 		int thetaIters = 0;
 		int maxThetaIters = 3;
-		public List<WPos> PathComplete = new List<WPos>();
 		WPos currPathTarget;
 		WPos lastPathTarget;
 
@@ -94,7 +93,7 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			if (completeCurrTarg)
 			{
-				PathComplete.Add(currPathTarget);
+				mobileOffGrid.PathComplete.Add(currPathTarget);
 				mobileOffGrid.LastCompletedTarget = currPathTarget;
 			}
 			if (pathRemaining.Count > 0)
@@ -105,12 +104,20 @@ namespace OpenRA.Mods.Common.Activities
 			}
 			else
 			{
-				System.Console.WriteLine("GetNextTargetOrComplete(): No more targets");
-				return true;
+				return Complete();
 			}
 
-			System.Console.WriteLine("GetNextTargetOrComplete(): More targets available");
+			// System.Console.WriteLine("GetNextTargetOrComplete(): More targets available");
 			return false;
+		}
+
+		public bool Complete()
+		{
+			// System.Console.WriteLine("GetNextTargetOrComplete(): No more targets");
+			mobileOffGrid.PathComplete.Clear();
+			mobileOffGrid.PositionBuffer.Clear();
+			mobileOffGrid.CurrPathTarget = WPos.Zero;
+			return true;
 		}
 
 		public static bool PosInRange(WPos pos, WPos origin, WDist range)
@@ -210,11 +217,13 @@ namespace OpenRA.Mods.Common.Activities
 							Color? targetLineColor = null)
 			: this(self, new List<Actor>(), t, initialTargetPosition, targetLineColor) { }
 
+		// Attack Move Move
 		public MoveOffGrid(Actor self, in List<Actor> groupedActors, in Target t, WDist minRange, WDist maxRange,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 			: this(self, groupedActors, t, initialTargetPosition, targetLineColor)
 		{
-			#if DEBUG
+			System.Console.WriteLine($"Target is {target}");
+			#if DEBUG || DEBUGWITHOVERLAY
 			System.Console.WriteLine("MoveOffGrid created at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
 			#endif
 			this.maxRange = maxRange;
@@ -318,6 +327,18 @@ namespace OpenRA.Mods.Common.Activities
 			var pos = mobileOffGrid.GetPosition();
 			//var delta = currPathTarget - pos;
 
+			// For Attack Move, we stop when we are within firing range of the target
+			if (minRange != WDist.Zero || maxRange != WDist.Zero)
+			{
+				var insideMinRange = minRange.Length > 0 && PosInRange(currPathTarget, pos, minRange);
+				var insideMaxRange = maxRange.Length > 0 && PosInRange(currPathTarget, pos, maxRange);
+				if (insideMaxRange && !insideMinRange)
+				{
+					EndingActions();
+					return true;
+				}
+			}
+
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
 			var cellsCollidingSet = new List<List<CPos>>();
 			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
@@ -340,14 +361,14 @@ namespace OpenRA.Mods.Common.Activities
 
 			// TO DO: Add repulsion to stationary objects so that move + repulsion = steering away from obstacles
 
-			if (mobileOffGrid.PositionBuffer.Count >= 10)
+			if (mobileOffGrid.PositionBuffer.Count >= 100)
 			{
 				var lengthMoved = (mobileOffGrid.PositionBuffer.Last() - mobileOffGrid.PositionBuffer.ElementAt(0)).Length;
 				var deltaFirst = currPathTarget - mobileOffGrid.PositionBuffer.ElementAt(0);
 				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
 
 				// We don't do this because in most RTS games, units will wait indefinitely if they are stuck in a move command
-				if (mobileOffGrid.PositionBuffer.Count >= 10 && lengthMoved < 256 && !searchingForNextTarget)
+				if (lengthMoved < 512 && !searchingForNextTarget)
 				{
 					// Create new path to the next path, then join it to the remainder of the existing path
 					// Make sure we are not re-running this if we received the same result last time
@@ -371,10 +392,14 @@ namespace OpenRA.Mods.Common.Activities
 							}
 							searchingForNextTarget = false;
 						}
+						else if (mobileOffGrid.PositionBuffer.Count >= 180) // 3 seconds
+						{
+							EndingActions();
+							return Complete();
+						}
 					}
 				}
-
-				if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared > deltaFirst.LengthSquared)
+				else if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared > deltaFirst.LengthSquared)
 				{
 					EndingActions();
 					mobileOffGrid.PositionBuffer.Clear();
@@ -394,7 +419,7 @@ namespace OpenRA.Mods.Common.Activities
 			if (hasReachedGoal)
 			{
 				#if DEBUG || DEBUGWITHOVERLAY
-				System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
+				// System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
 				#endif
 
 				if (Delta.HorizontalLengthSquared != 0 && selfHasReachedGoal)
@@ -414,7 +439,7 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			mobileOffGrid.PositionBuffer.Add(self.CenterPosition);
-			if (mobileOffGrid.PositionBuffer.Count > 10)
+			if (mobileOffGrid.PositionBuffer.Count > 180)
 				mobileOffGrid.PositionBuffer.RemoveAt(0);
 
 			return false;
@@ -473,12 +498,9 @@ namespace OpenRA.Mods.Common.Activities
 
 		public List<WPos> CompletedTargetsOfActors(List<Actor> actorList)
 		{
-			var completedTargs = actorList.Select(a => a.CurrentActivity)
-							.Where(ca => ca != null).Select(ca => ca.ActivitiesImplementing<MoveOffGrid>().FirstOrDefault())
-							.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
-			completedTargs = completedTargs.Union(actorList.Select(a => a.TraitsImplementing<MobileOffGrid>()
-																		 .Where(Exts.IsTraitEnabled).FirstOrDefault()
-																		 .LastCompletedTarget)).ToList();
+			var actorListMobileOGs = actorList.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault());
+			var completedTargs = actorListMobileOGs.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
+			completedTargs = completedTargs.Union(actorListMobileOGs.Select(m => m.LastCompletedTarget)).ToList();
 			return completedTargs;
 		}
 
