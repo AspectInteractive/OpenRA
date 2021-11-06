@@ -108,15 +108,24 @@ V2RL:
 	Health:
 		HP: 46000
 	Armor:
-		Type: Heavy
-	Mobile:
+		Type: Heavy        
+    MobileOffGrid:
+        Locomotor: wheeled
+		CanHover: True
+		CruiseAltitude: 0
+		TurnSpeed: 80
+		Speed: 112
+		CruisingCondition: cruising
+		WaitDistanceFromResupplyBase: 4c0
+		LandableTerrainTypes: Clear, Rough, Road, Ore, Beach, Gems
+		TakeOffOnResupply: true
+		VTOL: true
+		CanSlide: True
+	-Mobile:
 		Speed: 72
-	RevealsShroud:
-		MinRange: 4c0
-		Range: 6c0
-		RevealGeneratedShroud: False
 	RevealsShroud@GAPGEN:
 		Range: 4c0
+		Type: GroundPosition
 	Turreted:
 		TurnSpeed: 20
 	Armament:
