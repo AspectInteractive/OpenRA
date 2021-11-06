@@ -548,6 +548,14 @@ namespace OpenRA.Mods.Common.Traits
 			return -new WVec(new WDist(distToMove), WRot.FromYaw(repulsionDelta.Yaw));
 		}
 
+		public bool ActorIsAiming(Actor actor)
+		{
+			var actorAttacks = actor.TraitsImplementing<AttackFrontal>().ToArray().Where(Exts.IsTraitEnabled);
+			if (actorAttacks.Any())
+				return actorAttacks.FirstOrDefault().IsAiming;
+			return false;
+		}
+
 		public void RepelNearbyUnitsTick(Actor self)
 		{
 			var nearbyActorRange = UnitRadius * 2;
@@ -564,7 +572,8 @@ namespace OpenRA.Mods.Common.Traits
 						var repulsionMvVec = new MvVec(RepulsionVecFunc(actorMobileOG, CenterPosition, actorMobileOG.CenterPosition), 1);
 						var proposedActorMove = GenFinalWVec(actorMobileOG.SeekVectors,
 															 actorMobileOG.FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
-						if (!(CellsCollidingWithPos(actor, actor.CenterPosition, proposedActorMove, 3, Locomotor).Count > 0))
+						if (!(CellsCollidingWithPos(actor, actor.CenterPosition, proposedActorMove, 3, Locomotor).Count > 0) &&
+							!ActorIsAiming(actor)) // we do not repel Attacking actors, we repel against them
 							actorMobileOG.FleeVectors.Add(repulsionMvVec);
 						else // if collision will occur, we must apply reverse repulsion to ourselves
 							FleeVectors.Add(new MvVec(-repulsionMvVec.Vec, 1));
