@@ -171,7 +171,9 @@ namespace OpenRA.Traits
 					return false;
 				default:
 				case TargetType.TerrainCell:
+					return true;
 				case TargetType.TerrainPos:
+					return true;
 				case TargetType.TerrainCellPos:
 					return true;
 			}
