@@ -552,9 +552,9 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (!actor.IsDead)
 			{
-				var actorAttacks = actor.TraitsImplementing<AttackFrontal>().ToArray().Where(Exts.IsTraitEnabled);
-				if (actorAttacks.Any())
-					return actorAttacks.FirstOrDefault().IsAiming;
+				var actorAttacks = actor.TraitsImplementing<AttackTurreted>().Where(Exts.IsTraitEnabled).ToArray();
+				if (actorAttacks.Where(at => at.IsAiming).Any())
+					return true;
 			}
 			return false;
 		}
@@ -575,7 +575,7 @@ namespace OpenRA.Mods.Common.Traits
 						var repulsionMvVec = new MvVec(RepulsionVecFunc(actorMobileOG, CenterPosition, actorMobileOG.CenterPosition), 1);
 						var proposedActorMove = GenFinalWVec(actorMobileOG.SeekVectors,
 															 actorMobileOG.FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
-						if (!(CellsCollidingWithPos(actor, actor.CenterPosition, proposedActorMove, 3, Locomotor).Count > 0) &&
+						if (!CellsCollidingWithPosBool(actor, actor.CenterPosition, proposedActorMove, 3, Locomotor) &&
 							!ActorIsAiming(actor)) // we do not repel Attacking actors, we repel against them
 							actorMobileOG.FleeVectors.Add(repulsionMvVec);
 						else // if collision will occur, we must apply reverse repulsion to ourselves
@@ -655,7 +655,6 @@ namespace OpenRA.Mods.Common.Traits
 		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{ return CellsCollidingWithPos(self, self.CenterPosition, move, lookAhead, locomotor, incOrigin, skipLookAheadAmt); }
-
 		public List<CPos> CellsCollidingWithPos(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
@@ -663,9 +662,6 @@ namespace OpenRA.Mods.Common.Traits
 			var selfCenterPos = selfPos.XYToInt2();
 			var selfCenterPosWithMoves = new List<int2>();
 			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			for (var i = startI; i < lookAhead; i++)
-				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
-
 			// for each actor we are potentially colliding with
 			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
 			foreach (var selfShape in selfShapes)
@@ -673,22 +669,41 @@ namespace OpenRA.Mods.Common.Traits
 				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
 				foreach (var corner in hitShapeCorners)
 				{
-					var cornerWithMove = corner + move * 2;
-					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
 					var cell = self.World.Map.CellContaining(corner);
-					var cellWithMovesBlocked = new List<bool>();
-					Func<CPos, bool> cellIsBlocked = c => CellIsBlocked(self, locomotor, cell);
 					for (var i = startI; i < lookAhead; i++)
 					{
 						var cellToTest = self.World.Map.CellContaining(corner + move * i);
-						if (cellIsBlocked(cellToTest) && !cellsColliding.Contains(cellToTest))
+						if (CellIsBlocked(self, locomotor, cellToTest) && !cellsColliding.Contains(cellToTest))
 							cellsColliding.Add(cellToTest);
 					}
-					if (incOrigin && cellIsBlocked(cell) && !cellsColliding.Contains(cell))
+					if (incOrigin && CellIsBlocked(self, locomotor, cell) && !cellsColliding.Contains(cell))
 						cellsColliding.Add(cell);
 				}
 			}
 			return cellsColliding;
+		}
+		public bool CellsCollidingWithPosBool(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor,
+											bool incOrigin = false, int skipLookAheadAmt = 0)
+		{
+			var cellsColliding = new List<CPos>();
+			var selfCenterPos = selfPos.XYToInt2();
+			var selfCenterPosWithMoves = new List<int2>();
+			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
+			// for each actor we are potentially colliding with
+			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
+			foreach (var selfShape in selfShapes)
+			{
+				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
+				foreach (var corner in hitShapeCorners)
+				{
+					for (var i = startI; i < lookAhead; i++)
+						if (CellIsBlocked(self, locomotor, self.World.Map.CellContaining(corner + move * i)))
+							return true;
+					if (incOrigin && CellIsBlocked(self, locomotor, self.World.Map.CellContaining(corner)))
+						return true;
+				}
+			}
+			return false;
 		}
 
 		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
