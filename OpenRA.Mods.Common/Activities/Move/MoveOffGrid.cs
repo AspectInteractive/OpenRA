@@ -59,6 +59,29 @@ namespace OpenRA.Mods.Common.Activities
 
 		// Options for pathfinder (chosen in the constructor)
 		bool usePathFinder = true;
+		bool useLocalAvoidance = true;
+		/*List<int> localAvoidanceAngleOffsets = new List<int>()
+		{
+			64, -64, // +-22.5 deg
+			128, -128, // +-45 deg
+			192, -192, // +-67.5 deg
+			256, -256, // +-90 deg
+			320, -320, // +-112.5 deg
+			384, -384, // +-135 deg
+			448, -448, // +-157.5 deg
+			512		   // +180 deg (same as -180 deg)
+		};*/
+#pragma warning disable SA1137 // Elements should have the same indentation
+		List<int> localAvoidanceAngleOffsets = new List<int>()
+		{
+			  64,  128,  192,
+			 -64, -128, -192,
+			 256,  320,  384,
+			-256, -320, -384,
+			 448,  512,
+			-448
+		};
+#pragma warning restore SA1137 // Elements should have the same indentation
 
 		// LOS Checking interval
 		int tickCount = 0;
@@ -236,7 +259,8 @@ namespace OpenRA.Mods.Common.Activities
 
 		protected override void OnFirstRun(Actor self)
 		{
-			usePathFinder = true; // temporarily setting this to false
+			usePathFinder = true;
+			useLocalAvoidance = true;
 
 			if (usePathFinder)
 			{
@@ -338,6 +362,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
+			// Check collision with walls
 			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
 			var cellsCollidingSet = new List<List<CPos>>();
 			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
@@ -354,11 +379,43 @@ namespace OpenRA.Mods.Common.Activities
 					mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
 				}
 			}
-			mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
+
+			if (!(useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 3, locomotor)))
+				mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
+			else // Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
+			{
+				var revisedMoveVec = moveVec;
+				int localAvoidanceAngleOffset;
+				var i = 0;
+				do
+				{
+					localAvoidanceAngleOffset = localAvoidanceAngleOffsets.ElementAt(i);
+					// Do not go back in the same direction that you went forward, unless this is the last available local avoidance angle offset
+					if (!mobileOffGrid.ChangedAngleOffsetsBuffer.Where(a => a == -localAvoidanceAngleOffset).Any() ||
+						i == localAvoidanceAngleOffsets.Count - 1)
+					{
+						var newAngle = new WAngle(moveVec.Yaw.Angle + localAvoidanceAngleOffset);
+						System.Console.WriteLine($"existing deg: {moveVec.Yaw.Angle}, new deg: {newAngle.Angle}, offset: {localAvoidanceAngleOffset}");
+						revisedMoveVec = new WVec(new WDist(moveVec.Length), WRot.FromYaw(newAngle));
+						RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
+					}
+					i++;
+				}
+				while (!mobileOffGrid.HasNotCollided(self, revisedMoveVec, 3, locomotor) && i < localAvoidanceAngleOffsets.Count);
+
+				if (mobileOffGrid.HasNotCollided(self, revisedMoveVec, 3, locomotor))
+				{
+					#if DEBUGWITHOVERLAY
+					System.Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
+					RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
+					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);
+					#endif
+					mobileOffGrid.AddToChangedAngleBuffer(localAvoidanceAngleOffset);
+					mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(revisedMoveVec) };
+				}
+			}
 
 			var move = mobileOffGrid.GenFinalWVec();
-
-			// TO DO: Add repulsion to stationary objects so that move + repulsion = steering away from obstacles
 
 			if (mobileOffGrid.PositionBuffer.Count >= 100)
 			{
@@ -366,7 +423,6 @@ namespace OpenRA.Mods.Common.Activities
 				var deltaFirst = currPathTarget - mobileOffGrid.PositionBuffer.ElementAt(0);
 				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
 
-				// We don't do this because in most RTS games, units will wait indefinitely if they are stuck in a move command
 				if (lengthMoved < 512 && !searchingForNextTarget)
 				{
 					// Create new path to the next path, then join it to the remainder of the existing path
@@ -437,32 +493,8 @@ namespace OpenRA.Mods.Common.Activities
 				return GetNextTargetOrComplete();
 			}
 
-			mobileOffGrid.PositionBuffer.Add(self.CenterPosition);
-			if (mobileOffGrid.PositionBuffer.Count > 180)
-				mobileOffGrid.PositionBuffer.RemoveAt(0);
-
+			mobileOffGrid.AddToPositionBuffer(self.CenterPosition);
 			return false;
-		}
-
-		// Cheap LOS checking to validate whether we can see the next target or not (and cancel any existing local avoidance strategy)
-		private bool TargetInLOS(Actor self, WVec move, Locomotor locomotor, WPos targPos)
-		{
-			if (move.HorizontalLengthSquared == 0 || targPos == default)
-				return false;
-
-			var stepsToTarg = (int)((mobileOffGrid.CenterPosition - targPos).HorizontalLengthSquared / move.HorizontalLengthSquared);
-
-			var stepDelta = (mobileOffGrid.CenterPosition - targPos) * (int)move.HorizontalLengthSquared /
-							(int)(mobileOffGrid.CenterPosition - targPos).HorizontalLengthSquared;
-
-			var n = 1;
-			while (n < stepsToTarg)
-			{
-				if (!mobileOffGrid.HasNotCollided(self, stepDelta * n, 3, locomotor))
-					return false;
-				n++;
-			}
-			return true;
 		}
 
 		public override IEnumerable<Target> GetTargets(Actor self)
