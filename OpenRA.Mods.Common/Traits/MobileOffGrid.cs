@@ -316,6 +316,17 @@ namespace OpenRA.Mods.Common.Traits
 		public WVec Delta => CurrPathTarget - CenterPosition;
 		public List<WPos> PathComplete = new List<WPos>();
 		public List<WPos> PositionBuffer = new List<WPos>();
+		public int PositionBufferCapacity = 180;
+		public int ChangedAngleOffsetsBufferCapacity = 5;
+		public List<int> ChangedAngleOffsetsBuffer = new List<int>();
+		public static void AddToBuffer<T>(ref List<T> buffer, int bufferCapacity, T item)
+		{
+			buffer.Add(item);
+			if (buffer.Count > bufferCapacity)
+				buffer.RemoveAt(0);
+		}
+		public void AddToPositionBuffer(WPos pos) { AddToBuffer(ref PositionBuffer, PositionBufferCapacity, pos); }
+		public void AddToChangedAngleBuffer(int angle) { AddToBuffer(ref ChangedAngleOffsetsBuffer, ChangedAngleOffsetsBufferCapacity, angle); }
 
 		public List<MvVec> SeekVectors = new List<MvVec>();
 		public List<MvVec> FleeVectors = new List<MvVec>();
@@ -706,55 +717,48 @@ namespace OpenRA.Mods.Common.Traits
 			return false;
 		}
 
+		public static bool ValidCollisionActor(Actor actor)
+		{
+			return actor.TraitsImplementing<Building>().Any() ||
+				   actor.TraitsImplementing<Mobile>().Any() ||
+				   actor.TraitsImplementing<MobileOffGrid>().Any();
+		}
+
 		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
-			var destActorsWithinRange = self.World.FindActorsInCircle(self.CenterPosition, UnitRadius); // we double move length to widen search radius
-			var selfCenterPos = self.CenterPosition.XYToInt2();
-			var selfCenterPosWithMoves = new List<int2>();
-			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			for (var i = startI; i < lookAhead; i++)
-				selfCenterPosWithMoves.Add((self.CenterPosition + move * i).XYToInt2());
+			if (self.CurrentActivity is ReturnToCellActivity) // we ignore collision if the unit is returning to a cell, e.g. coming out of a factory
+				return true;
 
-			// for each actor we are potentially colliding with
+			var selfCenterPos = self.CenterPosition.XYToInt2();
+			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
+			Func<CPos, bool> cellIsBlocked = c => CellIsBlocked(self, locomotor, c);
+			Func<int2, HitShape, int2, HitShape, bool> posIsBlocked = (p, selfShape, destP, destShape) =>
+				{ return destShape.Info.Type.IntersectsWithHitShape(p, destP, selfShape); };
+
 			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
 			foreach (var selfShape in selfShapes)
 			{
-				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
-				foreach (var corner in hitShapeCorners)
+				foreach (var corner in selfShape.Info.Type.GetCorners(selfCenterPos))
 				{
-					var cornerWithMove = corner + move * 2;
 					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
 					var cell = self.World.Map.CellContaining(corner);
-					var cellWithMovesBlocked = new List<bool>();
-					Func<CPos, bool> cellIsBlocked = c => CellIsBlocked(self, locomotor, c);
 					for (var i = startI; i < lookAhead; i++)
-						cellWithMovesBlocked.Add(cellIsBlocked(self.World.Map.CellContaining(corner + move * i)));
-					if ((!incOrigin || cellIsBlocked(cell)) && cellWithMovesBlocked.Any(c => c == true))
 					{
-						/*System.Console.WriteLine($"collided with cell {cell} with value {short.MaxValue}");*/
-						return false;
-					}
-				}
+						var cornerWithOffset = corner + move * i;
+						if ((!incOrigin || cellIsBlocked(cell)) && cellIsBlocked(self.World.Map.CellContaining(cornerWithOffset)))
+							return false;
 
-				foreach (var destActor in destActorsWithinRange)
-				{
-					var destActorCenterPos = destActor.CenterPosition.XYToInt2();
-					if (!destActor.IsDead && (destActor.TraitsImplementing<Building>().Any() || destActor.TraitsImplementing<Mobile>().Any())
-						 && !(self.CurrentActivity is ReturnToCellActivity))
-					{
-						var destShapes = destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-						foreach (var destShape in destShapes)
+						foreach (var destActor in self.World.FindActorsInCircle(cornerWithOffset, UnitRadius).Where(a => a != self))
 						{
-							var hasCollision = destShape.Info.Type.IntersectsWithHitShape(selfCenterPos, destActorCenterPos, selfShape);
-							var posWithMovesBlocked = new List<bool>();
-							Func<int2, bool> posIsColliding = p =>
-							{ return destShape.Info.Type.IntersectsWithHitShape(p, destActorCenterPos, selfShape); };
-							for (var i = 0; i < lookAhead; i++)
-								posWithMovesBlocked.Add(posIsColliding(selfCenterPosWithMoves.ElementAt(i)));
-							// checking hasCollisionWithMove ensures we don't get stuck if moving out/away from the collision
-							if ((!incOrigin || hasCollision) && posWithMovesBlocked.Any(p => p == true))
-								return false;
+							if (!destActor.IsDead && ValidCollisionActor(destActor))
+							{
+								var destActorCenterPos = destActor.CenterPosition.XYToInt2();
+								foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
+									if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenterPos, destShape)) &&
+										posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenterPos, destShape))
+										return false;
+							}
 						}
 					}
 				}
