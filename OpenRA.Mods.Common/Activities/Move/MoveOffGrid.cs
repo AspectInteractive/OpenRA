@@ -59,7 +59,6 @@ namespace OpenRA.Mods.Common.Activities
 
 		// Options for pathfinder (chosen in the constructor)
 		bool usePathFinder = true;
-		bool useLocalAvoidance = true;
 
 		// LOS Checking interval
 		int tickCount = 0;
@@ -238,7 +237,6 @@ namespace OpenRA.Mods.Common.Activities
 		protected override void OnFirstRun(Actor self)
 		{
 			usePathFinder = true; // temporarily setting this to false
-			useLocalAvoidance = false;
 
 			if (usePathFinder)
 			{
