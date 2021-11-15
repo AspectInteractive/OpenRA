@@ -82,8 +82,8 @@ namespace OpenRA.Mods.Common.HitShapes
 			System.Console.WriteLine($"corners[8] is now {corners[8]}");*/
 			return corners;
 		}
-
-		public static int Div(int dividend, int divisor) { return Exts.IntegerDivisionRoundingAwayFromZero(dividend, divisor); }
+		public static float Sq(float i) { return i * i; }
+		public static float Sqrt(float i) { return (float)Math.Sqrt(i); }
 		public static int Sq(int i) { return Exts.ISqr(i); }
 		public static int Sqrt(int i) { return Exts.ISqrt(i); }
 
@@ -124,22 +124,22 @@ namespace OpenRA.Mods.Common.HitShapes
 			var poses = new List<WPos>();
 			if (LineIntersectsCircle(circleCenter, radius, p1, p2))
 			{
-				var a1 = Div(p2.Y - p1.Y, p2.X - p1.X);
-				var b1 = Div(p2.X * p1.Y - p1.X * p2.Y, p2.X - p1.X);
-				var a2 = Div(-1, a1);
-				var b2 = circleCenter.Y + circleCenter.X / a1;
-				var Px = Div(b2 - b1, a1 - a2);
-				var Py = Div(a1 * b2 - b1 * a2, a1 - a2);
-				var CP = (new WPos(Px, Py, 0) - circleCenter).Length;
-				var LenIP = Sqrt(Sq(radius) - Sq(CP));
+				var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X);
+				var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X);
+				var a2 = (-1) / a1;
+				var b2 = (circleCenter.Y + circleCenter.X) / a1;
+				var Px = (float)(b2 - b1) / (a1 - a2);
+				var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2);
+				var CP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
+				var LenIP = Sqrt(Math.Abs(Sq(radius) - Sq(CP)));
 				var A = Sq(a1);
-				var B = 2 * (a1 * (b1 - Py) - 1);
-				var C = Sq(Px) + Sq(b1 - Py) - Sq(LenIP);
+				var B = 2 * (a1 * (b1 - (int)Py) - 1);
+				var C = Sq((int)Px) + Sq(b1 - (int)Py) - Sq(LenIP);
 				if ((Sq(B) - 4 * A * C) > 0) // No roots found if this is less than 0
 				{
-					var root1 = Div(-B + Sqrt(Sq(B) - 4 * A * C), 2 * A);
-					var root2 = Div(-B - Sqrt(Sq(B) - 4 * A * C), 2 * A);
-					int Ix, Ix2, Iy;
+					var root1 = (-B + Sqrt(Sq(B) - 4 * A * C)) / (2 * A);
+					var root2 = (-B - Sqrt(Sq(B) - 4 * A * C)) / (2 * A);
+					float Ix, Ix2, Iy;
 					if (Math.Abs(p1.X - root1) < Math.Abs(p1.X - root2)) // root 1 is closer
 					{
 						Ix = root1;
@@ -151,11 +151,11 @@ namespace OpenRA.Mods.Common.HitShapes
 						Ix2 = root1;
 					}
 					Iy = a1 * Ix + b1;
-					poses.Add(new WPos(Ix, Iy, 0));
+					poses.Add(new WPos((int)Ix, (int)Iy, 0));
 					// If root2 is not the same as root1, a second root exists, so we include it as item 2.
 					// A second root also requires that the end point is not inside the circle.
 					if (Ix2 != Ix && !PosIsInsideCircle(circleCenter, radius, p2))
-						poses.Add(new WPos(Ix2, Iy, 0));
+						poses.Add(new WPos((int)Ix2, (int)Iy, 0));
 				}
 			}
 			return poses;
