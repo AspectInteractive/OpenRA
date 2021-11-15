@@ -9,6 +9,9 @@
  */
 #endregion
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using OpenRA.Mods.Common.HitShapes;
 
@@ -41,6 +44,35 @@ namespace OpenRA.Test
 			Assert.That(new CircleShape(new WDist(55))
 				.DistanceFromEdge(new WVec(30, -45, 0)).Length,
 				Is.EqualTo(0));
+		}
+
+		[TestCase(TestName = "CircleShape Line Intersection works")]
+		public void CircleShapeIntersection()
+		{
+			shape = new CircleShape(new WDist(1234));
+			shape.Initialize();
+			var shapeCenter = new WPos(426, 0, 0);
+
+			var line1 = new List<WPos>() { new WPos(2428, 1359, 0), new WPos(428, 859, 0) };
+			var line2 = new List<WPos>() { new WPos(428, 1459, 0), new WPos(1500, 650, 0) };
+			var line3 = new List<WPos>() { new WPos(-1300, 0, 0), new WPos(-300, 1800, 0) };
+			var line4 = new List<WPos>() { new WPos(-300, 1800, 0), new WPos(428, 859, 0) };
+
+			Func<List<WPos>, WPos?> shapeIntersectsLine = l => shape.FirstIntersectingPosFromLine(shapeCenter, l.ElementAt(0), l.ElementAt(1));
+
+			var line1IntersectingPoint = shapeIntersectsLine(line1);
+			var line2IntersectingPoint = shapeIntersectsLine(line2);
+			var line3IntersectingPoint = shapeIntersectsLine(line3);
+			var line4IntersectingPoint = shapeIntersectsLine(line4);
+
+			Assert.That(line1IntersectingPoint != null);
+			Assert.That(line2IntersectingPoint != null);
+			Assert.That(line3IntersectingPoint == null);
+			Assert.That(line4IntersectingPoint != null);
+			System.Console.WriteLine($"line1 intersects at: {line1IntersectingPoint} " +
+									 $"\nline2 intersects at: {line2IntersectingPoint}" +
+									 $"\nline3 intersects at: {line3IntersectingPoint}" +
+									 $"\nline4 intersects at: {line4IntersectingPoint}");
 		}
 
 		[TestCase(TestName = "CapsuleShape report accurate distance")]

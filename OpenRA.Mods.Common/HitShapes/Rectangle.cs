@@ -154,6 +154,8 @@ namespace OpenRA.Mods.Common.HitShapes
 
 		bool IntersectsWithHitShape(int2 selfCenter, int2 polygonCenter, PolygonShape polygonHitShape) { return false; } // to be implemented
 		bool IntersectsWithHitShape(int2 selfCenter, int2 capsuleCenter, CapsuleShape capsuleHitShape) { return false; } // to be implemented
+		public WPos? FirstIntersectingPosFromLine(WPos shapeCenterPos, WPos p1, WPos p2) { throw new NotImplementedException(); }
+		public List<WPos> IntersectingPosesFromLine(WPos shapeCenterPos, WPos p1, WPos p2) { throw new NotImplementedException(); }
 
 		WPos[] IHitShape.GetCorners(int2 selfCenter)
 		{

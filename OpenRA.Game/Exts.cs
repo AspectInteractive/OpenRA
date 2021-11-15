@@ -283,6 +283,8 @@ namespace OpenRA
 			}
 		}
 
+		public static int ISqr(int i) { return i * i; }
+
 		public static int NextPowerOf2(int v)
 		{
 			--v;

@@ -23,6 +23,8 @@ namespace OpenRA.Mods.Common.HitShapes
 		WDist DistanceFromEdge(WPos pos, WPos origin, WRot orientation);
 		WPos[] GetCorners(int2 selfCenter);
 		bool IntersectsWithHitShape(int2 selfCenter, int2 secondCenter, HitShape hitShape);
+		WPos? FirstIntersectingPosFromLine(WPos shapeCenterPos, WPos lineStart, WPos lineEnd);
+		List<WPos> IntersectingPosesFromLine(WPos shapeCenterPos, WPos p1, WPos p2);
 
 		void Initialize();
 		IEnumerable<IRenderable> RenderDebugOverlay(HitShape hs, WorldRenderer wr, WPos origin, WRot orientation);

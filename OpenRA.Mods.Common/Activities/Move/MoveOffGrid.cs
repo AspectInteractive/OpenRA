@@ -303,11 +303,20 @@ namespace OpenRA.Mods.Common.Activities
 			return newWvec / wvecList.Count;
 		}
 
-		public WVec RepulsionVecFunc(WPos selfPos, WPos cellPos, int moveSpeedScalar = 1)
+		public WVec RepulsionVecFunc(WPos selfPos, WPos cellPos)
 		{
 			var repulsionDelta = cellPos - selfPos;
 			var distToMove = Math.Min(repulsionDelta.Length, mobileOffGrid.MovementSpeed);
 			return -new WVec(new WDist(distToMove), WRot.FromYaw(repulsionDelta.Yaw));
+		}
+		public WVec? LocalAvoidanceFunc(WVec? avoidanceVec)
+		{
+			if (avoidanceVec != null)
+			{
+				var distToMove = Math.Min(((WVec)avoidanceVec).Length, mobileOffGrid.MovementSpeed);
+				return -new WVec(new WDist(distToMove), WRot.FromYaw(((WVec)avoidanceVec).Yaw));
+			}
+			return null;
 		}
 
 		public override bool Tick(Actor self)
@@ -394,11 +403,51 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
+			bool UnitHasNotCollided(WVec mv)
+			{ return mobileOffGrid.HasNotCollided(self, mv, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true); }
+
+			if (useLocalAvoidance && searchingForNextTarget && UnitHasNotCollided(moveVec))
+			{
+				pastMoveVec = new WVec(0, 0, 0);
+				currLocalAvoidanceAngleOffset = 0;
+				searchingForNextTarget = false;
+			}
+
+			//// Only update the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
+			//if (!(useLocalAvoidance && !UnitHasNotCollided(moveVec)) && !searchingForNextTarget)
+			//	mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
+			//// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
+			//else if (useLocalAvoidance && !UnitHasNotCollided(moveVec))
+			//{
+			//	WVec? revisedMoveVec = moveVec;
+			//	var i = 0;
+			//	do
+			//	{
+			//		revisedMoveVec = LocalAvoidanceFunc(mobileOffGrid.GetCollisionVector(self, (WVec)revisedMoveVec, 4, locomotor,
+			//													skipLookAheadAmt: 2, attackingUnitsOnly: true));
+			//		i++;
+			//	} while (revisedMoveVec != null && !UnitHasNotCollided((WVec)revisedMoveVec) && i < 5);
+			//	if (revisedMoveVec != null && UnitHasNotCollided((WVec)revisedMoveVec))
+			//	{
+			//		#if DEBUGWITHOVERLAY
+			//		System.Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {((WVec)revisedMoveVec).Yaw}");
+			//		/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
+			//		RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
+			//		#endif
+			//		//mobileOffGrid.AddToChangedAngleBuffer(localAvoidanceAngleOffset);
+			//		//currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
+			//		pastMoveVec = moveVec;
+			//		mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec((WVec)revisedMoveVec) };
+			//		moveVec = (WVec)revisedMoveVec;
+			//		searchingForNextTarget = true;
+			//	}
+			//}
+
 			// Only update the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
-			if (!(useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2)) && !searchingForNextTarget)
+			if (!(useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true)) && !searchingForNextTarget)
 				mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
 			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			else if (useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2))
+			else if (useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true))
 			{
 				var revisedMoveVec = moveVec;
 				int localAvoidanceAngleOffset;
@@ -435,7 +484,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget &&
-					 mobileOffGrid.HasNotCollided(self, pastMoveVec, 4, locomotor, skipLookAheadAmt: 2))
+					 mobileOffGrid.HasNotCollided(self, pastMoveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true))
 			{
 				pastMoveVec = new WVec(0, 0, 0);
 				currLocalAvoidanceAngleOffset = 0;
