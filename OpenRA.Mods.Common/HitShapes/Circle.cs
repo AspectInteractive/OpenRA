@@ -11,10 +11,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
+
+#pragma warning disable SA1005 // Single line comments should begin with single space
+#pragma warning disable SA1515 // Single-line comment should be preceded by blank line
+#pragma warning disable SA1108 // Block statements should not contain embedded comments
+#pragma warning disable SA1513 // Closing brace should be followed by blank line
 
 namespace OpenRA.Mods.Common.HitShapes
 {
@@ -76,6 +82,114 @@ namespace OpenRA.Mods.Common.HitShapes
 			System.Console.WriteLine($"corners[8] is now {corners[8]}");*/
 			return corners;
 		}
+
+		public static int Div(int dividend, int divisor) { return Exts.IntegerDivisionRoundingAwayFromZero(dividend, divisor); }
+		public static int Sq(int i) { return Exts.ISqr(i); }
+		public static int Sqrt(int i) { return Exts.ISqrt(i); }
+
+		public bool PosIsInsideCircle(WPos circleCenter, WPos checkPos) { return PosIsInsideCircle(circleCenter, Radius.Length, checkPos); }
+		private static bool PosIsInsideCircle(WPos circleCenter, int radius, WPos checkPos)
+		{
+			var xDelta = circleCenter.X - checkPos.X;
+			var yDelta = circleCenter.Y - checkPos.Y;
+			return Sqrt(Sq(xDelta) + Sq(yDelta)) < radius;
+		}
+		public bool LineIntersectsCircle(WPos circleCenter, WPos p1, WPos p2) { return LineIntersectsCircle(circleCenter, Radius.Length, p1, p2); }
+		public static bool LineIntersectsCircle(WPos circleCenter, int radius, WPos p1, WPos p2)
+		{
+			var circleLeft = circleCenter.X - radius;
+			var circleRight = circleCenter.X + radius;
+			var circleTop = circleCenter.Y - radius;
+			var circleBottom = circleCenter.Y + radius;
+			return ((p1.X < circleLeft ^ p2.X < circleLeft) ||
+				    (p1.X > circleRight ^ p2.X > circleRight)) &&
+				   ((p1.Y < circleTop ^ p2.Y < circleTop) ||
+				    (p1.Y > circleBottom ^ p2.Y > circleBottom));
+		}
+
+		WPos? IHitShape.FirstIntersectingPosFromLine(WPos circleCenter, WPos p1, WPos p2)
+		{
+			var intersectingPosesFromLine = IntersectingPosesFromLine(circleCenter, Radius.Length, p1, p2);
+			if (intersectingPosesFromLine.Count > 0)
+				return intersectingPosesFromLine.ElementAt(0);
+			return null;
+		}
+
+		List<WPos> IHitShape.IntersectingPosesFromLine(WPos shapeCenterPos, WPos p1, WPos p2)
+		{ return IntersectingPosesFromLine(shapeCenterPos, Radius.Length, p1, p2); }
+
+		#pragma warning disable SA1312 // Variable names should begin with lower-case letter
+		static List<WPos> IntersectingPosesFromLine(WPos circleCenter, int radius, WPos p1, WPos p2)
+		{
+			var poses = new List<WPos>();
+			if (LineIntersectsCircle(circleCenter, radius, p1, p2))
+			{
+				var a1 = Div(p2.Y - p1.Y, p2.X - p1.X);
+				var b1 = Div(p2.X * p1.Y - p1.X * p2.Y, p2.X - p1.X);
+				var a2 = Div(-1, a1);
+				var b2 = circleCenter.Y + circleCenter.X / a1;
+				var Px = Div(b2 - b1, a1 - a2);
+				var Py = Div(a1 * b2 - b1 * a2, a1 - a2);
+				var CP = (new WPos(Px, Py, 0) - circleCenter).Length;
+				var LenIP = Sqrt(Sq(radius) - Sq(CP));
+				var A = Sq(a1);
+				var B = 2 * (a1 * (b1 - Py) - 1);
+				var C = Sq(Px) + Sq(b1 - Py) - Sq(LenIP);
+				if ((Sq(B) - 4 * A * C) > 0) // No roots found if this is less than 0
+				{
+					var root1 = Div(-B + Sqrt(Sq(B) - 4 * A * C), 2 * A);
+					var root2 = Div(-B - Sqrt(Sq(B) - 4 * A * C), 2 * A);
+					int Ix, Ix2, Iy;
+					if (Math.Abs(p1.X - root1) < Math.Abs(p1.X - root2)) // root 1 is closer
+					{
+						Ix = root1;
+						Ix2 = root2;
+					}
+					else // root 2 is closer
+					{
+						Ix = root2;
+						Ix2 = root1;
+					}
+					Iy = a1 * Ix + b1;
+					poses.Add(new WPos(Ix, Iy, 0));
+					// If root2 is not the same as root1, a second root exists, so we include it as item 2.
+					// A second root also requires that the end point is not inside the circle.
+					if (Ix2 != Ix && !PosIsInsideCircle(circleCenter, radius, p2))
+						poses.Add(new WPos(Ix2, Iy, 0));
+				}
+			}
+			return poses;
+		}
+		#pragma warning restore SA1312 // Variable names should begin with lower-case letter
+
+		/*
+		public static WPos? FirstIntersectingPosFromLine(WPos circlePos, int circleRad, WPos lineStart, WPos lineEnd)
+		{
+			if (TrivialLineIsIntersecting(circlePos, circleRad, lineStart, lineEnd))
+			{
+				// B = d
+				// M = m
+				// Calculate terms of the linear and quadratic equations
+				var m = Div(lineEnd.Y - lineStart.Y, lineEnd.X - lineStart.X);
+				var d = lineStart.Y - m * lineStart.X;
+				var a = 1 + m * m;
+				var b = 2 * (m * d - m * circlePos.Y - circlePos.X);
+				var c = circlePos.X * circlePos.X + d * d + circlePos.Y * circlePos.Y - circleRad * circleRad - 2 * d * circlePos.Y;
+				// solve quadratic equation
+				var sqRtTerm = (int)Math.Sqrt(b * b - 4 * a * c);
+				var x = Div((-b) + sqRtTerm, 2 * a);
+				// make sure we have the correct root for our line segment
+				if ((x < Math.Min(lineStart.X, lineEnd.X)) || (x > Math.Max(lineStart.X, lineEnd.X)))
+					x = Div((-b) - sqRtTerm, 2 * a);
+				// solve for the y-component
+				var y = m * x + d;
+				return new WPos(x, y, 0);
+			}
+
+			// Line segment does not intersect at one point.  It is either fully outside, fully inside, intersects at two points, is
+			// tangential to, or one or more points is exactly on the circle radius.
+			return null;
+		}*/
 
 		bool IHitShape.IntersectsWithHitShape(int2 selfCenter, int2 secondCenter, HitShape hitShape)
 		{

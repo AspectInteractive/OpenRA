@@ -725,7 +725,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0)
+											bool incOrigin = false, int skipLookAheadAmt = 0, bool attackingUnitsOnly = false)
 		{
 			if (self.CurrentActivity is ReturnToCellActivity) // we ignore collision if the unit is returning to a cell, e.g. coming out of a factory
 				return true;
@@ -749,7 +749,8 @@ namespace OpenRA.Mods.Common.Traits
 						if ((!incOrigin || cellIsBlocked(cell)) && cellIsBlocked(self.World.Map.CellContaining(cornerWithOffset)))
 							return false;
 
-						foreach (var destActor in self.World.FindActorsInCircle(cornerWithOffset, UnitRadius).Where(a => a != self))
+						foreach (var destActor in self.World.FindActorsInCircle(cornerWithOffset, UnitRadius)
+															.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 						{
 							if (!destActor.IsDead && ValidCollisionActor(destActor))
 							{
@@ -768,6 +769,54 @@ namespace OpenRA.Mods.Common.Traits
 				}
 			}
 			return true;
+		}
+
+		public WVec? GetCollisionVector(Actor self, WVec move, int lookAhead, Locomotor locomotor,
+											bool incOrigin = false, int skipLookAheadAmt = 0, bool attackingUnitsOnly = false)
+		{
+			if (self.CurrentActivity is ReturnToCellActivity) // we ignore collision if the unit is returning to a cell, e.g. coming out of a factory
+				return null;
+
+			var selfCenterPos = self.CenterPosition.XYToInt2();
+			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
+			Func<CPos, bool> cellIsBlocked = c => CellIsBlocked(self, locomotor, c);
+			Func<int2, HitShape, int2, HitShape, bool> posIsBlocked = (p, selfShape, destP, destShape) =>
+			{ return destShape.Info.Type.IntersectsWithHitShape(p, destP, selfShape); };
+
+			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
+			foreach (var selfShape in selfShapes)
+			{
+				foreach (var corner in selfShape.Info.Type.GetCorners(selfCenterPos))
+				{
+					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
+					var cell = self.World.Map.CellContaining(corner);
+					for (var i = startI; i < lookAhead; i++)
+					{
+						var cornerWithOffset = corner + move * i;
+						var cellContainingCornerWithOffset = self.World.Map.CellContaining(cornerWithOffset);
+						if ((!incOrigin || cellIsBlocked(cell)) && cellIsBlocked(cellContainingCornerWithOffset))
+							return cornerWithOffset - self.World.Map.CenterOfCell(cellContainingCornerWithOffset);
+
+						foreach (var destActor in self.World.FindActorsInCircle(cornerWithOffset, UnitRadius)
+															.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
+						{
+							if (!destActor.IsDead && ValidCollisionActor(destActor))
+							{
+								//MoveOffGrid.RenderPoint(self, cornerWithOffset, Color.LightGreen);
+								var destActorCenter = (destActor.CenterPosition +
+														  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
+															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
+								MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+								foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
+									if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
+										posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
+										return destActorCenter - cornerWithOffset;
+							}
+						}
+					}
+				}
+			}
+			return null;
 		}
 
 		protected virtual void Tick(Actor self)
