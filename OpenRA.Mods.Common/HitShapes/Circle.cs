@@ -124,12 +124,12 @@ namespace OpenRA.Mods.Common.HitShapes
 			var poses = new List<WPos>();
 			if (LineIntersectsCircle(circleCenter, radius, p1, p2))
 			{
-				var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X);
-				var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X);
-				var a2 = (-1) / a1;
-				var b2 = (circleCenter.Y + circleCenter.X) / a1;
-				var Px = (float)(b2 - b1) / (a1 - a2);
-				var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2);
+				var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X); // tick
+				var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X); // tick
+				var a2 = (-1) / a1; // tick
+				var b2 = (circleCenter.Y + circleCenter.X) / a1; // tick
+				var Px = (float)(b2 - b1) / (a1 - a2); // tick
+				var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2); // tick
 				var CP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
 				var LenIP = Sqrt(Math.Abs(Sq(radius) - Sq(CP)));
 				var A = Sq(a1);
