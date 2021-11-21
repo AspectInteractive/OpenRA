@@ -124,22 +124,27 @@ namespace OpenRA.Mods.Common.HitShapes
 			var poses = new List<WPos>();
 			if (LineIntersectsCircle(circleCenter, radius, p1, p2))
 			{
-				var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X); // tick
-				var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X); // tick
-				var a2 = (-1) / a1; // tick
-				var b2 = (circleCenter.Y + circleCenter.X) / a1; // tick
-				var Px = (float)(b2 - b1) / (a1 - a2); // tick
-				var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2); // tick
-				var CP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
-				var LenIP = Sqrt(Math.Abs(Sq(radius) - Sq(CP)));
-				var A = Sq(a1);
-				var B = 2 * (a1 * (b1 - (int)Py) - 1);
-				var C = Sq((int)Px) + Sq(b1 - (int)Py) - Sq(LenIP);
-				if ((Sq(B) - 4 * A * C) > 0) // No roots found if this is less than 0
+				var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X);
+				var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X);
+				var a2 = (-1) / a1;
+				var b2 = circleCenter.Y + circleCenter.X / a1;
+				var Px = (float)(b2 - b1) / (a1 - a2);
+				var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2);
+				var LenCP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
+				var LenIPsq = Math.Abs(Sq(radius) - Sq(LenCP));
+				// var A = Sq(a1) + 1;
+				// var B = 2 * (a1 * (b1 - (int)Py) - 1);
+				// var C = Sq((int)Px) + Sq(b1 - (int)Py) - LenIPsq;
+				var A = Sq(a1) + 1;
+				var B = (-2) * Px + (2 * a1 * b1) - (2 * a1 * Py);
+				var C = Sq(Px) - 2 * b1 * Py + Sq(b1) + Sq(Py) - LenIPsq;
+				var discr = Sq(B) - 4 * A * C; // discriminant
+				if (discr > 0) // No roots found if this is less than 0
 				{
-					var root1 = (-B + Sqrt(Sq(B) - 4 * A * C)) / (2 * A);
-					var root2 = (-B - Sqrt(Sq(B) - 4 * A * C)) / (2 * A);
-					float Ix, Ix2, Iy;
+					var sqrtDiscr = Sqrt(discr);
+					var root1 = (-B + sqrtDiscr) / (2 * A);
+					var root2 = (-B - sqrtDiscr) / (2 * A);
+					float Ix, Ix2, Iy, Iy2;
 					if (Math.Abs(p1.X - root1) < Math.Abs(p1.X - root2)) // root 1 is closer
 					{
 						Ix = root1;
@@ -151,11 +156,19 @@ namespace OpenRA.Mods.Common.HitShapes
 						Ix2 = root1;
 					}
 					Iy = a1 * Ix + b1;
-					poses.Add(new WPos((int)Ix, (int)Iy, 0));
-					// If root2 is not the same as root1, a second root exists, so we include it as item 2.
-					// A second root also requires that the end point is not inside the circle.
-					if (Ix2 != Ix && !PosIsInsideCircle(circleCenter, radius, p2))
-						poses.Add(new WPos((int)Ix2, (int)Iy, 0));
+					// TO DO: Add code to validate 'S -> E' is long enough to intersect
+					var I = new WPos((int)Ix, (int)Iy, 0);
+					if (!((p2 - p1).Length < (I - p1).Length)) // Check that line segment is long enough to intersect
+					{
+						poses.Add(I);
+						// If root2 is not the same as root1, a second root exists, so we include it as item 2.
+						// A second root also requires that the end point is not inside the circle.
+						if (Ix2 != Ix && !PosIsInsideCircle(circleCenter, radius, p2))
+						{
+							Iy2 = a1 * Ix2 + b1;
+							poses.Add(new WPos((int)Ix2, (int)Iy2, 0));
+						}
+					}
 				}
 			}
 			return poses;
