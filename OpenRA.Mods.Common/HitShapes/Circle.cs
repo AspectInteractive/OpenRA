@@ -94,7 +94,21 @@ namespace OpenRA.Mods.Common.HitShapes
 			var yDelta = circleCenter.Y - checkPos.Y;
 			return Sqrt(Sq(xDelta) + Sq(yDelta)) < radius;
 		}
-		public bool LineIntersectsCircle(WPos circleCenter, WPos p1, WPos p2) { return LineIntersectsCircle(circleCenter, Radius.Length, p1, p2); }
+
+		public static bool PointIsWithinLineSegment(WPos checkPoint, WPos lineP1, WPos lineP2)
+		{
+			// if we knew lineP1.X < lineP2.X, then we could use lineP1.X <= checkPoint.X && checkPoint.X <= lineP2.X
+			var deltaVec = lineP2 - lineP1;
+			var slope = Math.Abs(deltaVec.Y / deltaVec.X);
+			Func<WPos, int> getC; // get a coordinate
+			if (slope <= 1)
+				getC = p => p.X;
+			else
+				getC = p => p.Y;
+			return getC(checkPoint) < getC(lineP1) ^ getC(checkPoint) <= getC(lineP2); // if this does not work use checkPoint.X or checkPoint.Y etc.
+		}
+
+		/*public bool LineIntersectsCircle(WPos circleCenter, WPos p1, WPos p2) { return LineIntersectsCircle(circleCenter, Radius.Length, p1, p2); }
 		public static bool LineIntersectsCircle(WPos circleCenter, int radius, WPos p1, WPos p2)
 		{
 			var circleLeft = circleCenter.X - radius;
@@ -105,7 +119,7 @@ namespace OpenRA.Mods.Common.HitShapes
 				    (p1.X > circleRight ^ p2.X > circleRight)) &&
 				   ((p1.Y < circleTop ^ p2.Y < circleTop) ||
 				    (p1.Y > circleBottom ^ p2.Y > circleBottom));
-		}
+		}*/
 
 		WPos? IHitShape.FirstIntersectingPosFromLine(WPos circleCenter, WPos p1, WPos p2)
 		{
@@ -122,15 +136,15 @@ namespace OpenRA.Mods.Common.HitShapes
 		static List<WPos> IntersectingPosesFromLine(WPos circleCenter, int radius, WPos p1, WPos p2)
 		{
 			var poses = new List<WPos>();
-			if (LineIntersectsCircle(circleCenter, radius, p1, p2))
+			var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X);
+			var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X);
+			var a2 = (-1) / a1;
+			var b2 = circleCenter.Y + circleCenter.X / a1;
+			var Px = (float)(b2 - b1) / (a1 - a2);
+			var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2);
+			var LenCP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
+			if (LenCP <= radius) // true if there is an intersection between the circle and the infinite line
 			{
-				var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X);
-				var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X);
-				var a2 = (-1) / a1;
-				var b2 = circleCenter.Y + circleCenter.X / a1;
-				var Px = (float)(b2 - b1) / (a1 - a2);
-				var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2);
-				var LenCP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
 				var LenIPsq = Math.Abs(Sq(radius) - Sq(LenCP));
 				// var A = Sq(a1) + 1;
 				// var B = 2 * (a1 * (b1 - (int)Py) - 1);
@@ -158,7 +172,8 @@ namespace OpenRA.Mods.Common.HitShapes
 					Iy = a1 * Ix + b1;
 					// TO DO: Add code to validate 'S -> E' is long enough to intersect
 					var I = new WPos((int)Ix, (int)Iy, 0);
-					if (!((p2 - p1).Length < (I - p1).Length)) // Check that line segment is long enough to intersect
+					//!((p2 - p1).Length < (I - p1).Length)
+					if (PointIsWithinLineSegment(I, p1, p2)) // Check that line segment is long enough to intersect
 					{
 						poses.Add(I);
 						// If root2 is not the same as root1, a second root exists, so we include it as item 2.
