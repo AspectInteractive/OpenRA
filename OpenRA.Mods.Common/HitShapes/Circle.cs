@@ -136,52 +136,61 @@ namespace OpenRA.Mods.Common.HitShapes
 		static List<WPos> IntersectingPosesFromLine(WPos circleCenter, int radius, WPos p1, WPos p2)
 		{
 			var poses = new List<WPos>();
-			var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X);
-			var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X);
-			var a2 = (-1) / a1;
-			var b2 = circleCenter.Y + circleCenter.X / a1;
-			var Px = (float)(b2 - b1) / (a1 - a2);
-			var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2);
-			var LenCP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
-			if (LenCP <= radius) // true if there is an intersection between the circle and the infinite line
+			var p1InCircle = PosIsInsideCircle(circleCenter, radius, p1);
+			var p2InCircle = PosIsInsideCircle(circleCenter, radius, p2);
+			if (!(p1InCircle && p2InCircle))
 			{
-				var LenIPsq = Math.Abs(Sq(radius) - Sq(LenCP));
-				// var A = Sq(a1) + 1;
-				// var B = 2 * (a1 * (b1 - (int)Py) - 1);
-				// var C = Sq((int)Px) + Sq(b1 - (int)Py) - LenIPsq;
-				var A = Sq(a1) + 1;
-				var B = (-2) * Px + (2 * a1 * b1) - (2 * a1 * Py);
-				var C = Sq(Px) - 2 * b1 * Py + Sq(b1) + Sq(Py) - LenIPsq;
-				var discr = Sq(B) - 4 * A * C; // discriminant
-				if (discr > 0) // No roots found if this is less than 0
+				if (p1.X == p2.X) // since we cannot have a slope for a vertical line, we add 1, or 0.1% the width of a cell to the ray cast
+					p2 = new WPos(p2.X + 1, p2.Y, p2.Z);
+				if (p1.Y == p2.Y)
+					p2 = new WPos(p2.X, p2.Y + 1, p2.Z);
+				var a1 = (float)(p2.Y - p1.Y) / (p2.X - p1.X); // could be an issue for floating point
+				var b1 = (p2.X * p1.Y - p1.X * p2.Y) / (p2.X - p1.X);
+				var a2 = (-1) / a1;
+				var b2 = circleCenter.Y + circleCenter.X / a1;
+				var Px = (float)(b2 - b1) / (a1 - a2); // could be an issue for floating point
+				var Py = (float)(a1 * b2 - b1 * a2) / (a1 - a2);
+				var LenCP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
+				if (LenCP <= radius) // true if there is an intersection between the circle and the infinite line
 				{
-					var sqrtDiscr = Sqrt(discr);
-					var root1 = (-B + sqrtDiscr) / (2 * A);
-					var root2 = (-B - sqrtDiscr) / (2 * A);
-					float Ix, Ix2, Iy, Iy2;
-					if (Math.Abs(p1.X - root1) < Math.Abs(p1.X - root2)) // root 1 is closer
+					var LenIPsq = Math.Abs(Sq(radius) - Sq(LenCP));
+					// var A = Sq(a1) + 1;
+					// var B = 2 * (a1 * (b1 - (int)Py) - 1);
+					// var C = Sq((int)Px) + Sq(b1 - (int)Py) - LenIPsq;
+					var A = Sq(a1) + 1;
+					var B = (-2) * Px + (2 * a1 * b1) - (2 * a1 * Py);
+					var C = Sq(Px) - 2 * b1 * Py + Sq(b1) + Sq(Py) - LenIPsq;
+					var discr = Sq(B) - 4 * A * C; // discriminant
+					if (discr > 0) // No roots found if this is less than 0
 					{
-						Ix = root1;
-						Ix2 = root2;
-					}
-					else // root 2 is closer
-					{
-						Ix = root2;
-						Ix2 = root1;
-					}
-					Iy = a1 * Ix + b1;
-					// TO DO: Add code to validate 'S -> E' is long enough to intersect
-					var I = new WPos((int)Ix, (int)Iy, 0);
-					//!((p2 - p1).Length < (I - p1).Length)
-					if (PointIsWithinLineSegment(I, p1, p2)) // Check that line segment is long enough to intersect
-					{
-						poses.Add(I);
-						// If root2 is not the same as root1, a second root exists, so we include it as item 2.
-						// A second root also requires that the end point is not inside the circle.
-						if (Ix2 != Ix && !PosIsInsideCircle(circleCenter, radius, p2))
+						var sqrtDiscr = Sqrt(discr);
+						var root1 = (-B + sqrtDiscr) / (2 * A);
+						var root2 = (-B - sqrtDiscr) / (2 * A);
+						float Ix, Ix2, Iy, Iy2;
+						if (Math.Abs(p1.X - root1) < Math.Abs(p1.X - root2)) // root 1 is closer
 						{
-							Iy2 = a1 * Ix2 + b1;
-							poses.Add(new WPos((int)Ix2, (int)Iy2, 0));
+							Ix = root1;
+							Ix2 = root2;
+						}
+						else // root 2 is closer
+						{
+							Ix = root2;
+							Ix2 = root1;
+						}
+						Iy = a1 * Ix + b1;
+						// TO DO: Add code to validate 'S -> E' is long enough to intersect
+						var I = new WPos((int)Ix, (int)Iy, 0);
+						//!((p2 - p1).Length < (I - p1).Length)
+						if (PointIsWithinLineSegment(I, p1, p2)) // Check that line segment is long enough to intersect
+						{
+							poses.Add(I);
+							// If root2 is not the same as root1, a second root exists, so we include it as item 2.
+							// A second root also requires that no end points are inside the circle
+							if (Ix2 != Ix && !p1InCircle && !p2InCircle)
+							{
+								Iy2 = a1 * Ix2 + b1;
+								poses.Add(new WPos((int)Ix2, (int)Iy2, 0));
+							}
 						}
 					}
 				}
