@@ -149,6 +149,7 @@ namespace OpenRA.Primitives
 			}
 			return new Fix64(sum);
 		}
+		public static Fix64 operator +(Fix64 x, int y) { return x + new Fix64(y); }
 
 		/// <summary>
 		/// Adds x and y witout performing overflow checking. Should be inlined by the CLR.
