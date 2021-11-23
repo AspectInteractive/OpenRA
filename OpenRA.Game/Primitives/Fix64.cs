@@ -7,6 +7,9 @@ using System.Runtime.CompilerServices;
 #pragma warning disable SA1203 // Constants should appear before fields
 #pragma warning disable SA1005 // Single line comments should begin with single space
 
+/* Library by André Slupik Copyright 2012. Please see Fix64LICENSE.txt for full license details.
+ * https://github.com/asik/FixedMath.Net */
+
 namespace OpenRA.Primitives
 {
 	/// <summary>
