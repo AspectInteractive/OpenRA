@@ -23,7 +23,6 @@ namespace OpenRA.Graphics
 		readonly int markerSize;
 		readonly int layer;
 
-
 		public TargetLineRenderable(IEnumerable<WPos> waypoints, Color color, int width, int markerSize, int layer)
 		{
 			this.waypoints = waypoints;
