@@ -125,8 +125,10 @@ namespace OpenRA.Mods.Common.HitShapes
 
 		WPos? IHitShape.FirstIntersectingPosFromLine(WPos circleCenter, WPos p1, WPos p2)
 		{
+			//var intersectingPosesFromLineOrig = IntersectingPosesFromLineOrig(circleCenter, Radius.Length, p1, p2);
 			var intersectingPosesFromLine = IntersectingPosesFromLine(circleCenter, Radius.Length, p1, p2);
 			if (intersectingPosesFromLine.Count > 0)
+				if (intersectingPosesFromLine.Count > 0)
 				return intersectingPosesFromLine.ElementAt(0);
 			return null;
 		}
@@ -140,10 +142,10 @@ namespace OpenRA.Mods.Common.HitShapes
 			var poses = new List<WPos>();
 			var p1InCircle = PosIsInsideCircle(circleCenter, radius, p1);
 			var p2InCircle = PosIsInsideCircle(circleCenter, radius, p2);
-			var p1X = new Fix64(p1.X);
-			var p1Y = new Fix64(p1.Y);
-			var p2X = new Fix64(p2.X);
-			var p2Y = new Fix64(p2.Y);
+			var p1X = (Fix64)p1.X;
+			var p1Y = (Fix64)p1.Y;
+			var p2X = (Fix64)p2.X;
+			var p2Y = (Fix64)p2.Y;
 			if (!(p1InCircle && p2InCircle))
 			{
 				if (p1X == p2X) // since we cannot have a slope for a vertical line, we add 1, or 0.1% the width of a cell to the ray cast
@@ -152,26 +154,26 @@ namespace OpenRA.Mods.Common.HitShapes
 					p2Y += 1;
 				var a1 = (p2Y - p1Y) / (p2X - p1X); // could be an issue for floating point
 				var b1 = (p2X * p1Y - p1X * p2Y) / (p2X - p1X);
-				var a2 = new Fix64(-1) / a1;
-				var b2 = new Fix64(circleCenter.Y) + new Fix64(circleCenter.X) / a1;
+				var a2 = (Fix64)(-1) / a1;
+				var b2 = (Fix64)circleCenter.Y + (Fix64)circleCenter.X / a1;
 				var Px = (b2 - b1) / (a1 - a2); // could be an issue for floating point
 				var Py = (a1 * b2 - b1 * a2) / (a1 - a2);
 				var LenCP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
 				if (LenCP <= radius) // true if there is an intersection between the circle and the infinite line
 				{
-					var LenIPsq = Fix64.Abs(Sq(new Fix64(radius)) - Sq(new Fix64(LenCP)));
+					var LenIPsq = Fix64.Abs(Sq((Fix64)radius) - Sq((Fix64)LenCP));
 					// var A = Sq(a1) + 1;
 					// var B = 2 * (a1 * (b1 - (int)Py) - 1);
 					// var C = Sq((int)Px) + Sq(b1 - (int)Py) - LenIPsq;
 					var A = Sq(a1) + 1;
-					var B = new Fix64(-2) * Px + (new Fix64(2) * a1 * b1) - (new Fix64(2) * a1 * Py);
-					var C = Sq(Px) - new Fix64(2) * b1 * Py + Sq(b1) + Sq(Py) - LenIPsq;
-					var discr = Sq(B) - new Fix64(4) * A * C; // discriminant
-					if (discr > Fix64.Zero) // No roots found if this is less than 0
+					var B = (Fix64)(-2) * Px + (Fix64)2 * a1 * b1 - (Fix64)2 * a1 * Py;
+					var C = Sq(Px) - (Fix64)2 * b1 * Py + Sq(b1) + Sq(Py) - LenIPsq;
+					var discr = Sq((float)B) - 4 * (float)A * (float)C; // discriminant
+					if (discr > 0) // No roots found if this is less than 0
 					{
-						var sqrtDiscr = Sqrt(discr);
-						var root1 = (-B + sqrtDiscr) / (new Fix64(2) * A);
-						var root2 = (-B - sqrtDiscr) / (new Fix64(2) * A);
+						var sqrtDiscr = (Fix64)(float)Sqrt(discr);
+						var root1 = (-B + sqrtDiscr) / ((Fix64)2 * A);
+						var root2 = (-B - sqrtDiscr) / ((Fix64)2 * A);
 						var I1 = new WPos((int)root1, (int)(a1 * root1 + b1), 0);
 						var I2 = new WPos((int)root2, (int)(a1 * root2 + b1), 0);
 						var newP2 = new WPos((int)p2X, (int)p2Y, p2.Z);
