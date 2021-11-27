@@ -674,10 +674,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 #pragma warning restore SA1312 // Variable names should begin with lower-case letter
 
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
-		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1) { return GetAllCellsUnderneathALine(thisWorld, a0, a1); }
+		public List<CPos> GetAllCellsUnderneathALineOld(WPos a0, WPos a1) { return GetAllCellsUnderneathALineOld(thisWorld, a0, a1); }
 
 		// This could potentially be optimised with great care, currently it returns a bounding box of cells for a given line (WPos -> Wpos)
-		public static List<CPos> GetAllCellsUnderneathALine(World world, WPos a0, WPos a1)
+		public static List<CPos> GetAllCellsUnderneathALineOld(World world, WPos a0, WPos a1)
 		{
 			var startingCornerCell = world.Map.CellContaining(a0);
 			var endingCornerCell = world.Map.CellContaining(a1);
@@ -692,6 +692,67 @@ namespace OpenRA.Mods.Common.Pathfinder
 				for (var currCellY = topMostY; currCellY <= bottomMostY; currCellY += 1)
 					cellsUnderneathLine.Add(new CPos(currCellX, currCellY));
 			return cellsUnderneathLine;
+		}
+
+		public static void AddSelfAndNeighboursOfCPosToList(World world, CPos cp, ref List<CPos> inputCellList, int neighboursToCount = 1)
+		{
+			var minX = Math.Max(cp.X - neighboursToCount, 0);
+			var minY = Math.Max(cp.Y - neighboursToCount, 0);
+			var maxX = Math.Min(cp.X + neighboursToCount, world.Map.MapSize.X - 1);
+			var maxY = Math.Min(cp.Y + neighboursToCount, world.Map.MapSize.Y - 1);
+			for (var x = minX; x <= maxX; x++)
+				for (var y = minY; y <= maxY; y++)
+					if (!inputCellList.Contains(new CPos(x, y)))
+						inputCellList.Add(new CPos(x, y));
+		}
+
+		// Bresenham Line Algorithmng box of cells for a given line (WPos -> Wpos) https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+		public List<CPos> GetAllCellsUnderneathALine(WPos a0, WPos a1) { return GetAllCellsUnderneathALine(thisWorld, a0, a1); }
+		public static List<CPos> GetAllCellsUnderneathALine(World world, WPos a0, WPos a1, int neighboursToCount = 0)
+		{
+			var cellList = new List<CPos>();
+			var ca0 = world.Map.CellContaining(a0);
+			var ca1 = world.Map.CellContaining(a1);
+			var x0 = ca0.X;
+			var y0 = ca0.Y;
+			var x1 = ca1.X;
+			var y1 = ca1.Y;
+			var dx = Math.Abs(x1 - x0);
+			var dy = -Math.Abs(y1 - y0);
+			var sx = x0 < x1 ? 1 : -1;
+			var sy = y0 < y1 ? 1 : -1;
+			var err = dx + dy;  // error value e_xy
+			var initialIter = true;
+			var currIter = 0;
+
+			while (true && x0 < world.Map.MapSize.X && currIter < 50000)
+			{
+				if (!initialIter)
+				{
+					if (x0 == x1 && y0 == y1)
+						break;
+					var e2 = 2 * err;
+					if (e2 >= dy) // e_xy+e_x > 0
+					{
+						err += dy;
+						x0 += sx;
+					}
+					if (e2 <= dx) // e_xy+e_y < 0
+					{
+						err += dx;
+						y0 += sy;
+					}
+				}
+				initialIter = false;
+				var newCPos = new CPos(x0, y0);
+				if (neighboursToCount > 0)
+					AddSelfAndNeighboursOfCPosToList(world, newCPos, ref cellList, neighboursToCount);
+				else
+					if (!cellList.Contains(newCPos) && CPosinMap(newCPos, world))
+						cellList.Add(newCPos);
+				currIter += 1;
+			}
+			return cellList;
 		}
 
 		public bool AreCellsIntersectingPath(List<CPos> cells, WPos sourcePos, WPos destPos)
@@ -741,6 +802,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 		{
 			return cPos.X >= cPosMinSizeX && cPos.X <= cPosMaxSizeX &&
 				   cPos.Y >= cPosMinSizeY && cPos.Y <= cPosMaxSizeY;
+		}
+		private static bool CPosinMap(CPos cPos, World world)
+		{
+			return cPos.X >= 0 && cPos.X <= world.Map.MapSize.X - 1 &&
+				   cPos.Y >= 0 && cPos.Y <= world.Map.MapSize.Y - 1;
 		}
 
 		private static CCPos ClosestCCPosInMap(CCPos ccPos, World world) // These must be static to allow the HueristicFunction to be static

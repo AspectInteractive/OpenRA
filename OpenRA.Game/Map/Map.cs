@@ -1115,6 +1115,12 @@ namespace OpenRA
 			var a1 = cellEdge.ElementAt(1);
 			return WPos.DoTwoLinesIntersect(a0, a1, b0, b1);
 		}
+		public static WPos? CellEdgeIntersectionWithLine(List<WPos> cellEdge, WPos b0, WPos b1)
+		{
+			var a0 = cellEdge.ElementAt(0);
+			var a1 = cellEdge.ElementAt(1);
+			return WPos.FindIntersection(a0, a1, b0, b1);
+		}
 
 		public bool AnyCellEdgeIntersectsWithLine(CPos cell, WPos b0, WPos b1)
 		{
@@ -1127,12 +1133,28 @@ namespace OpenRA
 			};
 			foreach (var edge in cellEdges)
 				if (CellEdgeIntersectsWithLine(edge, b0, b1))
-				{
-					return true; // at least one edge has intersected
-				}
+					return true; // at least one edge has intersected			
+			return false; // none of the cell's edges intersects with the line
+		}
+		public List<WPos> CellEdgeIntersectionsWithLine(CPos cell, WPos b0, WPos b1)
+		{
+			var intersectingPoints = new List<WPos>();
+			var cellEdges = new List<List<WPos>>()
+			{
+				TopEdgeOfCell(cell),
+				BottomEdgeOfCell(cell),
+				LeftEdgeOfCell(cell),
+				RightEdgeOfCell(cell),
+			};
 
-			// none of the cell's edges intersects with the line
-			return false;
+			foreach (var edge in cellEdges)
+			{
+				var intersection = CellEdgeIntersectionWithLine(edge, b0, b1);
+				if (intersection != null)
+					intersectingPoints.Add((WPos)intersection); // at least one edge has intersected
+			}
+
+			return intersectingPoints; // none of the cell's edges intersects with the line
 		}
 
 		public WPos CenterOfSubCell(CPos cell, SubCell subCell)
