@@ -9,11 +9,13 @@
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
+using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Traits;
 
@@ -68,6 +70,16 @@ namespace OpenRA.Mods.Common.Traits
 			var map = wr.World.Map;
 			var colors = wr.World.Map.Rules.TerrainInfo.HeightDebugColors;
 			var mouseCell = wr.Viewport.ViewToWorld(Viewport.LastMousePos).ToMPos(wr.World.Map);
+
+			/* // For testing cellList Output only
+			var testP0 = self.World.Map.CenterOfCell(new CPos(40, 30));
+			var testP1 = self.World.Map.CenterOfCell(new CPos(50, 50));
+			var testColor = Color.Green;
+			var cellList = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, testP0, testP1, 1);
+			yield return new LineAnnotationRenderable(testP0, testP1, 3, testColor, testColor, 4);
+			foreach (var cell in cellList)
+				yield return new CircleAnnotationRenderable(self.World.Map.CenterOfCell(cell), new WDist(500),
+															5, Color.Yellow, true, 2);*/
 
 			foreach (var uv in wr.Viewport.AllVisibleCells.CandidateMapCoords)
 			{
