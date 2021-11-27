@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Eluant;
 using Eluant.ObjectBinding;
+using OpenRA.Primitives;
 using OpenRA.Scripting;
 
 namespace OpenRA
@@ -130,6 +131,69 @@ namespace OpenRA
 
 			return intersect;
 		}
+
+		public static WPos? FindIntersectionTwoLines(WPos p1, WPos p2, WPos p3, WPos p4)
+		{
+			// Line AB represented as a1x + b1y = c1
+			var a = p2.Y - p1.Y;
+			var b = p1.X - p2.X;
+			var c = a * p1.X + b * p1.Y;
+
+			// Line CD represented as a2x + b2y = c2
+			var a1 = p4.Y - p3.Y;
+			var b1 = p3.X - p4.X;
+			var c1 = a1 * p3.X + b1 * p3.Y;
+			var det = a * b1 - a1 * b;
+
+			if (det == 0)
+				return null;
+			else
+			{
+				var x = (Fix64)(b1 * c - b * c1) / (Fix64)det;
+				var y = (Fix64)(a * c1 - a1 * c) / (Fix64)det;
+				return new WPos((int)x, (int)y, 0);
+			}
+		}
+
+		// Returns 1 if the lines intersect, otherwise 0. In addition, if the lines 
+		// intersect the intersection point may be stored in the floats i_x and i_y.
+		#pragma warning disable SA1515 // Single-line comment should be preceded by blank line
+		#pragma warning disable SA1513 // Closing brace should be followed by blank line
+		public static WPos? FindIntersection(WPos p0, WPos p1, WPos p2, WPos p3)
+		{
+			var s1x = p1.X - p0.X;
+			var s1y = p1.Y - p0.Y;
+			var s2x = p3.X - p2.X;
+			var s2y = p3.Y - p2.Y;
+			var det = (Fix64)(-s2x * s1y + s1x * s2y);
+			var p0overlaps = p2.X <= p0.X && p0.X <= p3.X && p2.Y <= p0.Y && p0.Y <= p3.Y;
+			var p1overlaps = p2.X <= p1.X && p1.X <= p3.X && p2.Y <= p1.Y && p1.Y <= p3.Y;
+
+			if (det != (Fix64)0)
+			{
+				var s = (Fix64)(-s1y * (p0.X - p2.X) + s1x * (p0.Y - p2.Y)) / det;
+				var t = (Fix64)(s2x * (p0.Y - p2.Y) - s2y * (p0.X - p2.X)) / det;
+				if (s >= (Fix64)0 && s <= (Fix64)1 && t >= (Fix64)0 && t <= (Fix64)1) // Collision detected
+					return new WPos((int)((Fix64)p0.X + (t * (Fix64)s1x))
+								   , (int)((Fix64)p0.Y + (t * (Fix64)s1y)), 0);
+			}
+			// Check if lines are collinear, one of the end points must intersect
+			else if (p0overlaps)
+				if (p1overlaps)
+					return p0; // since entire line is in the segment it does not matter which point we return
+				else if (p2.X > p1.X || p2.Y > p1.Y) // p1 is to the left of p2->p3, so p2 is the intersection
+					return p2;
+				else if (p3.X < p1.X || p3.Y < p1.Y) // p1 is to the right of p2->p3, so p3 is the intersection
+					return p3;
+			else if (p1overlaps)
+				if (p2.X > p0.X || p2.Y > p0.Y)
+					return p2;
+				else if (p3.X < p0.X || p3.Y < p0.Y)
+					return p3;
+			return null; // No collision, and parallel if det == 0
+		}
+		#pragma warning restore SA1515 // Single-line comment should be preceded by blank line
+		#pragma warning restore SA1513 // Closing brace should be followed by blank line
 
 		public override int GetHashCode() { return X.GetHashCode() ^ Y.GetHashCode() ^ Z.GetHashCode(); }
 

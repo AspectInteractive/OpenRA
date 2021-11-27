@@ -15,6 +15,7 @@ using System.Linq;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
+using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
@@ -722,6 +723,64 @@ namespace OpenRA.Mods.Common.Traits
 			return actor.TraitsImplementing<Building>().Any() ||
 				   actor.TraitsImplementing<Mobile>().Any() ||
 				   actor.TraitsImplementing<MobileOffGrid>().Any();
+		}
+
+		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor, int skipLookAheadAmt = 0, bool attackingUnitsOnly = false)
+		{
+			var intersections = new List<WPos>();
+			var selfCenter = self.CenterPosition;
+			var destCenter = selfCenter + new WVec(lookAheadDist, WRot.FromYaw(move.Yaw));
+			var rotVec = new WVec(UnitRadius / 2, WRot.FromYaw(move.Rotate(new WRot(WAngle.Zero,
+																					WAngle.Zero,
+																					new WAngle(512))).Yaw));
+			var sourceDestPairs = new List<(WPos, WPos)>()
+			{
+				  (selfCenter + new WVec(UnitRadius / 2, WRot.FromYaw(move.Yaw)),
+				   destCenter + new WVec(UnitRadius / 2, WRot.FromYaw(move.Yaw))) // selfFront and destFront
+				, (selfCenter - rotVec, destCenter - rotVec) // selfLeft and destLeft
+				, (selfCenter + rotVec, destCenter + rotVec) // selfRight and destRight
+			};
+			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
+
+			// Ray cast to cell collisions
+			foreach (var sdPair in sourceDestPairs)
+			{
+				var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
+				foreach (var cell in cellsToCheck)
+					if (CellIsBlocked(self, locomotor, cell))
+						intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+													 .ToList();
+			}
+
+			// Ray cast to actor collisions
+			foreach (var destActor in self.World.FindActorsInCircle(selfCenter, new WDist((int)((selfCenter - destCenter).Length * 0.66)))
+												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
+			{
+				if (!destActor.IsDead && ValidCollisionActor(destActor))
+				{
+					var destActorCenter = (destActor.CenterPosition +
+											  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
+												.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
+					if (destActorCenter != WPos.Zero)
+					{
+						MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
+						{
+							foreach (var sdPair in sourceDestPairs)
+							{
+								var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destCenter, sdPair.Item1, sdPair.Item2);
+								if (intersection != null)
+									intersections.Add((WPos)intersection);
+							}
+						}
+					}
+				}
+			}
+
+			if (intersections.Count > 0)
+				return intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
+			else
+				return null;
 		}
 
 		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,

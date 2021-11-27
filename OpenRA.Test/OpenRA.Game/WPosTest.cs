@@ -9,6 +9,9 @@
  */
 #endregion
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 
 namespace OpenRA.Test
@@ -55,6 +58,33 @@ namespace OpenRA.Test
 			System.Console.WriteLine($"DoTwoLinesIntersect for tr,br, c0,c1: {WPos.DoTwoLinesIntersect(tr, br, c0, c1)}");
 			System.Console.WriteLine($"DoTwoLinesIntersect for br,bl, c0,c1: {WPos.DoTwoLinesIntersect(br, bl, c0, c1)}");
 			System.Console.WriteLine($"DoTwoLinesIntersect for bl,tl, c0,c1: {WPos.DoTwoLinesIntersect(bl, tl, c0, c1)}");
+		}
+
+		[TestCase(TestName = "Testing line intersection pos between lines p1->p2 and p3->p4")]
+		public void GetIntersectionOfTwoLines()
+		{
+			var linePairs = new List<(List<WPos>, List<WPos>, bool)>()
+			{
+				  (new List<WPos>() { new WPos(428, 859, 0), new WPos(2428, 1359, 0) },
+				   new List<WPos>() { new WPos(228, 1459, 0), new WPos(1500, 650, 0) }, true)
+				, (new List<WPos>() { new WPos(-1300, 0, 0), new WPos(-300, 1800, 0) },
+				   new List<WPos>() { new WPos(-1000, 400, 0), new WPos(428, 559, 0) }, false)
+				, (new List<WPos>() { new WPos(450, 800, 0), new WPos(700, 800, 0) },
+				   new List<WPos>() { new WPos(715, 800, 0), new WPos(750, 800, 0) }, false)
+				, (new List<WPos>() { new WPos(450, 800, 0), new WPos(700, 800, 0) },
+				   new List<WPos>() { new WPos(250, 800, 0), new WPos(500, 800, 0) }, true)
+			};
+
+			Func<List<WPos>, List<WPos>, WPos?> intersectingPoint = (l1, l2) =>
+			{ return WPos.FindIntersection(l1.ElementAt(0), l1.ElementAt(1), l2.ElementAt(0), l2.ElementAt(1)); };
+
+			var lineIntersectingPoint = new List<WPos?>();
+			foreach (var (lines, index) in linePairs.Select((item, index) => (item, index)))
+			{
+				var currIntersectingPoint = intersectingPoint(lines.Item1, lines.Item2);
+				//Assert.That((currIntersectingPoint != null) == lines.Item3); // if != null is true, a point exists
+				System.Console.WriteLine($"lineSet {index + 1} intersects at: {currIntersectingPoint}");
+			}
 		}
 	}
 }

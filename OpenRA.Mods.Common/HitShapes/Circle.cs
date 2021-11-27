@@ -63,6 +63,22 @@ namespace OpenRA.Mods.Common.HitShapes
 			return DistanceFromEdge(pos - new WPos(origin.X, origin.Y, pos.Z));
 		}
 
+		public static WPos[] GetCornersOfCircle(int2 selfCenter, int radius)
+		{
+			var corners = new WPos[9];
+			var wvec = new WVec(radius, 0, 0);
+			corners[0] = new WPos(selfCenter.X, selfCenter.Y, 0); // center
+			corners[1] = new WPos(selfCenter.X - radius, selfCenter.Y, 0); // left-center
+			corners[2] = new WPos(selfCenter.X + radius, selfCenter.Y, 0); // right-center
+			corners[3] = new WPos(selfCenter.X, selfCenter.Y - radius, 0); // top-center
+			corners[4] = new WPos(selfCenter.X, selfCenter.Y + radius, 0); // bottom-center
+			corners[5] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(45))); // bottom-right
+			corners[6] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(135))); // bot-left
+			corners[7] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(225))); // top-left
+			corners[8] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(315))); // top-right
+			return corners;
+		}
+
 		WPos[] IHitShape.GetCorners(int2 selfCenter)
 		{
 			var corners = new WPos[9];
