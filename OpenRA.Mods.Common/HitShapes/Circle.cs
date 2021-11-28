@@ -144,7 +144,6 @@ namespace OpenRA.Mods.Common.HitShapes
 			//var intersectingPosesFromLineOrig = IntersectingPosesFromLineOrig(circleCenter, Radius.Length, p1, p2);
 			var intersectingPosesFromLine = IntersectingPosesFromLine(circleCenter, Radius.Length, p1, p2);
 			if (intersectingPosesFromLine.Count > 0)
-				if (intersectingPosesFromLine.Count > 0)
 				return intersectingPosesFromLine.ElementAt(0);
 			return null;
 		}
