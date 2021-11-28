@@ -725,7 +725,7 @@ namespace OpenRA.Mods.Common.Traits
 				   actor.TraitsImplementing<MobileOffGrid>().Any();
 		}
 
-		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor, int skipLookAheadAmt = 0, bool attackingUnitsOnly = false)
+		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor, bool attackingUnitsOnly = false)
 		{
 			var intersections = new List<WPos>();
 			var selfCenter = self.CenterPosition;
@@ -763,22 +763,28 @@ namespace OpenRA.Mods.Common.Traits
 												.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
 					if (destActorCenter != WPos.Zero)
 					{
-						MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+						//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-						{
-							foreach (var sdPair in sourceDestPairs)
-							{
-								var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destCenter, sdPair.Item1, sdPair.Item2);
-								if (intersection != null)
-									intersections.Add((WPos)intersection);
-							}
-						}
+							if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
+								foreach (var sdPair in sourceDestPairs)
+								{
+									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
+									if (intersection != null)
+									{
+										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.LightBlue);
+										intersections.Add((WPos)intersection);
+									}
+								}
 					}
 				}
 			}
 
 			if (intersections.Count > 0)
-				return intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
+			{
+				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
+				MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
+				return firstIntersection;
+			}
 			else
 				return null;
 		}

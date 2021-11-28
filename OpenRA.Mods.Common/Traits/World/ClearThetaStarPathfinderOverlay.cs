@@ -57,6 +57,7 @@ namespace OpenRA.Mods.Common.Traits
 				thetaStarPathFinderTrait.ClearIntervals();
 				thetaStarPathFinderTrait.ClearPaths();
 				thetaStarPathFinderTrait.ClearLines();
+				thetaStarPathFinderTrait.ClearLinesWithColors();
 				thetaStarPathFinderTrait.ClearStates();
 				thetaStarPathFinderTrait.ClearPoints();
 				thetaStarPathFinderTrait.ClearCircles();

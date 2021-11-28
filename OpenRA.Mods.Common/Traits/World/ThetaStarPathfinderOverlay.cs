@@ -28,6 +28,7 @@ namespace OpenRA.Mods.Common.Traits
 	public class ThetaStarPathfinderOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
 	{
 		public readonly List<Command> Comms;
+		private List<(List<WPos>, Color)> linesWithColors = new List<(List<WPos>, Color)>();
 		private List<((WPos, WDist), Color)> circlesWithColors = new List<((WPos, WDist), Color)>();
 		private List<(WPos, Color)> pointsWithColors = new List<(WPos, Color)>();
 		private List<(CCState, Color)> statesWithColors = new List<(CCState, Color)>();
@@ -169,6 +170,14 @@ namespace OpenRA.Mods.Common.Traits
 				foreach (var l in linesToRender)
 					yield return l;
 			}
+
+			// Render LinesWithColours
+			foreach (var (line, color) in linesWithColors)
+			{
+				var linesToRender = GetPathRenderableSet(line, lineThickness, color, endPointRadius, endPointThickness, color);
+				foreach (var l in linesToRender)
+					yield return l;
+			}
 		}
 
 		public void UpdatePointColors()
@@ -224,11 +233,14 @@ namespace OpenRA.Mods.Common.Traits
 		public void RemovePath(List<WPos> path)	{ paths.RemoveAll(p => p == path); }
 		public void AddLine(List<WPos> line) { lines.Add(line); }
 		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l == line); }
+		public void AddLineWithColor(List<WPos> line, Color color) { linesWithColors.Add((line, color)); }
+		public void RemoveLineWithColor(List<WPos> line) { linesWithColors.RemoveAll(lwc => lwc.Item1 == line); }
 		public void AddCircle((WPos, WDist) circle) { circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight))); }
 		public void RemoveCircle((WPos, WDist) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
 		public void ClearIntervals() { statesWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
 		public void ClearLines() { lines.Clear(); }
+		public void ClearLinesWithColors() { linesWithColors.Clear(); }
 		public void ClearStates() { statesWithColors.Clear(); }
 		public void ClearPoints() { pointsWithColors.Clear(); }
 		public void ClearCircles() { circlesWithColors.Clear(); }
