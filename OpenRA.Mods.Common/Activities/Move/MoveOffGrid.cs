@@ -198,11 +198,19 @@ namespace OpenRA.Mods.Common.Activities
 			if (line.Count > 1) // cannot render a path of length 1
 				self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
 		}
+
 		public static void RenderLine(Actor self, WPos pos1, WPos pos2)
 		{
 			var renderLine = new List<WPos>() { pos1, pos2 };
 			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
 		}
+		public static void RenderLineWithColor(Actor self, WPos pos1, WPos pos2, Color color)
+		{
+			var renderLine = new List<WPos>() { pos1, pos2 };
+			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault()
+				.AddLineWithColor(renderLine, color);
+		}
+
 		public static void RenderCircle(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
 		public static void RemoveCircle(Actor self, WPos pos, WDist radius)
@@ -403,8 +411,11 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
+			/*bool UnitHasNotCollided(WVec mv)
+			{ return mobileOffGrid.HasNotCollided(self, mv, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true); }*/
+
 			bool UnitHasNotCollided(WVec mv)
-			{ return mobileOffGrid.HasNotCollided(self, mv, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true); }
+			{ return mobileOffGrid.GetFirstMoveCollision(self, mv, new WDist(1024 * 3), locomotor, true) != null; }
 
 			if (useLocalAvoidance && searchingForNextTarget && UnitHasNotCollided(moveVec))
 			{
@@ -460,7 +471,7 @@ namespace OpenRA.Mods.Common.Activities
 						i == localAvoidanceAngleOffsets.Count - 1)
 					{
 						var newAngle = new WAngle(moveVec.Yaw.Angle + localAvoidanceAngleOffset);
-						System.Console.WriteLine($"existing deg: {moveVec.Yaw.Angle}, new deg: {newAngle.Angle}, offset: {localAvoidanceAngleOffset}");
+						// System.Console.WriteLine($"existing deg: {moveVec.Yaw.Angle}, new deg: {newAngle.Angle}, offset: {localAvoidanceAngleOffset}");
 						revisedMoveVec = new WVec(new WDist(moveVec.Length), WRot.FromYaw(newAngle));
 						// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					}
