@@ -106,7 +106,7 @@ namespace OpenRA.Mods.Common.HitShapes
 		public static int Sqrt(int i) { return Exts.ISqrt(i); }
 
 		public bool PosIsInsideCircle(WPos circleCenter, WPos checkPos) { return PosIsInsideCircle(circleCenter, Radius.Length, checkPos); }
-		private static bool PosIsInsideCircle(WPos circleCenter, int radius, WPos checkPos)
+		public static bool PosIsInsideCircle(WPos circleCenter, int radius, WPos checkPos)
 		{
 			var xDelta = circleCenter.X - checkPos.X;
 			var yDelta = circleCenter.Y - checkPos.Y;

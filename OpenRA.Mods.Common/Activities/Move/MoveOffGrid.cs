@@ -60,7 +60,8 @@ namespace OpenRA.Mods.Common.Activities
 		// Options for pathfinder (chosen in the constructor)
 		bool usePathFinder = true;
 		bool useLocalAvoidance = true;
-		List<int> localAvoidanceAngleOffsets = new List<int>()
+		WDist localAvoidanceDist;
+		/*List<int> localAvoidanceAngleOffsets = new List<int>()
 		{
 			64, -64, // +-22.5 deg
 			128, -128, // +-45 deg
@@ -70,8 +71,8 @@ namespace OpenRA.Mods.Common.Activities
 			384, -384, // +-135 deg
 			448, -448, // +-157.5 deg
 			512		   // +180 deg (same as -180 deg)
-		};
-/*#pragma warning disable SA1137 // Elements should have the same indentation
+		};*/
+		#pragma warning disable SA1137 // Elements should have the same indentation
 		List<int> localAvoidanceAngleOffsets = new List<int>()
 		{
 			  64,  128,  192,
@@ -240,6 +241,7 @@ namespace OpenRA.Mods.Common.Activities
 							Color? targetLineColor = null)
 		{
 			mobileOffGrid = self.Trait<MobileOffGrid>();
+			localAvoidanceDist = mobileOffGrid.UnitRadius * 2;
 			target = t;
 			this.targetLineColor = targetLineColor;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
@@ -415,7 +417,7 @@ namespace OpenRA.Mods.Common.Activities
 			{ return mobileOffGrid.HasNotCollided(self, mv, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true); }*/
 
 			bool UnitHasNotCollided(WVec mv)
-			{ return mobileOffGrid.GetFirstMoveCollision(self, mv, new WDist(1024 * 3), locomotor, true) != null; }
+			{ return mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true) == null; }
 
 			if (useLocalAvoidance && searchingForNextTarget && UnitHasNotCollided(moveVec))
 			{
@@ -455,7 +457,7 @@ namespace OpenRA.Mods.Common.Activities
 			//}
 
 			// Only update the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
-			if (!(useLocalAvoidance && !UnitHasNotCollided(moveVec) && !searchingForNextTarget))
+			if (!(useLocalAvoidance && !UnitHasNotCollided(moveVec)) && !searchingForNextTarget)
 				mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
 			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
 			else if (useLocalAvoidance && !UnitHasNotCollided(moveVec))
@@ -467,14 +469,18 @@ namespace OpenRA.Mods.Common.Activities
 				{
 					localAvoidanceAngleOffset = localAvoidanceAngleOffsets.ElementAt(i);
 					// Do not go back in the same direction that you went forward, unless this is the last available local avoidance angle offset
-					if (!mobileOffGrid.ChangedAngleOffsetsBuffer.Where(a => a == localAvoidanceAngleOffset).Any() ||
-						i == localAvoidanceAngleOffsets.Count - 1)
-					{
-						var newAngle = new WAngle(moveVec.Yaw.Angle + localAvoidanceAngleOffset);
-						// System.Console.WriteLine($"existing deg: {moveVec.Yaw.Angle}, new deg: {newAngle.Angle}, offset: {localAvoidanceAngleOffset}");
-						revisedMoveVec = new WVec(new WDist(moveVec.Length), WRot.FromYaw(newAngle));
-						// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
-					}
+					var newAngle = new WAngle(moveVec.Yaw.Angle + localAvoidanceAngleOffset);
+					// System.Console.WriteLine($"existing deg: {moveVec.Yaw.Angle}, new deg: {newAngle.Angle}, offset: {localAvoidanceAngleOffset}");
+					var testMoveVec = new WVec(localAvoidanceDist, WRot.FromYaw(newAngle));
+					var actualMoveVec = new WVec(new WDist(moveVec.Length), WRot.FromYaw(newAngle));
+					var propActorMove = mobileOffGrid.GenFinalWVec(new List<MvVec>() { new MvVec(testMoveVec) },
+																	   mobileOffGrid.FleeVectors);
+					var propActorPos = self.CenterPosition + propActorMove;
+					if (!mobileOffGrid.TraversedCirclesBuffer.Where(c =>
+								HitShapes.CircleShape.PosIsInsideCircle(c, mobileOffGrid.UnitRadius.Length, propActorPos)).Any()
+						|| i == localAvoidanceAngleOffsets.Count - 1)
+						revisedMoveVec = actualMoveVec;
+					// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					i++;
 				}
 				while (!UnitHasNotCollided(revisedMoveVec) && i < localAvoidanceAngleOffsets.Count);
@@ -486,7 +492,7 @@ namespace OpenRA.Mods.Common.Activities
 					/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
 					#endif
-					mobileOffGrid.AddToChangedAngleBuffer(localAvoidanceAngleOffset);
+					mobileOffGrid.AddToTraversedCirclesBuffer(self.CenterPosition + revisedMoveVec);
 					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
 					pastMoveVec = moveVec;
 					mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(revisedMoveVec) };
