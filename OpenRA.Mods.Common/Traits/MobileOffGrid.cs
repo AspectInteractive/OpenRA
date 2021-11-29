@@ -318,8 +318,8 @@ namespace OpenRA.Mods.Common.Traits
 		public List<WPos> PathComplete = new List<WPos>();
 		public List<WPos> PositionBuffer = new List<WPos>();
 		public int PositionBufferCapacity = 180;
-		public int ChangedAngleOffsetsBufferCapacity = 5;
-		public List<int> ChangedAngleOffsetsBuffer = new List<int>();
+		public int TraversedCirclesBufferCapacity = 10;
+		public List<WPos> TraversedCirclesBuffer = new List<WPos>();
 		public static void AddToBuffer<T>(ref List<T> buffer, int bufferCapacity, T item)
 		{
 			buffer.Add(item);
@@ -327,7 +327,12 @@ namespace OpenRA.Mods.Common.Traits
 				buffer.RemoveAt(0);
 		}
 		public void AddToPositionBuffer(WPos pos) { AddToBuffer(ref PositionBuffer, PositionBufferCapacity, pos); }
-		public void AddToChangedAngleBuffer(int angle) { AddToBuffer(ref ChangedAngleOffsetsBuffer, ChangedAngleOffsetsBufferCapacity, angle); }
+		public void AddToTraversedCirclesBuffer(WPos pos)
+		{
+			// We divide UnitRadius by 2 because we allow some overlap, to ensure the space between circles is not skipped.
+			if (!TraversedCirclesBuffer.Where(c => HitShapes.CircleShape.PosIsInsideCircle(c, UnitRadius.Length / 2, pos)).Any())
+				AddToBuffer(ref TraversedCirclesBuffer, TraversedCirclesBufferCapacity, pos);
+		}
 
 		public List<MvVec> SeekVectors = new List<MvVec>();
 		public List<MvVec> FleeVectors = new List<MvVec>();
@@ -729,31 +734,35 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var intersections = new List<WPos>();
 			var selfCenter = self.CenterPosition;
-			var destCenter = selfCenter + new WVec(lookAheadDist, WRot.FromYaw(move.Yaw));
-			var rotVec = new WVec(UnitRadius / 2, WRot.FromYaw(move.Rotate(new WRot(WAngle.Zero,
-																					WAngle.Zero,
-																					new WAngle(512))).Yaw));
-			var sourceDestPairs = new List<(WPos, WPos)>()
+			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
+			var destCenter = calcOffsetPos(selfCenter, lookAheadDist);
+			var radiusVec = new WVec(UnitRadius / 2, WRot.FromYaw(move.Yaw));
+			var rightVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(256)));
+			var leftVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(1024 - 256)));
+			Func<WDist, List<(WPos, WPos)>> calcSourceDestPairs = dist => new List<(WPos, WPos)>()
 			{
-				  (selfCenter + new WVec(UnitRadius / 2, WRot.FromYaw(move.Yaw)),
-				   destCenter + new WVec(UnitRadius / 2, WRot.FromYaw(move.Yaw))) // selfFront and destFront
-				, (selfCenter - rotVec, destCenter - rotVec) // selfLeft and destLeft
-				, (selfCenter + rotVec, destCenter + rotVec) // selfRight and destRight
+				  (selfCenter + radiusVec, calcOffsetPos(selfCenter, dist) + radiusVec) // selfFront and destFront
+				, (selfCenter - radiusVec, calcOffsetPos(selfCenter, dist) - radiusVec) // selfBack and destBack
+				, (selfCenter + rightVec, calcOffsetPos(selfCenter, dist) + rightVec) // selfRight and destRight
+				, (selfCenter + leftVec, calcOffsetPos(selfCenter, dist) + leftVec) // selfLeft and destLeft
 			};
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
 			// Ray cast to cell collisions
-			foreach (var sdPair in sourceDestPairs)
-			{
-				var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
-				foreach (var cell in cellsToCheck)
-					if (CellIsBlocked(self, locomotor, cell))
-						intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
-													 .ToList();
-			}
+			if (!(self.CurrentActivity is ReturnToCellActivity))
+				foreach (var sdPair in calcSourceDestPairs(UnitRadius * 2))
+				{
+					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
+					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell))
+							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+														 .ToList();
+				}
 
 			// Ray cast to actor collisions
-			foreach (var destActor in self.World.FindActorsInCircle(selfCenter, new WDist((int)((selfCenter - destCenter).Length * 0.66)))
+			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (destCenter - selfCenter) / 2, lookAheadDist)
 												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 			{
 				if (!destActor.IsDead && ValidCollisionActor(destActor))
@@ -766,13 +775,18 @@ namespace OpenRA.Mods.Common.Traits
 						//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 							if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
-								foreach (var sdPair in sourceDestPairs)
+								foreach (var sdPair in calcSourceDestPairs(lookAheadDist))
 								{
 									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
 									if (intersection != null)
 									{
-										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.LightBlue);
+										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
 										intersections.Add((WPos)intersection);
+									}
+									else
+									{
+										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
+										continue;
 									}
 								}
 					}
@@ -782,7 +796,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (intersections.Count > 0)
 			{
 				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
-				MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
+				//MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
 				return firstIntersection;
 			}
 			else

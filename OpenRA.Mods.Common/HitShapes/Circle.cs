@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FixedPointy;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
@@ -98,15 +99,17 @@ namespace OpenRA.Mods.Common.HitShapes
 			System.Console.WriteLine($"corners[8] is now {corners[8]}");*/
 			return corners;
 		}
+		public static Fix Sq(Fix i) { return i * i; }
+		public static Fix Sqrt(Fix i) { return FixMath.Sqrt(i); }
 		public static Fix64 Sq(Fix64 i) { return i * i; }
 		public static Fix64 Sqrt(Fix64 i) { return Fix64.Sqrt(i); }
-		public static float Sq(float i) { return i * i; }
-		public static float Sqrt(float i) { return (float)Math.Sqrt(i); }
+		public static double Sq(double i) { return i * i; }
+		public static double Sqrt(double i) { return (double)Math.Sqrt(i); }
 		public static int Sq(int i) { return Exts.ISqr(i); }
 		public static int Sqrt(int i) { return Exts.ISqrt(i); }
 
 		public bool PosIsInsideCircle(WPos circleCenter, WPos checkPos) { return PosIsInsideCircle(circleCenter, Radius.Length, checkPos); }
-		private static bool PosIsInsideCircle(WPos circleCenter, int radius, WPos checkPos)
+		public static bool PosIsInsideCircle(WPos circleCenter, int radius, WPos checkPos)
 		{
 			var xDelta = circleCenter.X - checkPos.X;
 			var yDelta = circleCenter.Y - checkPos.Y;
@@ -182,11 +185,11 @@ namespace OpenRA.Mods.Common.HitShapes
 					// var C = Sq((int)Px) + Sq(b1 - (int)Py) - LenIPsq;
 					var A = Sq(a1) + 1;
 					var B = (Fix64)(-2) * Px + (Fix64)2 * a1 * b1 - (Fix64)2 * a1 * Py;
-					var C = Sq(Px) - (Fix64)2 * b1 * Py + Sq(b1) + Sq(Py) - LenIPsq;
-					var discr = Sq((float)B) - 4 * (float)A * (float)C; // discriminant
+					var C = Sq((double)Px) - 2 * (double)b1 * (double)Py + Sq((double)b1) + Sq((double)Py) - (double)LenIPsq;
+					var discr = Sq((double)B) - 4 * (double)A * (double)C; // discriminant
 					if (discr > 0) // No roots found if this is less than 0
 					{
-						var sqrtDiscr = (Fix64)(float)Sqrt(discr);
+						var sqrtDiscr = (Fix64)(double)Sqrt(discr);
 						var root1 = (-B + sqrtDiscr) / ((Fix64)2 * A);
 						var root2 = (-B - sqrtDiscr) / ((Fix64)2 * A);
 						var I1 = new WPos((int)root1, (int)(a1 * root1 + b1), 0);
