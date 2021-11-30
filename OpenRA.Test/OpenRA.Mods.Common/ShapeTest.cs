@@ -84,6 +84,7 @@ namespace OpenRA.Test
 				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(30, -3000, 0), new WPos(0, 2000, 0), true)
 				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -3000, 0), new WPos(0, 2000, 0), true)
 				, new CircleTestCase(new WDist(300), new WPos(14067, 35637, 0), new WPos(10677, 36340, 0), new WPos(13879, 36006, 0), false)
+				, new CircleTestCase(new WDist(300), new WPos(24514, 33723, 0), new WPos(24517, 33142, 0), new WPos(24739, 33699, 0), true)
 			};
 
 			Func<CircleTestCase, WPos?> shapeIntersectsLine = ctc =>
