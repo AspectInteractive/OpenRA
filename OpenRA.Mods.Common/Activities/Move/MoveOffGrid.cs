@@ -214,6 +214,11 @@ namespace OpenRA.Mods.Common.Activities
 
 		public static void RenderCircle(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
+		public static void RenderCircleWithColor(Actor self, WPos pos, WDist radius, Color color)
+		{
+			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>()
+				.FirstEnabledTraitOrDefault().AddCircleWithColor((pos, radius), color);
+		}
 		public static void RemoveCircle(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
 
@@ -493,6 +498,7 @@ namespace OpenRA.Mods.Common.Activities
 					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
 					#endif
 					mobileOffGrid.AddToTraversedCirclesBuffer(self.CenterPosition + revisedMoveVec);
+					RenderCircleWithColor(self, mobileOffGrid.CenterPosition + revisedMoveVec, mobileOffGrid.UnitRadius, Color.LightGreen);
 					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
 					pastMoveVec = moveVec;
 					mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(revisedMoveVec) };

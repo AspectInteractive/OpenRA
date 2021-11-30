@@ -236,6 +236,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void AddLineWithColor(List<WPos> line, Color color) { linesWithColors.Add((line, color)); }
 		public void RemoveLineWithColor(List<WPos> line) { linesWithColors.RemoveAll(lwc => lwc.Item1 == line); }
 		public void AddCircle((WPos, WDist) circle) { circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight))); }
+		public void AddCircleWithColor((WPos, WDist) circle, Color color) { circlesWithColors.Add((circle, color)); }
 		public void RemoveCircle((WPos, WDist) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
 		public void ClearIntervals() { statesWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
