@@ -12,7 +12,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using FixedPointy;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
@@ -99,8 +98,6 @@ namespace OpenRA.Mods.Common.HitShapes
 			System.Console.WriteLine($"corners[8] is now {corners[8]}");*/
 			return corners;
 		}
-		public static Fix Sq(Fix i) { return i * i; }
-		public static Fix Sqrt(Fix i) { return FixMath.Sqrt(i); }
 		public static Fix64 Sq(Fix64 i) { return i * i; }
 		public static Fix64 Sqrt(Fix64 i) { return Fix64.Sqrt(i); }
 		public static double Sq(double i) { return i * i; }
