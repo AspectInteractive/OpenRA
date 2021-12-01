@@ -770,7 +770,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public bool IsPathObservable(WPos rootPos, WPos destPos) { return IsPathObservable(thisWorld, self, locomotor, rootPos, destPos); }
 		public static bool IsPathObservable(World world, Actor self, Locomotor locomotor, WPos rootPos, WPos destPos)
 		{
-			var cellsUnderneathLine = GetAllCellsUnderneathALine(world, rootPos, destPos);
+			var cellsUnderneathLine = GetAllCellsUnderneathALine(world, rootPos, destPos, 1);
 			return !AreCellsIntersectingPath(world, self, locomotor, cellsUnderneathLine, rootPos, destPos);
 		}
 

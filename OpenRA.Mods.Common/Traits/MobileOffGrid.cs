@@ -655,6 +655,22 @@ namespace OpenRA.Mods.Common.Traits
 				   cPos.Y >= 0 && cPos.Y <= self.World.Map.MapSize.Y - 1;
 		}
 
+		public static Func<WDist, List<(WPos, WPos)>> GenSDPairCalcFunc(WPos selfCenter, WVec move, WDist unitRadius)
+		{
+			var radiusVec = new WVec(unitRadius / 2, WRot.FromYaw(move.Yaw));
+			var rightVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(256)));
+			var leftVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(1024 - 256)));
+			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
+			Func<WDist, List<(WPos, WPos)>> calcSourceDestPairs = dist => new List<(WPos, WPos)>()
+			{
+				  (selfCenter + radiusVec, calcOffsetPos(selfCenter, dist) + radiusVec) // selfFront and destFront
+				, (selfCenter - radiusVec, calcOffsetPos(selfCenter, dist) - radiusVec) // selfBack and destBack
+				, (selfCenter + rightVec, calcOffsetPos(selfCenter, dist) + rightVec) // selfRight and destRight
+				, (selfCenter + leftVec, calcOffsetPos(selfCenter, dist) + leftVec) // selfLeft and destLeft
+			};
+			return calcSourceDestPairs;
+		}
+
 		public static bool CellIsBlocked(Actor self, Locomotor locomotor, CPos cell)
 		{
 			return locomotor.MovementCostToEnterCell(default, cell, BlockedByActor.None, self) == short.MaxValue ||
@@ -735,34 +751,11 @@ namespace OpenRA.Mods.Common.Traits
 			var intersections = new List<WPos>();
 			var selfCenter = self.CenterPosition;
 			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
-			var destCenter = calcOffsetPos(selfCenter, lookAheadDist);
-			var radiusVec = new WVec(UnitRadius / 2, WRot.FromYaw(move.Yaw));
-			var rightVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(256)));
-			var leftVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(1024 - 256)));
-			Func<WDist, List<(WPos, WPos)>> calcSourceDestPairs = dist => new List<(WPos, WPos)>()
-			{
-				  (selfCenter + radiusVec, calcOffsetPos(selfCenter, dist) + radiusVec) // selfFront and destFront
-				, (selfCenter - radiusVec, calcOffsetPos(selfCenter, dist) - radiusVec) // selfBack and destBack
-				, (selfCenter + rightVec, calcOffsetPos(selfCenter, dist) + rightVec) // selfRight and destRight
-				, (selfCenter + leftVec, calcOffsetPos(selfCenter, dist) + leftVec) // selfLeft and destLeft
-			};
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
-			// Ray cast to cell collisions
-			if (!(self.CurrentActivity is ReturnToCellActivity))
-				foreach (var sdPair in calcSourceDestPairs(UnitRadius * 2))
-				{
-					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
-					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell))
-							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
-														 .ToList();
-				}
-
 			// Ray cast to actor collisions
-			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (destCenter - selfCenter) / 2, lookAheadDist)
+			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (calcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
+																	lookAheadDist)
 												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 			{
 				if (!destActor.IsDead && ValidCollisionActor(destActor))
@@ -775,7 +768,7 @@ namespace OpenRA.Mods.Common.Traits
 						//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 							if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
-								foreach (var sdPair in calcSourceDestPairs(lookAheadDist))
+								foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
 								{
 									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
 									if (intersection != null)
