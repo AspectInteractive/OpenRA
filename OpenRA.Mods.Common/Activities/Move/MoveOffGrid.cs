@@ -109,6 +109,8 @@ namespace OpenRA.Mods.Common.Activities
 		int maxThetaIters = 3;
 		WPos currPathTarget;
 		WPos lastPathTarget;
+		bool isBlocked = false;
+
 		WPos FinalPathTarget => pathRemaining.Count > 0 ? pathRemaining.Last() : currPathTarget;
 
 		private void RequeueTargetAndSetCurrTo(WPos target)
@@ -399,37 +401,18 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
-			var moveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
-
-			// Check collision with walls
-			var cellsCollidingSet = new List<List<CPos>>();
-			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
-			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
-			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
-			for (var i = 0; i < cellsCollidingSet.Count; i++)
-			{
-				var currCellsColliding = cellsCollidingSet.ElementAt(i);
-				if (currCellsColliding.Count > 0)
-				{
-					var fleeVecs = currCellsColliding.Select(c => self.World.Map.CenterOfCell(c))    // Note: we add scalar prop. to i
-												     .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
-					var fleeVecToUse = AvgOfVectors(fleeVecs);
-					mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
-				}
-			}
-
 			/*bool UnitHasNotCollided(WVec mv)
 			{ return mobileOffGrid.HasNotCollided(self, mv, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true); }*/
 
 			bool UnitHasNotCollided(WVec mv)
 			{ return mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true) == null; }
 
-			if (useLocalAvoidance && searchingForNextTarget && UnitHasNotCollided(moveVec))
+			/*if (useLocalAvoidance && searchingForNextTarget && UnitHasNotCollided(moveVec))
 			{
 				pastMoveVec = new WVec(0, 0, 0);
 				currLocalAvoidanceAngleOffset = 0;
 				searchingForNextTarget = false;
-			}
+			}*/
 
 			//// Only update the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
 			//if (!(useLocalAvoidance && !UnitHasNotCollided(moveVec)) && !searchingForNextTarget)
@@ -461,11 +444,21 @@ namespace OpenRA.Mods.Common.Activities
 			//	}
 			//}
 
-			// Only update the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
+			// Update SeekVector if there is none
+			WVec deltaMoveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
+			if (mobileOffGrid.SeekVectors.Count == 0)
+				mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(deltaMoveVec) };
+			// moveVec is equalk to the Seekector
+			var moveVec = mobileOffGrid.SeekVectors.ElementAt(0).Vec;
+			// Only change the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
+			// Revert to deltaMoveVec if we are no longer searching for the next target
 			if (!(useLocalAvoidance && !UnitHasNotCollided(moveVec)) && !searchingForNextTarget)
-				mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
+			{
+				mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(deltaMoveVec) };
+				moveVec = deltaMoveVec;
+			}
 			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			else if (useLocalAvoidance && !UnitHasNotCollided(moveVec))
+			else if ((useLocalAvoidance && !UnitHasNotCollided(moveVec)) || isBlocked)
 			{
 				var revisedMoveVec = moveVec;
 				int localAvoidanceAngleOffset;
@@ -501,9 +494,10 @@ namespace OpenRA.Mods.Common.Activities
 					RenderCircleWithColor(self, mobileOffGrid.CenterPosition + revisedMoveVec, mobileOffGrid.UnitRadius, Color.LightGreen);
 					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
 					pastMoveVec = moveVec;
-					mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(revisedMoveVec) };
 					moveVec = revisedMoveVec;
+					mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
 					searchingForNextTarget = true;
+					isBlocked = false;
 				}
 			}
 			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget && UnitHasNotCollided(pastMoveVec))
@@ -513,7 +507,23 @@ namespace OpenRA.Mods.Common.Activities
 				searchingForNextTarget = false;
 			}
 
-			mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
+			// Check collision with walls
+			var cellsCollidingSet = new List<List<CPos>>();
+			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
+			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
+			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
+			for (var i = 0; i < cellsCollidingSet.Count; i++)
+			{
+				var currCellsColliding = cellsCollidingSet.ElementAt(i);
+				if (currCellsColliding.Count > 0)
+				{
+					var fleeVecs = currCellsColliding.Select(c => self.World.Map.CenterOfCell(c))    // Note: we add scalar prop. to i
+													 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
+					var fleeVecToUse = AvgOfVectors(fleeVecs);
+					mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
+				}
+			}
+
 			var move = mobileOffGrid.GenFinalWVec();
 
 			if (mobileOffGrid.PositionBuffer.Count >= 100)
@@ -529,6 +539,7 @@ namespace OpenRA.Mods.Common.Activities
 					// Also do not re-run if max expansions were reached last time
 					if (currPathTarget != lastPathTarget)
 					{
+						isBlocked = true;
 						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
 							searchingForNextTarget = true;
@@ -545,6 +556,7 @@ namespace OpenRA.Mods.Common.Activities
 								mobileOffGrid.PositionBuffer.Clear();
 							}
 							searchingForNextTarget = false;
+							isBlocked = false;
 						}
 						else if (mobileOffGrid.PositionBuffer.Count >= 180) // 3 seconds
 						{
