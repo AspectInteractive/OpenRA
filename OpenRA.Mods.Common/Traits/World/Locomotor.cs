@@ -170,10 +170,7 @@ namespace OpenRA.Mods.Common.Traits
 			MovementClass = (uint)terrainTypeInfoTypes.Select(ti => ti.Cost < short.MaxValue).ToBits();
 		}
 
-		public short MovementCostForCell(CPos cell)
-		{
-			return MovementCostForCell(cell, null);
-		}
+		public short MovementCostForCell(CPos cell) { return MovementCostForCell(cell, null); }
 
 		short MovementCostForCell(CPos cell, CPos? fromCell)
 		{
@@ -197,6 +194,16 @@ namespace OpenRA.Mods.Common.Traits
 				world.GetCustomMovementLayers()[cell.Layer].GetTerrainIndex(cell);
 
 			return terrainTypeInfoTypes[index].Speed;
+		}
+		public short MovementCostToEnterCell(Actor actor, CPos destNode, BlockedByActor check, Actor ignoreActor)
+		{
+			var cellCost = MovementCostForCell(destNode);
+
+			if (cellCost == PathGraph.MovementCostForUnreachableCell ||
+				!CanMoveFreelyInto(actor, destNode, check, ignoreActor))
+				return PathGraph.MovementCostForUnreachableCell;
+
+			return cellCost;
 		}
 
 		public short MovementCostToEnterCell(Actor actor, CPos srcNode, CPos destNode, BlockedByActor check, Actor ignoreActor)

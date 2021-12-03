@@ -142,7 +142,7 @@ namespace OpenRA
 					return (int)(target.Actor.ActorID << 16) * 0x567;
 
 				case TargetType.FrozenActor:
-					var actor = t.FrozenActor.Actor;
+					var actor = target.FrozenActor.Actor;
 					if (actor == null)
 						return 0;
 

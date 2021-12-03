@@ -1023,12 +1023,9 @@ namespace OpenRA.Mods.Common.Traits
 			if (ToCell.Layer == 0)
 				return true;
 
-			if (self.World.GetCustomMovementLayers().TryGetValue(ToCell.Layer, out var layer))
-				return layer.InteractsWithDefaultLayer;
-
-			return true;
+			var layer = self.World.GetCustomMovementLayers()[ToCell.Layer];
+			return layer == null || layer.InteractsWithDefaultLayer;
 		}
-
 		#endregion
 
 		#region IPositionable
