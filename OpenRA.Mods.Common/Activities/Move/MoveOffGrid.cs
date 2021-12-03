@@ -347,27 +347,10 @@ namespace OpenRA.Mods.Common.Activities
 										.Select(a => a.Delta).ToList());
 			else sharedMoveAvgDelta = Delta;
 
-			// Refuse to take off if it would land immediately again.
-			if (mobileOffGrid.ForceLanding)
-				Cancel(self);
-
 			var dat = self.World.Map.DistanceAboveTerrain(mobileOffGrid.CenterPosition);
-			var isLanded = false; /*dat <= mobileOffGrid.LandAltitude;*/
-
-			// HACK: Prevent paused (for example, EMP'd) mobileOffGrid from taking off.
-			// This is necessary until the TODOs in the IsCanceling block below are adressed.
-			if (isLanded && mobileOffGrid.IsTraitPaused)
-				return false;
 
 			if (IsCanceling)
 			{
-				// We must return the actor to a sensible height before continuing.
-				// If the mobileOffGrid is on the ground we queue TakeOff to manage the influence reservation and takeoff sounds etc.
-				// TODO: It would be better to not take off at all, but we lack the plumbing to detect current airborne/landed state.
-				// If the mobileOffGrid lands when idle and is idle, we let the default idle handler manage this.
-				// TODO: Remove this after fixing all activities to work properly with arbitrary starting altitudes.
-				var landWhenIdle = mobileOffGrid.Info.IdleBehavior == IdleBehaviorType.Land;
-				var skipHeightAdjustment = landWhenIdle && self.CurrentActivity.IsCanceling && self.CurrentActivity.NextActivity == null;
 				EndingActions();
 				return true;
 			}
@@ -401,48 +384,8 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
-			/*bool UnitHasNotCollided(WVec mv)
-			{ return mobileOffGrid.HasNotCollided(self, mv, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true); }*/
-
 			bool UnitHasNotCollided(WVec mv)
 			{ return mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true) == null; }
-
-			/*if (useLocalAvoidance && searchingForNextTarget && UnitHasNotCollided(moveVec))
-			{
-				pastMoveVec = new WVec(0, 0, 0);
-				currLocalAvoidanceAngleOffset = 0;
-				searchingForNextTarget = false;
-			}*/
-
-			//// Only update the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
-			//if (!(useLocalAvoidance && !UnitHasNotCollided(moveVec)) && !searchingForNextTarget)
-			//	mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
-			//// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			//else if (useLocalAvoidance && !UnitHasNotCollided(moveVec))
-			//{
-			//	WVec? revisedMoveVec = moveVec;
-			//	var i = 0;
-			//	do
-			//	{
-			//		revisedMoveVec = LocalAvoidanceFunc(mobileOffGrid.GetCollisionVector(self, (WVec)revisedMoveVec, 4, locomotor,
-			//													skipLookAheadAmt: 2, attackingUnitsOnly: true));
-			//		i++;
-			//	} while (revisedMoveVec != null && !UnitHasNotCollided((WVec)revisedMoveVec) && i < 5);
-			//	if (revisedMoveVec != null && UnitHasNotCollided((WVec)revisedMoveVec))
-			//	{
-			//		#if DEBUGWITHOVERLAY
-			//		System.Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {((WVec)revisedMoveVec).Yaw}");
-			//		/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
-			//		RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
-			//		#endif
-			//		//mobileOffGrid.AddToChangedAngleBuffer(localAvoidanceAngleOffset);
-			//		//currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
-			//		pastMoveVec = moveVec;
-			//		mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec((WVec)revisedMoveVec) };
-			//		moveVec = (WVec)revisedMoveVec;
-			//		searchingForNextTarget = true;
-			//	}
-			//}
 
 			// Update SeekVector if there is none
 			WVec deltaMoveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
@@ -537,9 +480,9 @@ namespace OpenRA.Mods.Common.Activities
 					// Create new path to the next path, then join it to the remainder of the existing path
 					// Make sure we are not re-running this if we received the same result last time
 					// Also do not re-run if max expansions were reached last time
+					isBlocked = true;
 					if (currPathTarget != lastPathTarget)
 					{
-						isBlocked = true;
 						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
 							searchingForNextTarget = true;
@@ -554,33 +497,31 @@ namespace OpenRA.Mods.Common.Activities
 								GetNextTargetOrComplete(false);
 								EndingActions();
 								mobileOffGrid.PositionBuffer.Clear();
+								isBlocked = false; // only unblock if we have found a better path
 							}
 							searchingForNextTarget = false;
-							isBlocked = false;
 						}
 						else if (mobileOffGrid.PositionBuffer.Count >= 180) // 3 seconds
 						{
+							isBlocked = false;
 							EndingActions();
 							return Complete();
 						}
 					}
 				}
-				else if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared > deltaFirst.LengthSquared)
+				else if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared + (512 * 512) > deltaFirst.LengthSquared)
 				{
 					EndingActions();
 					mobileOffGrid.PositionBuffer.Clear();
 				}
 			}
 
-			var selfHasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared;
+			var selfHasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared + mobileOffGrid.UnitRadius.LengthSquared;
 			var completedTargsOfNearbyActors = CompletedTargetsOfActors(GetNearbyActorsSharingMove(self));
 			tickCount = tickCount >= maxTicksBeforeLOScheck ? tickCount = 0 : tickCount + 1;
 			var hasReachedGoal = selfHasReachedGoal ||
 								 (tickCount == 0 && completedTargsOfNearbyActors.Contains(currPathTarget) &&
-								  ((pathRemaining.Count == 0 && Delta.Length < (move.Length + MaxRangeToTarget().Length))
-								  || ThetaStarPathSearch.IsPathObservable(self.World, self, locomotor,
-																	mobileOffGrid.CenterPosition, pathRemaining.FirstOrDefault())));
-								  //TargetInLOS(self, move, locomotor, pathRemaining.FirstOrDefault()));
+								  pathRemaining.Count == 0 && Delta.Length < move.Length + MaxRangeToTarget().Length);
 
 			if (hasReachedGoal)
 			{
