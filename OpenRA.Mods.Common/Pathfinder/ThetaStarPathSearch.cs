@@ -52,6 +52,16 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public bool AtStart = true;
 		public WPos Source;
 		public WPos Dest;
+		public CCState minState;
+		public CCState startState;
+		public CCState goalState;
+		public List<WPos> path = new List<WPos>();
+		public bool pathFound = false;
+		public int numCurrExpansions;
+		public int numTotalExpansions;
+		public int maxCurrExpansions;
+		public int maxTotalExpansions;
+		public bool HitTotalExpansionLimit => numTotalExpansions >= maxTotalExpansions;
 
 		public class CCState : IComparable<CCState>, IEquatable<CCState>
 		{
@@ -427,14 +437,16 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public bool IsPathObsCached(CCPos rootCC, CCPos destCC)
 		{ return GetOrCreatePathObs((rootCC, destCC), () => IsPathObservable(rootCC, destCC)); }
 
-		public (List<WPos>, bool) ThetaStarFindPath(WPos sourcePos, WPos destPos)
+		public void Initialize(WPos sourcePos, WPos destPos)
 		{
 			ResetLists();
 
 			if (sourcePos == destPos)
-				return (new List<WPos>(), false);
+			{
+				path = new List<WPos>();
+				pathFound = true; // since we have automatically found the path needed, which is no path since source = dest.
+			}
 
-			List<WPos> path = new List<WPos>();
 			Source = sourcePos;
 			Dest = destPos;
 
@@ -499,25 +511,60 @@ namespace OpenRA.Mods.Common.Pathfinder
 				RenderPathIfOverlay(path);
 				#endif
 
-				return (path, false);
+				pathFound = true;
 			}
 
-			var startState = GetState(sourceCCPos);
-			var goalState = GetState(destCCPos);
+			startState = GetState(sourceCCPos);
+			goalState = GetState(destCCPos);
 			startState.Gval = 0;
 			startState.ParentState = startState;
 			AddStateToOpen(startState);
 
-			var numExpansions = 0;
-			var maxExpansions = 6000;
-			CCState minState = startState;
-			while (OpenList.Count > 0 && numExpansions < maxExpansions)
+			numTotalExpansions = 0;
+			maxTotalExpansions = 6000;
+			minState = startState;
+		}
+
+		public void UpdatePathIfFound()
+		{
+			if (goalState.Gval < int.MaxValue)
+			{
+				Func<CCState, CCState> incrementFunc = state => state.ParentState;
+				ValidateParent(goalState);
+				var currState = goalState;
+				path.Add(Dest); // We add the goal first since it is a WPos, then increment first initially
+				currState = incrementFunc(currState);
+				while (currState != startState)
+				{
+					var paddedCCpos = PadCC(currState.CC);
+					// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC)); // Swap above line with this if not using padding
+					path.Add(paddedCCpos);
+					thisThetaCache.Add(currState, Dest, goalState.Gval); // add to cache for future look-ups
+					currState = incrementFunc(currState);
+				}
+				// path.Add(sourcePos);
+				path.Reverse();
+
+				#if DEBUGWITHOVERLAY
+				RenderPathIfOverlay(new List<WPos>() { Source }.Union(path).ToList());
+				#endif
+			}
+			else
+				path = EmptyPath;
+
+			pathFound = true;
+		}
+
+		public void Expand()
+		{
+			numCurrExpansions = 0;
+			while (OpenList.Count > 0 && numCurrExpansions < maxCurrExpansions && numTotalExpansions < maxTotalExpansions)
 			{
 				minState = PopFirstFromOpen();
 				if (goalState.Gval <= minState.Fval)
 					break;
-				else if (thisThetaCache.CheckIfInCache(minState, destPos))
-					if (minState.Gval + thisThetaCache.Get(minState, destPos).FinalHval <= minState.Fval)
+				else if (thisThetaCache.CheckIfInCache(minState, Dest))
+					if (minState.Gval + thisThetaCache.Get(minState, Dest).FinalHval <= minState.Fval)
 						break;
 
 				/* ---------------
@@ -526,7 +573,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 				 * --------------- */
 				// else if (pastGoalState.Gval - pastGoalState[minState.CC].Gval + minState.Gval <= minState.Fval)
 
-				numExpansions++;
+				numCurrExpansions++;
+				numTotalExpansions++;
 
 				ValidateParent(minState);
 				var newParentState = minState.ParentState;
@@ -555,31 +603,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 				}
 			}
 
-			if (goalState.Gval < int.MaxValue)
-			{
-				Func<CCState, CCState> incrementFunc = state => state.ParentState;
-				ValidateParent(goalState);
-				var currState = goalState;
-				path.Add(destPos); // We add the goal first since it is a WPos, then increment first initially
-				currState = incrementFunc(currState);
-				while (currState != startState)
-				{
-					var paddedCCpos = PadCC(currState.CC);
-					// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC)); // Swap above line with this if not using padding
-					path.Add(paddedCCpos);
-					thisThetaCache.Add(currState, destPos, goalState.Gval); // add to cache for future look-ups
-					currState = incrementFunc(currState);
-				}
-				// path.Add(sourcePos);
-				path.Reverse();
-
-				#if DEBUGWITHOVERLAY
-				RenderPathIfOverlay(new List<WPos>() { sourcePos }.Union(path).ToList());
-				#endif
-				return (path, numExpansions >= maxExpansions);
-			}
-
-			return (EmptyPath, numExpansions >= maxExpansions);
+			// If we have exhausted the OpenList, or the maximum number of expansions, we return a path, otherwise we return null
+			if (OpenList.Count == 0 || goalState.Gval < int.MaxValue || numTotalExpansions >= maxTotalExpansions)
+				UpdatePathIfFound();
 		}
 
 #pragma warning disable SA1312 // Variable names should begin with lower-case letter
@@ -927,7 +953,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		#region Constructors
-		public ThetaStarPathSearch(World world, Actor self)
+		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos, int maxCurrExpansions)
 		{
 			thisWorld = world;
 			thisThetaCache = world.WorldActor.TraitsImplementing<ThetaStarCache>().FirstEnabledTraitOrDefault();
@@ -950,6 +976,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 			cPosMaxSizeY = thisWorld.Map.MapSize.Y - 1;
 			cPosMinSizeY = 0;
 			ResetLists();
+
+			this.maxCurrExpansions = maxCurrExpansions;
+			Initialize(sourcePos, destPos);
 		}
 		#endregion
 
