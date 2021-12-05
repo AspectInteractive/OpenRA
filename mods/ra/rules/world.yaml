@@ -10,6 +10,7 @@
 	TerrainGeometryOverlay:
     ClearThetaStarPathfinderOverlay:
 	ThetaStarPathfinderOverlay:    
+    ThetaPathfinderExecutionManager:
 	CPosCoordsDebugOverlay:
 	DebugVisualizations:
     ThetaStarCache:
