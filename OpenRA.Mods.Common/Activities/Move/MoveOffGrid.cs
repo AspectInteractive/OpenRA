@@ -103,9 +103,9 @@ namespace OpenRA.Mods.Common.Activities
 		readonly Locomotor locomotor;
 
 		ThetaStarPathSearch thetaStarSearch;
+		ThetaPathfinderExecutionManager thetaPFexecManager;
 		bool runningTheta = false;
 		bool secondThetaRun = false;
-		int maxCurrExpansions = 11;
 		List<Actor> actorsSharingMove = new List<Actor>();
 		List<WPos> pathRemaining = new List<WPos>();
 		bool reachedMaxExpansions = false;
@@ -296,10 +296,12 @@ namespace OpenRA.Mods.Common.Activities
 			usePathFinder = true;
 			useLocalAvoidance = true;
 
+			thetaPFexecManager = self.World.WorldActor.TraitsImplementing<ThetaPathfinderExecutionManager>().FirstOrDefault();
+
 			if (usePathFinder)
 			{
-				thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition,
-														  maxCurrExpansions);
+				thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition);
+				thetaPFexecManager.AddPF(self, thetaStarSearch);
 				runningTheta = true;
 				thetaIters++;
 			}
@@ -342,8 +344,9 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			if (runningTheta)
 			{
-				using (new Support.PerfTimer("ThetaStar"))
-					thetaStarSearch.Expand();
+				// -- Expansion now managed by execution manager
+				//using (new Support.PerfTimer("ThetaStar"))
+				//	thetaStarSearch.Expand();
 
 				if (thetaStarSearch.pathFound)
 				{
@@ -373,6 +376,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
+			// Will not move unless there is a path to move on
 			if (!thetaStarSearch.pathFound)
 				return false;
 
@@ -523,8 +527,8 @@ namespace OpenRA.Mods.Common.Activities
 						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
 							searchingForNextTarget = true;
-							thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget,
-																	  maxCurrExpansions);
+							thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget);
+							thetaPFexecManager.AddPF(self, thetaStarSearch);
 							runningTheta = true;
 							secondThetaRun = true;
 							thetaIters++;
