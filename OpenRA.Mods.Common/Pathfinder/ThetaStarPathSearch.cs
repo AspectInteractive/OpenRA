@@ -59,7 +59,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public bool pathFound = false;
 		public int numCurrExpansions;
 		public int numTotalExpansions;
-		public int maxCurrExpansions;
+		public int maxCurrExpansions = -1;
 		public int maxTotalExpansions;
 		public bool HitTotalExpansionLimit => numTotalExpansions >= maxTotalExpansions;
 
@@ -555,8 +555,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 			pathFound = true;
 		}
 
-		public void Expand()
+		public void Expand(int inMaxCurrExpansions)
 		{
+			maxCurrExpansions = inMaxCurrExpansions;
 			numCurrExpansions = 0;
 			while (OpenList.Count > 0 && numCurrExpansions < maxCurrExpansions && numTotalExpansions < maxTotalExpansions)
 			{
@@ -953,7 +954,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		#region Constructors
-		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos, int maxCurrExpansions)
+		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos)
 		{
 			thisWorld = world;
 			thisThetaCache = world.WorldActor.TraitsImplementing<ThetaStarCache>().FirstEnabledTraitOrDefault();
@@ -975,9 +976,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 			cPosMinSizeX = 0;
 			cPosMaxSizeY = thisWorld.Map.MapSize.Y - 1;
 			cPosMinSizeY = 0;
-			ResetLists();
 
-			this.maxCurrExpansions = maxCurrExpansions;
+			ResetLists();
 			Initialize(sourcePos, destPos);
 		}
 		#endregion
