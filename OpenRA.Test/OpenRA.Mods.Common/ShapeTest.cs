@@ -48,7 +48,7 @@ namespace OpenRA.Test
 				Is.EqualTo(0));
 		}
 
-		public struct CircleTestCase
+		public struct CircleIntersectTestCase
 		{
 			public WDist CircleRadius;
 			public WPos CircleCenter;
@@ -56,7 +56,7 @@ namespace OpenRA.Test
 			public WPos P2;
 			public bool HasIntersection;
 
-			public CircleTestCase(WDist circleRadius, WPos circleCenter, WPos p1, WPos p2, bool hasIntersection)
+			public CircleIntersectTestCase(WDist circleRadius, WPos circleCenter, WPos p1, WPos p2, bool hasIntersection)
 			{
 				CircleRadius = circleRadius;
 				CircleCenter = circleCenter;
@@ -66,35 +66,81 @@ namespace OpenRA.Test
 			}
 		}
 
+		public struct CircleSliceTestCase
+		{
+			public WDist CircleRadius;
+			public WPos CircleCenter;
+			public WPos P;
+			public bool IsInsideCircle;
+
+			public CircleSliceTestCase(WDist circleRadius, WPos circleCenter, WPos p, bool isInsideCircle)
+			{
+				CircleRadius = circleRadius;
+				CircleCenter = circleCenter;
+				P = p;
+				IsInsideCircle = isInsideCircle;
+			}
+		}
+
+		[TestCase(TestName = "CircleShape Point in Slice check works")]
+		public void CircleSliceTests()
+		{
+			int angleToUseForSlices = 10;
+			var circleTestCases = new List<CircleSliceTestCase>()
+			{
+				  new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-530, 2000, 0), true) // p1
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-1400, 2000, 0), false) // p2
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-200, 1200, 0), true) // p3
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-1100, 300, 0), false) // p4
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(0, 1600, 0), true) // p5
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(800, 1700, 0), true) // p6
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(700, 2400, 0), true) // p7
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(500, 2900, 0), false) // p8
+				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(200, 2300, 0), true) // p9
+			};
+
+			Func<CircleSliceTestCase, int> sliceOfPointInsideCircle = ctc =>
+			{ return CircleShape.CircleSliceIndex(ctc.CircleCenter, ctc.CircleRadius.Length, ctc.P, angleToUseForSlices); };
+
+			var circleSlicesOfPoints = new List<int>();
+			foreach (var (ctc, index) in circleTestCases.Select((item, index) => (item, index)))
+			{
+				var pointCircleSlice = sliceOfPointInsideCircle(ctc);
+				circleSlicesOfPoints.Add(pointCircleSlice);
+				// Assert.That(pointCircleSlice >= 0 == ctc.IsInsideCircle); // if slice returned is -1, the point is not inside the circle
+				System.Console.WriteLine($"point {index + 1} is inside circle slice: {pointCircleSlice} ");
+			}
+		}
+
 		[TestCase(TestName = "CircleShape Line Intersection works")]
 		public void CircleShapeIntersection()
 		{
-			var circleTestCases = new List<CircleTestCase>()
+			var circleTestCases = new List<CircleIntersectTestCase>()
 			{
-				  new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(428, 859, 0), new WPos(2428, 1359, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(228, 1459, 0), new WPos(1500, 650, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-1300, 0, 0), new WPos(-300, 1800, 0), false)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-300, 1800, 0), new WPos(428, 859, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-2000, 3000, 0), new WPos(-700, 800, 0), false)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-3000, -500, 0), new WPos(3000, -500, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -3000, 0), new WPos(10, 2000, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-1200, -1200, 0), new WPos(1200, 1800, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(500, -800, 0), new WPos(200, -100, 0), false)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -1000, 0), new WPos(50, 2000, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(30, -3000, 0), new WPos(0, 2000, 0), true)
-				, new CircleTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -3000, 0), new WPos(0, 2000, 0), true)
-				, new CircleTestCase(new WDist(300), new WPos(14067, 35637, 0), new WPos(10677, 36340, 0), new WPos(13879, 36006, 0), false)
-				, new CircleTestCase(new WDist(300), new WPos(24514, 33723, 0), new WPos(24517, 33142, 0), new WPos(24739, 33699, 0), true)
+				  new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(428, 859, 0), new WPos(2428, 1359, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(228, 1459, 0), new WPos(1500, 650, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-1300, 0, 0), new WPos(-300, 1800, 0), false)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-300, 1800, 0), new WPos(428, 859, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-2000, 3000, 0), new WPos(-700, 800, 0), false)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-3000, -500, 0), new WPos(3000, -500, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -3000, 0), new WPos(10, 2000, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(-1200, -1200, 0), new WPos(1200, 1800, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(500, -800, 0), new WPos(200, -100, 0), false)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -1000, 0), new WPos(50, 2000, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(30, -3000, 0), new WPos(0, 2000, 0), true)
+				, new CircleIntersectTestCase(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -3000, 0), new WPos(0, 2000, 0), true)
+				, new CircleIntersectTestCase(new WDist(300), new WPos(14067, 35637, 0), new WPos(10677, 36340, 0), new WPos(13879, 36006, 0), false)
+				, new CircleIntersectTestCase(new WDist(300), new WPos(24514, 33723, 0), new WPos(24517, 33142, 0), new WPos(24739, 33699, 0), true)
 			};
 
-			Func<CircleTestCase, WPos?> shapeIntersectsLine = ctc =>
+			Func<CircleIntersectTestCase, WPos?> shapeIntersectsLine = ctc =>
 			{
 				shape = new CircleShape(ctc.CircleRadius);
 				shape.Initialize();
 				return shape.FirstIntersectingPosFromLine(ctc.CircleCenter, ctc.P1, ctc.P2);
 			};
 
-			Func<CircleTestCase, List<WPos>> intersectingLinePoints = ctc =>
+			Func<CircleIntersectTestCase, List<WPos>> intersectingLinePoints = ctc =>
 			{
 				shape = new CircleShape(ctc.CircleRadius);
 				shape.Initialize();
