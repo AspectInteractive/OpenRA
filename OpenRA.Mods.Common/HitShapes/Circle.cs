@@ -113,6 +113,26 @@ namespace OpenRA.Mods.Common.HitShapes
 			return Sqrt(Sq(xDelta) + Sq(yDelta)) < radius;
 		}
 
+		public static int GetSliceCount(int angleToCutCircleSlices)
+		{ return angleToCutCircleSlices != 0 ? (int)((Fix64)360 / (Fix64)angleToCutCircleSlices) : -1; }
+
+		public int CircleSliceIndex(WPos circleCenter, WPos checkPos, int angleToCutCircleSlices)
+		{ return CircleSliceIndex(circleCenter, Radius.Length, checkPos, angleToCutCircleSlices); }
+		public static int CircleSliceIndex(WPos circleCenter, int radius, WPos checkPos, int angleToCutCircleSlices)
+		{
+			var nSlices = GetSliceCount(angleToCutCircleSlices);
+			if (nSlices > 0 && PosIsInsideCircle(circleCenter, radius, checkPos))
+			{
+				var angle = Fix64.Atan2((Fix64)(circleCenter.Y - checkPos.Y), (Fix64)(circleCenter.X - checkPos.X));
+				if (angle < Fix64.Zero)
+					angle = Fix64.Pi - angle;
+				var sliceAngle = (Fix64)2.0 * Fix64.Pi / (Fix64)nSlices;
+				return (int)(angle / sliceAngle);
+			}
+			else
+				return -1;
+		}
+
 		public static bool PointIsWithinLineSegment(WPos checkPoint, WPos lineP1, WPos lineP2)
 		{
 			// if we knew lineP1.X < lineP2.X, then we could use lineP1.X <= checkPoint.X && checkPoint.X <= lineP2.X
