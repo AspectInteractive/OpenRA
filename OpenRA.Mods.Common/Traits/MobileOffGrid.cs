@@ -746,12 +746,90 @@ namespace OpenRA.Mods.Common.Traits
 				   actor.TraitsImplementing<MobileOffGrid>().Any();
 		}
 
-		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor, bool attackingUnitsOnly = false)
+		public WPos? GetFirstCollision(WPos checkPos, WVec move, WDist lookAheadDist, Locomotor locomotor,
+									   bool attackingUnitsOnly = false, bool includeCellCollision = false)
+		{
+			var intersections = new List<WPos>();
+			var selfCenter = checkPos;
+			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
+			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
+
+			// Ray cast to cell collisions
+			if (includeCellCollision && !(self.CurrentActivity is ReturnToCellActivity))
+				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
+				{
+					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
+					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell))
+							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+														 .ToList();
+				}
+
+			// Ray cast to actor collisions
+			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (calcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
+																	lookAheadDist)
+												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
+			{
+				if (!destActor.IsDead && ValidCollisionActor(destActor))
+				{
+					var destActorCenter = (destActor.CenterPosition +
+											  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
+												.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
+					if (destActorCenter != WPos.Zero)
+					{
+						//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
+							if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
+								foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
+								{
+									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
+									if (intersection != null)
+									{
+										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
+										intersections.Add((WPos)intersection);
+									}
+									else
+									{
+										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
+										continue;
+									}
+								}
+					}
+				}
+			}
+
+			if (intersections.Count > 0)
+			{
+				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
+				//MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
+				return firstIntersection;
+			}
+			else
+				return null;
+		}
+
+		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
+										   bool attackingUnitsOnly = false, bool includeCellCollision = false)
 		{
 			var intersections = new List<WPos>();
 			var selfCenter = self.CenterPosition;
 			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
+
+			// Ray cast to cell collisions
+			if (includeCellCollision && !(self.CurrentActivity is ReturnToCellActivity))
+				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
+				{
+					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
+					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell))
+							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+														 .ToList();
+				}
 
 			// Ray cast to actor collisions
 			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (calcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
