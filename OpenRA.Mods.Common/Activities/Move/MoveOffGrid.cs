@@ -17,6 +17,7 @@ using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
+using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
 using static OpenRA.Mods.Common.Traits.MobileOffGrid;
 
 #pragma warning disable SA1512 // SingleLineCommentsMustNotBeFollowedByBlankLine
@@ -300,7 +301,8 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (usePathFinder)
 			{
-				thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition);
+				thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition
+														  , actorsSharingMove);
 				thetaPFexecManager.AddPF(self, thetaStarSearch);
 				runningTheta = true;
 				thetaIters++;
@@ -340,6 +342,12 @@ namespace OpenRA.Mods.Common.Activities
 			return null;
 		}
 
+		public WPos PadCCifCC(Actor self, PathPos pp)
+		{ return pp.ccPos != CCPos.Zero ? ThetaStarPathSearch.PadCC(self.World, self, locomotor, mobileOffGrid, pp.ccPos) : pp.wPos; }
+
+		public List<WPos> GetThetaPathAndConvert(Actor self)
+		{ return thetaStarSearch.path.Select(pp => PadCCifCC(self, pp)).ToList(); }
+
 		public override bool Tick(Actor self)
 		{
 			if (runningTheta)
@@ -350,7 +358,8 @@ namespace OpenRA.Mods.Common.Activities
 
 				if (thetaStarSearch.pathFound)
 				{
-					(pathRemaining, reachedMaxExpansions) = (thetaStarSearch.path, thetaStarSearch.HitTotalExpansionLimit);
+					pathRemaining = GetThetaPathAndConvert(self);
+					reachedMaxExpansions = thetaStarSearch.HitTotalExpansionLimit;
 					if (pathRemaining.Count == 0)
 						pathRemaining = new List<WPos>() { target.CenterPosition };
 
@@ -359,7 +368,8 @@ namespace OpenRA.Mods.Common.Activities
 					else
 					{
 						List<WPos> thetaToNextTarg;
-						(thetaToNextTarg, reachedMaxExpansions) = (thetaStarSearch.path, thetaStarSearch.HitTotalExpansionLimit);
+						thetaToNextTarg = GetThetaPathAndConvert(self);
+						reachedMaxExpansions = thetaStarSearch.HitTotalExpansionLimit;
 						thetaIters++;
 						if (thetaToNextTarg.Count > 1)
 						{
@@ -527,7 +537,8 @@ namespace OpenRA.Mods.Common.Activities
 						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
 							searchingForNextTarget = true;
-							thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget);
+							thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget
+																	  , actorsSharingMove);
 							thetaPFexecManager.AddPF(self, thetaStarSearch);
 							runningTheta = true;
 							secondThetaRun = true;
