@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 {
 	public class ThetaStarPathSearch
 	{
-		static readonly List<WPos> EmptyPath = new List<WPos>(0);
+		static readonly List<PathPos> EmptyPath = new List<PathPos>(0);
 
 		public void RenderPathIfOverlay(List<WPos> path)
 		{
@@ -49,13 +49,30 @@ namespace OpenRA.Mods.Common.Pathfinder
 			}
 		}
 
+		public struct PathPos
+		{
+			public CCPos ccPos;
+			public WPos wPos;
+
+			public PathPos(WPos wPos, CCPos ccPos)
+			{
+				this.wPos = wPos;
+				this.ccPos = ccPos;
+			}
+			public PathPos(WPos wPos)
+			{
+				this.wPos = wPos;
+				ccPos = CCPos.Zero;
+			}
+		}
+
 		public bool AtStart = true;
 		public WPos Source;
 		public WPos Dest;
 		public CCState minState;
 		public CCState startState;
 		public CCState goalState;
-		public List<WPos> path = new List<WPos>();
+		public List<PathPos> path = new List<PathPos>();
 		public bool pathFound = false;
 		public int numCurrExpansions;
 		public int numTotalExpansions;
@@ -196,11 +213,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		private readonly World thisWorld;
+		public List<Actor> sharedMoveActors;
 		private readonly ThetaStarCache thisThetaCache;
-		private readonly Actor self;
+		public readonly Actor self;
 		private Func<CCPos, CCPos, bool> CCLineOfSightFunc;
 		private bool skipInitialLOSCheck = false;
-		private readonly MobileOffGrid mobileOffGrid;
+		public readonly MobileOffGrid mobileOffGrid;
 		private readonly Locomotor locomotor;
 		private readonly int ccPosMaxSizeX;
 		private readonly int ccPosMaxSizeY;
@@ -368,15 +386,17 @@ namespace OpenRA.Mods.Common.Pathfinder
 		//
 		// XO                    OX                   XO                    XO
 		// XX - move point TR    OO - move point BL   XO - move point R     OX - should not happen (to be tested)
-		public WPos PadCC(CCPos cc)
-		{
-			var ccPos = thisWorld.Map.WPosFromCCPos(cc);
-			var unitRadius = mobileOffGrid.UnitRadius.Length;
 
-			var topLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopLeft);
-			var topRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.TopRight);
-			var botLeftBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomLeft);
-			var botRightBlocked = CellSurroundingCCPosIsBlocked(cc, CellSurroundingCorner.BottomRight);
+		public WPos PadCC(CCPos cc) { return PadCC(thisWorld, self, locomotor, mobileOffGrid, cc); }
+		public static WPos PadCC(World world, Actor self, Locomotor locomotor, MobileOffGrid mobileOG, CCPos cc)
+		{
+			var ccPos = world.Map.WPosFromCCPos(cc);
+			var unitRadius = mobileOG.UnitRadius.Length;
+
+			var topLeftBlocked = CellSurroundingCCPosIsBlocked(world, self, locomotor, cc, CellSurroundingCorner.TopLeft);
+			var topRightBlocked = CellSurroundingCCPosIsBlocked(world, self, locomotor, cc, CellSurroundingCorner.TopRight);
+			var botLeftBlocked = CellSurroundingCCPosIsBlocked(world, self, locomotor, cc, CellSurroundingCorner.BottomLeft);
+			var botRightBlocked = CellSurroundingCCPosIsBlocked(world, self, locomotor, cc, CellSurroundingCorner.BottomRight);
 
 			var blockedList = new List<bool>() { topLeftBlocked, topRightBlocked, botLeftBlocked, botRightBlocked };
 			var areBlocked = blockedList.Where(c => c == true).ToList();
@@ -443,7 +463,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			if (sourcePos == destPos)
 			{
-				path = new List<WPos>();
+				path = new List<PathPos>();
 				pathFound = true; // since we have automatically found the path needed, which is no path since source = dest.
 			}
 
@@ -505,10 +525,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos))
 			{
 				// path.Add(sourcePos);
-				path.Add(destPos);
+				path.Add(new PathPos(destPos));
 
 				#if DEBUGWITHOVERLAY
-				RenderPathIfOverlay(path);
+				RenderPathIfOverlay(path.Select(pp => pp.wPos).ToList());
 				#endif
 
 				pathFound = true;
@@ -532,13 +552,14 @@ namespace OpenRA.Mods.Common.Pathfinder
 				Func<CCState, CCState> incrementFunc = state => state.ParentState;
 				ValidateParent(goalState);
 				var currState = goalState;
-				path.Add(Dest); // We add the goal first since it is a WPos, then increment first initially
+				path.Add(new PathPos(Dest)); // We add the goal first since it is a WPos, then increment first initially
 				currState = incrementFunc(currState);
 				while (currState != startState)
 				{
-					var paddedCCpos = PadCC(currState.CC);
+					//var ccToUse = PadCC(currState.CC);
+					var pathPos = new PathPos(thisWorld.Map.WPosFromCCPos(currState.CC), currState.CC);
 					// path.Add(thisWorld.Map.WPosFromCCPos(currState.CC)); // Swap above line with this if not using padding
-					path.Add(paddedCCpos);
+					path.Add(pathPos);
 					thisThetaCache.Add(currState, Dest, goalState.Gval); // add to cache for future look-ups
 					currState = incrementFunc(currState);
 				}
@@ -546,7 +567,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				path.Reverse();
 
 				#if DEBUGWITHOVERLAY
-				RenderPathIfOverlay(new List<WPos>() { Source }.Union(path).ToList());
+				RenderPathIfOverlay(new List<WPos>() { Source }.Union(path.Select(pp => pp.wPos).ToList()).ToList());
 				#endif
 			}
 			else
@@ -882,17 +903,20 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		private bool CellSurroundingCCPosIsBlocked(CCPos ccPos, CellSurroundingCorner cellSurroundingCorner)
+		{ return CellSurroundingCCPosIsBlocked(thisWorld, self, locomotor, ccPos, cellSurroundingCorner); }
+		private static bool CellSurroundingCCPosIsBlocked(World world, Actor self, Locomotor locomotor,
+														  CCPos ccPos, CellSurroundingCorner cellSurroundingCorner)
 		{
 			switch (cellSurroundingCorner)
 			{
 				case CellSurroundingCorner.TopLeft:
-					return IsCellBlocked(thisWorld.Map.CellTopLeftOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellTopLeftOfCCPos(ccPos));
 				case CellSurroundingCorner.TopRight:
-					return IsCellBlocked(thisWorld.Map.CellTopRightOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellTopRightOfCCPos(ccPos));
 				case CellSurroundingCorner.BottomLeft:
-					return IsCellBlocked(thisWorld.Map.CellBottomLeftOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellBottomLeftOfCCPos(ccPos));
 				case CellSurroundingCorner.BottomRight:
-					return IsCellBlocked(thisWorld.Map.CellBottomRightOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellBottomRightOfCCPos(ccPos));
 				default:
 					return false;
 			}
@@ -954,9 +978,10 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		#region Constructors
-		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos)
+		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos, List<Actor> sharedMoveActors)
 		{
 			thisWorld = world;
+			this.sharedMoveActors = sharedMoveActors;
 			thisThetaCache = world.WorldActor.TraitsImplementing<ThetaStarCache>().FirstEnabledTraitOrDefault();
 			if (thisWorld.Map.Grid.Type != MapGridType.Rectangular)
 			{

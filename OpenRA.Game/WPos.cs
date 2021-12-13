@@ -155,7 +155,7 @@ namespace OpenRA
 			}
 		}
 
-		// Returns 1 if the lines intersect, otherwise 0. In addition, if the lines 
+		// Returns 1 if the lines intersect, otherwise 0. In addition, if the lines
 		// intersect the intersection point may be stored in the floats i_x and i_y.
 		#pragma warning disable SA1515 // Single-line comment should be preceded by blank line
 		#pragma warning disable SA1513 // Closing brace should be followed by blank line
