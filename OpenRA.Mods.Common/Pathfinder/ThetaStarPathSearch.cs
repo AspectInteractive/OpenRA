@@ -74,6 +74,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public CCState goalState;
 		public List<PathPos> path = new List<PathPos>();
 		public bool pathFound = false;
+		public bool running = false;
 		public int currDelayToRun = -1; // This is the number of ticks required to elapse before this PF runs
 		public int numCurrExpansions;
 		public int numTotalExpansions;
@@ -230,6 +231,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 		private readonly int cPosMinSizeX;
 		private readonly int cPosMinSizeY;
 		private enum CellSurroundingCorner : byte { TopLeft, TopRight, BottomLeft, BottomRight }
+
+		private void EndingActions(bool pathWasFound)
+		{
+			pathFound = pathWasFound;
+			running = false;
+		}
 
 		private void AddStateToOpen(CCState state)
 		{
@@ -465,7 +472,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			if (sourcePos == destPos)
 			{
 				path = new List<PathPos>();
-				pathFound = true; // since we have automatically found the path needed, which is no path since source = dest.
+				EndingActions(true); // since we have automatically found the path needed, which is no path since source = dest.
 			}
 
 			Source = sourcePos;
@@ -532,7 +539,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				RenderPathIfOverlay(path.Select(pp => pp.wPos).ToList());
 				#endif
 
-				pathFound = true;
+				EndingActions(true);
 			}
 
 			startState = GetState(sourceCCPos);
@@ -574,7 +581,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			else
 				path = EmptyPath;
 
-			pathFound = true;
+			EndingActions(true);
 		}
 
 		public void Expand(int inMaxCurrExpansions)
