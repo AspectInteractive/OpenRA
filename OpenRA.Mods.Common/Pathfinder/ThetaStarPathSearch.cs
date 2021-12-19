@@ -74,6 +74,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public CCState goalState;
 		public List<PathPos> path = new List<PathPos>();
 		public bool pathFound = false;
+		public int currDelayToRun = -1; // This is the number of ticks required to elapse before this PF runs
 		public int numCurrExpansions;
 		public int numTotalExpansions;
 		public int maxCurrExpansions = -1;
@@ -978,10 +979,12 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		#region Constructors
-		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos, List<Actor> sharedMoveActors)
+		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos
+								   , List<Actor> sharedMoveActors, int currDelayToRun = 2)
 		{
 			thisWorld = world;
 			this.sharedMoveActors = sharedMoveActors;
+			this.currDelayToRun = currDelayToRun;
 			thisThetaCache = world.WorldActor.TraitsImplementing<ThetaStarCache>().FirstEnabledTraitOrDefault();
 			if (thisWorld.Map.Grid.Type != MapGridType.Rectangular)
 			{

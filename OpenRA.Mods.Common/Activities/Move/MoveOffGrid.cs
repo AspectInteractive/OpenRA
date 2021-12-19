@@ -103,9 +103,7 @@ namespace OpenRA.Mods.Common.Activities
 		int maxTicksBeforeLOScheck = 3;
 		readonly Locomotor locomotor;
 
-		ThetaStarPathSearch thetaStarSearch;
 		ThetaPathfinderExecutionManager thetaPFexecManager;
-		bool runningTheta = false;
 		bool secondThetaRun = false;
 		List<Actor> actorsSharingMove = new List<Actor>();
 		List<WPos> pathRemaining = new List<WPos>();
@@ -228,6 +226,8 @@ namespace OpenRA.Mods.Common.Activities
 		}
 		public static void RemoveCircle(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
+		public static void RemoveCircle(World world, WPos pos, WDist radius)
+		{ world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
 
 		public static void RenderPoint(Actor self, WPos pos)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
@@ -301,10 +301,14 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (usePathFinder)
 			{
-				thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition
-														  , actorsSharingMove);
-				thetaPFexecManager.AddPF(self, thetaStarSearch);
-				runningTheta = true;
+				// mobileOffGrid.thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition
+				//										  , actorsSharingMove);
+				// IMPORTANT: This AddMoveOrder call relies on _all_ MoveOffGrid Activities
+				// being called _before_ any traits are called. This is because all of the actors
+				// must be processed collectively in order for the grouped pathfinding to work.
+				// Otherwise pathfinding will be inefficient and slow.
+				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, actorsSharingMove);
+				mobileOffGrid.runningTheta = true;
 				thetaIters++;
 			}
 
@@ -346,20 +350,20 @@ namespace OpenRA.Mods.Common.Activities
 		{ return pp.ccPos != CCPos.Zero ? ThetaStarPathSearch.PadCC(self.World, self, locomotor, mobileOffGrid, pp.ccPos) : pp.wPos; }
 
 		public List<WPos> GetThetaPathAndConvert(Actor self)
-		{ return thetaStarSearch.path.Select(pp => PadCCifCC(self, pp)).ToList(); }
+		{ return mobileOffGrid.thetaStarSearch.path.Select(pp => PadCCifCC(self, pp)).ToList(); }
 
 		public override bool Tick(Actor self)
 		{
-			if (runningTheta)
+			if (mobileOffGrid.runningTheta)
 			{
 				// -- Expansion now managed by execution manager
 				//using (new Support.PerfTimer("ThetaStar"))
 				//	thetaStarSearch.Expand();
 
-				if (thetaStarSearch.pathFound)
+				if (mobileOffGrid.thetaStarSearch.pathFound)
 				{
 					pathRemaining = GetThetaPathAndConvert(self);
-					reachedMaxExpansions = thetaStarSearch.HitTotalExpansionLimit;
+					reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
 					if (pathRemaining.Count == 0)
 						pathRemaining = new List<WPos>() { target.CenterPosition };
 
@@ -369,7 +373,7 @@ namespace OpenRA.Mods.Common.Activities
 					{
 						List<WPos> thetaToNextTarg;
 						thetaToNextTarg = GetThetaPathAndConvert(self);
-						reachedMaxExpansions = thetaStarSearch.HitTotalExpansionLimit;
+						reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
 						thetaIters++;
 						if (thetaToNextTarg.Count > 1)
 						{
@@ -381,13 +385,13 @@ namespace OpenRA.Mods.Common.Activities
 						}
 						searchingForNextTarget = false;
 					}
-					runningTheta = false;
+					mobileOffGrid.runningTheta = false;
 					secondThetaRun = false;
 				}
 			}
 
 			// Will not move unless there is a path to move on
-			if (!thetaStarSearch.pathFound)
+			if (!mobileOffGrid.thetaStarSearch.pathFound)
 				return false;
 
 			var nearbyActorsSharingMove = GetNearbyActorsSharingMove(self, false);
@@ -537,10 +541,14 @@ namespace OpenRA.Mods.Common.Activities
 						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
 							searchingForNextTarget = true;
-							thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget
-																	  , actorsSharingMove);
-							thetaPFexecManager.AddPF(self, thetaStarSearch);
-							runningTheta = true;
+							// mobileOffGrid.thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget
+							//										  , actorsSharingMove);
+							// IMPORTANT: This AddMoveOrder call relies on _all_ MoveOffGrid Activities
+							// being called _before_ any traits are called. This is because all of the actors
+							// must be processed collectively in order for the grouped pathfinding to work.
+							// Otherwise pathfinding will be inefficient and slow.
+							thetaPFexecManager.AddMoveOrder(self, currPathTarget, actorsSharingMove, secondThetaRun: true);
+							mobileOffGrid.runningTheta = true;
 							secondThetaRun = true;
 							thetaIters++;
 						}

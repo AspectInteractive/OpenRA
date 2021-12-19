@@ -107,6 +107,7 @@ namespace OpenRA
 		readonly IFacing facing;
 		readonly IHealth health;
 		readonly IResolveOrder[] resolveOrders;
+		readonly IResolveGroupedOrder[] resolveGroupedOrders;
 		readonly IRenderModifier[] renderModifiers;
 		readonly IRender[] renders;
 		readonly IMouseBounds[] mouseBounds;
@@ -148,6 +149,7 @@ namespace OpenRA
 
 				IPositionable positionable = null;
 				var resolveOrdersList = new List<IResolveOrder>();
+				var resolveGroupedOrdersList = new List<IResolveGroupedOrder>();
 				var renderModifiersList = new List<IRenderModifier>();
 				var rendersList = new List<IRender>();
 				var mouseBoundsList = new List<IMouseBounds>();
@@ -174,6 +176,7 @@ namespace OpenRA
 					{ if (trait is IFacing t) facing = t; }
 					{ if (trait is IHealth t) health = t; }
 					{ if (trait is IResolveOrder t) resolveOrdersList.Add(t); }
+					{ if (trait is IResolveGroupedOrder t) resolveGroupedOrdersList.Add(t); }
 					{ if (trait is IRenderModifier t) renderModifiersList.Add(t); }
 					{ if (trait is IRender t) rendersList.Add(t); }
 					{ if (trait is IMouseBounds t) mouseBoundsList.Add(t); }
@@ -187,6 +190,7 @@ namespace OpenRA
 				}
 
 				resolveOrders = resolveOrdersList.ToArray();
+				resolveGroupedOrders = resolveGroupedOrdersList.ToArray();
 				renderModifiers = renderModifiersList.ToArray();
 				renders = rendersList.ToArray();
 				mouseBounds = mouseBoundsList.ToArray();
@@ -440,6 +444,11 @@ namespace OpenRA
 				/*System.Console.WriteLine($"Resolving order {order} with Targ Type {order.Target.Type}");*/
 				r.ResolveOrder(this, order);
 			}
+		}
+		public void ResolveGroupedOrder(Order order)
+		{
+			foreach (var r in resolveGroupedOrders)
+				r.ResolveGroupedOrder(this, order);
 		}
 
 		// TODO: move elsewhere.

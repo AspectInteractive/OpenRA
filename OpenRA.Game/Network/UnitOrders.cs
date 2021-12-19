@@ -324,6 +324,19 @@ namespace OpenRA.Network
 						break;
 					}
 
+				case "Move":
+					{
+						if (world == null)
+							break;
+
+						if (order.GroupedActors == null)
+							ResolveOrder(order, world, orderManager, clientId);
+						else
+							ResolveGroupedOrder(order, world, orderManager, clientId);
+
+						break;
+					}
+
 				default:
 					{
 						if (world == null)
@@ -347,6 +360,15 @@ namespace OpenRA.Network
 
 			if (world.OrderValidators.All(vo => vo.OrderValidation(orderManager, world, clientId, order)))
 				order.Subject.ResolveOrder(order);
+		}
+
+		static void ResolveGroupedOrder(Order order, World world, OrderManager orderManager, int clientId)
+		{
+			// world.WorldActor.ResolveGroupedOrder(order);
+
+			// From default case in Process Order
+			foreach (var subject in order.GroupedActors)
+				ResolveOrder(Order.FromGroupedOrder(order, subject), world, orderManager, clientId);
 		}
 	}
 }
