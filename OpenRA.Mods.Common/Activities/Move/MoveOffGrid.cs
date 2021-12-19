@@ -308,7 +308,6 @@ namespace OpenRA.Mods.Common.Activities
 				// must be processed collectively in order for the grouped pathfinding to work.
 				// Otherwise pathfinding will be inefficient and slow.
 				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, actorsSharingMove);
-				mobileOffGrid.runningTheta = true;
 				thetaIters++;
 			}
 
@@ -354,7 +353,8 @@ namespace OpenRA.Mods.Common.Activities
 
 		public override bool Tick(Actor self)
 		{
-			if (mobileOffGrid.runningTheta)
+			// NOTE: Do not check if the pathfinder is running, as it will automatically turn off after the path is found
+			if (mobileOffGrid.thetaStarSearch != null && mobileOffGrid.thetaStarSearch.pathFound)
 			{
 				// -- Expansion now managed by execution manager
 				//using (new Support.PerfTimer("ThetaStar"))
@@ -385,13 +385,13 @@ namespace OpenRA.Mods.Common.Activities
 						}
 						searchingForNextTarget = false;
 					}
-					mobileOffGrid.runningTheta = false;
+					mobileOffGrid.thetaStarSearch.pathFound = false;
 					secondThetaRun = false;
 				}
 			}
 
 			// Will not move unless there is a path to move on
-			if (!mobileOffGrid.thetaStarSearch.pathFound)
+			if (pathRemaining.Count == 0 && currPathTarget == WPos.Zero)
 				return false;
 
 			var nearbyActorsSharingMove = GetNearbyActorsSharingMove(self, false);
@@ -548,7 +548,6 @@ namespace OpenRA.Mods.Common.Activities
 							// must be processed collectively in order for the grouped pathfinding to work.
 							// Otherwise pathfinding will be inefficient and slow.
 							thetaPFexecManager.AddMoveOrder(self, currPathTarget, actorsSharingMove, secondThetaRun: true);
-							mobileOffGrid.runningTheta = true;
 							secondThetaRun = true;
 							thetaIters++;
 						}

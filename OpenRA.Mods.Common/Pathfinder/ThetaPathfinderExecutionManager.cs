@@ -125,11 +125,19 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			// Bypass circle logic if distance to target is small enough
 			if (!GreaterThanMinDistanceForCircles(actor, targetPos) || secondThetaRun)
-				ThetaPFsToRun.Add(new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition, targetPos, sharedMoveActors));
+			{
+				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
+																 targetPos, sharedMoveActors);
+				rawThetaStarSearch.running = true;
+				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
+				ThetaPFsToRun.Add(rawThetaStarSearch);
+			}
 			else
 			{
 				// If no circle exists, generate one
 				var playerCircleIndex = new PlayerCircleIndex(actor.Owner, targetPos);
+				if (!playerCircles.ContainsKey(playerCircleIndex))
+					playerCircles[playerCircleIndex] = new List<CircleOfActors>();
 				if (playerCircles[playerCircleIndex].Count == 0)
 					playerCircles[playerCircleIndex].Add(new CircleOfActors(actor.CenterPosition, new WDist(radiusForSharedThetas)));
 
@@ -144,7 +152,21 @@ namespace OpenRA.Mods.Common.Traits
 						var circleSliceIndex = CircleShape.CircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																			actor.CenterPosition, sliceAngle);
 						var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
+						if (!ActorOrdersInCircleSlices.ContainsKey(actorPFindex))
+							ActorOrdersInCircleSlices[actorPFindex] = new List<ActorWithOrder>();
 						ActorOrdersInCircleSlices[actorPFindex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
+
+						// Create the circle's slice group. Note that this only depends on blocked cells, so it only needs to be run once
+						var sliceGroupFirst = 0;
+						for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
+							if (SliceIsBlocked(actor, circle.CircleCenter, sliceIndex) ||
+								SliceIsBlocked(actor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
+								sliceIndex == 360 / sliceAngle - 1)
+							{
+								circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
+								sliceGroupFirst = sliceIndex + 1;
+							}
+
 						circleFound = true;
 					}
 				}
@@ -165,7 +187,8 @@ namespace OpenRA.Mods.Common.Traits
 					var sliceGroupFirst = 0;
 					for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
 						if (SliceIsBlocked(actor, circle.CircleCenter, sliceIndex) ||
-							SliceIsBlocked(actor, circle.CircleCenter, GetOppositeSlice(sliceIndex)))
+							SliceIsBlocked(actor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
+							sliceIndex == 360 / sliceAngle)
 						{
 							circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
 							sliceGroupFirst = sliceIndex + 1;
@@ -223,24 +246,30 @@ namespace OpenRA.Mods.Common.Traits
 						var actorOrdersInSliceGroup = new List<ActorWithOrder>();
 						for (var sliceIndex = sliceGroup.First; sliceIndex <= sliceGroup.Last; sliceIndex++)
 						{
-							actorOrdersInSliceGroup = actorOrdersInSliceGroup
-														.Union(ActorOrdersInCircleSlices[new ActorPFIndex(playerCircleIndex,
+							if (ActorOrdersInCircleSlices.ContainsKey(new ActorPFIndex(playerCircleIndex,
+																					   circleIndex, sliceIndex)))
+								actorOrdersInSliceGroup = actorOrdersInSliceGroup
+															.Union(ActorOrdersInCircleSlices[new ActorPFIndex(playerCircleIndex,
 																										  circleIndex, sliceIndex)]).ToList();
 						}
 
-						// Generate Average Theta PF for Slice Group
-						var firstActorOrder = actorOrdersInSliceGroup.First();
-						var avgSourcePosOfGroup = IEnumerableExtensions.Average(actorOrdersInSliceGroup
-																				   .Select(ao => ao.Actor.CenterPosition));
-						var newAvgThetaStarSearch = new ThetaStarPathSearch(firstActorOrder.Actor.World,
-																		 firstActorOrder.Actor, avgSourcePosOfGroup,
-																		 firstActorOrder.TargetPos,
-																		 firstActorOrder.SharedMoveActors.ToList());
+						// Generate Average Theta PF for Slice Group if at least one actor order exists within it
+						if (actorOrdersInSliceGroup.Count > 0)
+						{
+							var firstActorOrder = actorOrdersInSliceGroup.First();
+							var avgSourcePosOfGroup = IEnumerableExtensions.Average(actorOrdersInSliceGroup
+																					   .Select(ao => ao.Actor.CenterPosition));
+							var newAvgThetaStarSearch = new ThetaStarPathSearch(firstActorOrder.Actor.World,
+																			 firstActorOrder.Actor, avgSourcePosOfGroup,
+																			 firstActorOrder.TargetPos,
+																			 firstActorOrder.SharedMoveActors.ToList());
 
-						// Add Averaged Theta PF back to Actors, and to the GroupedThetaPF list
-						foreach (var actor in actorOrdersInSliceGroup.Select(ao => ao.Actor))
-							actor.Trait<MobileOffGrid>().thetaStarSearch = newAvgThetaStarSearch;
-						ThetaPFsToRun.Add(newAvgThetaStarSearch);
+							// Add Averaged Theta PF back to Actors, and to the GroupedThetaPF list
+							foreach (var actor in actorOrdersInSliceGroup.Select(ao => ao.Actor))
+								actor.Trait<MobileOffGrid>().thetaStarSearch = newAvgThetaStarSearch;
+							newAvgThetaStarSearch.running = true;
+							ThetaPFsToRun.Add(newAvgThetaStarSearch);
+						}
 					}
 				}
 			}
@@ -259,8 +288,8 @@ namespace OpenRA.Mods.Common.Traits
 
 			for (var i = ThetaPFsToRun.Count; i > 0; i--) // Iterate backwards since we may remove PFs that are no longer expanding
 			{
-				var thetaPF = ThetaPFsToRun.ElementAt(i);
-				if (thetaPF.pathFound == false)
+				var thetaPF = ThetaPFsToRun.ElementAt(i - 1);
+				if (thetaPF.running && !thetaPF.pathFound)
 					if (thetaPF.currDelayToRun == 0)
 						thetaPF.Expand((int)Fix64.Ceiling((Fix64)maxCurrExpansions / (Fix64)ThetaPFsToRun.Count));
 					else if (thetaPF.currDelayToRun > 0)
