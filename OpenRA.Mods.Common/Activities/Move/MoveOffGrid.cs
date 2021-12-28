@@ -106,6 +106,7 @@ namespace OpenRA.Mods.Common.Activities
 		ThetaPathfinderExecutionManager thetaPFexecManager;
 		bool secondThetaRun = false;
 		List<Actor> actorsSharingMove = new List<Actor>();
+		bool pathFound = false;
 		List<WPos> pathRemaining = new List<WPos>();
 		bool reachedMaxExpansions = false;
 		int thetaIters = 0;
@@ -354,40 +355,39 @@ namespace OpenRA.Mods.Common.Activities
 		public override bool Tick(Actor self)
 		{
 			// NOTE: Do not check if the pathfinder is running, as it will automatically turn off after the path is found
-			if (mobileOffGrid.thetaStarSearch != null && mobileOffGrid.thetaStarSearch.pathFound)
+			if (mobileOffGrid.thetaStarSearch != null && mobileOffGrid.thetaStarSearch.pathFound
+				&& !pathFound)
 			{
 				// -- Expansion now managed by execution manager
 				//using (new Support.PerfTimer("ThetaStar"))
 				//	thetaStarSearch.Expand();
 
-				if (mobileOffGrid.thetaStarSearch.pathFound)
-				{
-					pathRemaining = GetThetaPathAndConvert(self);
-					reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
-					if (pathRemaining.Count == 0)
-						pathRemaining = new List<WPos>() { target.CenterPosition };
+				pathRemaining = GetThetaPathAndConvert(self);
+				reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
+				if (pathRemaining.Count == 0)
+					pathRemaining = new List<WPos>() { target.CenterPosition };
 
-					if (!secondThetaRun)
-						GetNextTargetOrComplete();
-					else
+				if (!secondThetaRun)
+					GetNextTargetOrComplete();
+				else
+				{
+					List<WPos> thetaToNextTarg;
+					thetaToNextTarg = GetThetaPathAndConvert(self);
+					reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
+					thetaIters++;
+					if (thetaToNextTarg.Count > 1)
 					{
-						List<WPos> thetaToNextTarg;
-						thetaToNextTarg = GetThetaPathAndConvert(self);
-						reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
-						thetaIters++;
-						if (thetaToNextTarg.Count > 1)
-						{
-							pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
-							GetNextTargetOrComplete(false);
-							EndingActions();
-							mobileOffGrid.PositionBuffer.Clear();
-							isBlocked = false; // only unblock if we have found a better path
-						}
-						searchingForNextTarget = false;
+						pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
+						GetNextTargetOrComplete(false);
+						EndingActions();
+						mobileOffGrid.PositionBuffer.Clear();
+						isBlocked = false; // only unblock if we have found a better path
 					}
-					mobileOffGrid.thetaStarSearch.pathFound = false;
-					secondThetaRun = false;
+					searchingForNextTarget = false;
 				}
+				mobileOffGrid.thetaStarSearch = null;
+				pathFound = true;
+				secondThetaRun = false;
 			}
 
 			// Will not move unless there is a path to move on
@@ -549,6 +549,7 @@ namespace OpenRA.Mods.Common.Activities
 							// Otherwise pathfinding will be inefficient and slow.
 							thetaPFexecManager.AddMoveOrder(self, currPathTarget, actorsSharingMove, secondThetaRun: true);
 							secondThetaRun = true;
+							pathFound = false;
 							thetaIters++;
 						}
 						else if (mobileOffGrid.PositionBuffer.Count >= 180) // 3 seconds

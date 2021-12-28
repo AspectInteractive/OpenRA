@@ -9,7 +9,7 @@
 			"windows": {
 				"program": "${workspaceRoot}/bin/OpenRA.exe",
 			},
-			"args": ["Game.Mod=ra", "Engine.EngineDir=..", "Launch.Map=G:\\Jire\\mods\\ra\\maps\\warwind.oramap"],
+			"args": ["Game.Mod=ra", "Engine.EngineDir=..", "Launch.Map=warwind.oramap"],
 			"preLaunchTask": "build",
 		},
 		{
@@ -20,7 +20,7 @@
 			"windows": {
 				"program": "${workspaceRoot}/bin/OpenRA.exe",
 			},
-			"args": ["Game.Mod=ts", "Engine.EngineDir=..", "Launch.Map=G:\\Jire\\mods\\ts\\maps\\arivruns"],
+			"args": ["Game.Mod=ts", "Engine.EngineDir=..", "Launch.Map=arivruns"],
 			"preLaunchTask": "build",
 		},
 		{

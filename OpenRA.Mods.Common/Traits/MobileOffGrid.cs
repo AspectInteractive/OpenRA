@@ -313,7 +313,6 @@ namespace OpenRA.Mods.Common.Traits
 
 		public WPos CurrPathTarget;
 		public WPos LastCompletedTarget;
-		public bool runningTheta = false;
 		public ThetaStarPathSearch thetaStarSearch;
 
 		public WVec Delta => CurrPathTarget - CenterPosition;
