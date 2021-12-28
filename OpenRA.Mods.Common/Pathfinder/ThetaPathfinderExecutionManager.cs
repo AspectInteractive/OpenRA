@@ -151,6 +151,9 @@ namespace OpenRA.Mods.Common.Traits
 						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
 						var circleSliceIndex = CircleShape.CircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																			actor.CenterPosition, sliceAngle);
+						var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, circleSliceIndex);
+						MoveOffGrid.RenderLineWithColor(actor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
+														Color.DarkBlue);
 						var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
 						if (!ActorOrdersInCircleSlices.ContainsKey(actorPFindex))
 							ActorOrdersInCircleSlices[actorPFindex] = new List<ActorWithOrder>();
@@ -168,6 +171,9 @@ namespace OpenRA.Mods.Common.Traits
 					var circleIndex = playerCircles[playerCircleIndex].Count - 1;
 					var circleSliceIndex = CircleShape.CircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																		actor.CenterPosition, sliceAngle);
+					var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, circleSliceIndex);
+					MoveOffGrid.RenderLineWithColor(actor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
+													Color.DarkBlue);
 					var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
 					ActorOrdersInCircleSlices[actorPFindex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
 				}
@@ -175,6 +181,15 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public void AddPF(ThetaStarPathSearch thetaPF) { ThetaPFsToRun.Add(thetaPF); }
+
+		public List<WPos> GetSliceLine(WPos circleCenter, WDist circleRadius, int sliceAngle, int sliceIndex)
+		{
+			return new List<WPos>()
+				{
+					circleCenter,
+					circleCenter + new WVec(circleRadius, WRot.FromYaw(WAngle.FromDegrees(sliceIndex * sliceAngle)))
+				};
+		}
 
 		public void GenSharedMoveThetaPFs(World world)
 		{
@@ -226,6 +241,10 @@ namespace OpenRA.Mods.Common.Traits
 					{
 						var sliceGroupFirst = 0;
 						for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
+						{
+							// var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
+							// MoveOffGrid.RenderLineWithColor(blockTestActor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
+							//							 	Color.DarkGreen);
 							if (SliceIsBlocked(blockTestActor, circle.CircleCenter, sliceIndex) ||
 								SliceIsBlocked(blockTestActor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
 								sliceIndex == 360 / sliceAngle - 1)
@@ -233,6 +252,7 @@ namespace OpenRA.Mods.Common.Traits
 								circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
 								sliceGroupFirst = sliceIndex + 1;
 							}
+						}
 					}
 
 					foreach (var sliceGroup in circle.SliceGroups)
