@@ -130,7 +130,7 @@ namespace OpenRA.Mods.Common.Traits
 																 targetPos, sharedMoveActors);
 				rawThetaStarSearch.running = true;
 				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
-				ThetaPFsToRun.Add(rawThetaStarSearch);
+				AddPF(rawThetaStarSearch);
 			}
 			else
 			{
@@ -155,18 +155,6 @@ namespace OpenRA.Mods.Common.Traits
 						if (!ActorOrdersInCircleSlices.ContainsKey(actorPFindex))
 							ActorOrdersInCircleSlices[actorPFindex] = new List<ActorWithOrder>();
 						ActorOrdersInCircleSlices[actorPFindex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
-
-						// Create the circle's slice group. Note that this only depends on blocked cells, so it only needs to be run once
-						var sliceGroupFirst = 0;
-						for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
-							if (SliceIsBlocked(actor, circle.CircleCenter, sliceIndex) ||
-								SliceIsBlocked(actor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
-								sliceIndex == 360 / sliceAngle - 1)
-							{
-								circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
-								sliceGroupFirst = sliceIndex + 1;
-							}
-
 						circleFound = true;
 					}
 				}
@@ -182,17 +170,6 @@ namespace OpenRA.Mods.Common.Traits
 																		actor.CenterPosition, sliceAngle);
 					var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
 					ActorOrdersInCircleSlices[actorPFindex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
-
-					// Create the circle's slice group. Note that this only depends on blocked cells, so it only needs to be run once
-					var sliceGroupFirst = 0;
-					for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
-						if (SliceIsBlocked(actor, circle.CircleCenter, sliceIndex) ||
-							SliceIsBlocked(actor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
-							sliceIndex == 360 / sliceAngle)
-						{
-							circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
-							sliceGroupFirst = sliceIndex + 1;
-						}
 				}
 			}
 		}
@@ -240,6 +217,24 @@ namespace OpenRA.Mods.Common.Traits
 					// Disable this if you want to see the circles persist
 					// MoveOffGrid.RemoveCircle(world, circle.CircleCenter, circle.CircleRadius);
 
+					// The below actor is only used for SliceIsBlocked, and is guaranteed to exist since playerCircle
+					// only exists
+					var blockTestActor = ActorOrdersInCircleSlices.FirstOrDefault().Value.FirstOrDefault().Actor;
+
+					// Generate slice groups (split at each collision)
+					if (!circle.SliceGroupsSet)
+					{
+						var sliceGroupFirst = 0;
+						for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
+							if (SliceIsBlocked(blockTestActor, circle.CircleCenter, sliceIndex) ||
+								SliceIsBlocked(blockTestActor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
+								sliceIndex == 360 / sliceAngle - 1)
+							{
+								circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
+								sliceGroupFirst = sliceIndex + 1;
+							}
+					}
+
 					foreach (var sliceGroup in circle.SliceGroups)
 					{
 						// Get Actors Within Slice Group
@@ -266,9 +261,11 @@ namespace OpenRA.Mods.Common.Traits
 
 							// Add Averaged Theta PF back to Actors, and to the GroupedThetaPF list
 							foreach (var actor in actorOrdersInSliceGroup.Select(ao => ao.Actor))
+							{
 								actor.Trait<MobileOffGrid>().thetaStarSearch = newAvgThetaStarSearch;
+							}
 							newAvgThetaStarSearch.running = true;
-							ThetaPFsToRun.Add(newAvgThetaStarSearch);
+							AddPF(newAvgThetaStarSearch);
 						}
 					}
 				}
@@ -290,14 +287,16 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var thetaPF = ThetaPFsToRun.ElementAt(i - 1);
 				if (thetaPF.running && !thetaPF.pathFound)
+				{
 					if (thetaPF.currDelayToRun == 0)
 						thetaPF.Expand((int)Fix64.Ceiling((Fix64)maxCurrExpansions / (Fix64)ThetaPFsToRun.Count));
 					else if (thetaPF.currDelayToRun > 0)
 						thetaPF.currDelayToRun--; // keep subtracting the delay each tick until 0 is reached
+				}
 				else
 				{
 					thetaPF.currDelayToRun = -1;
-					ThetaPFsToRun.RemoveAt(i); // Remove if no longer expanding
+					ThetaPFsToRun.RemoveAt(i - 1); // Remove if no longer expanding
 				}
 			}
 		}
