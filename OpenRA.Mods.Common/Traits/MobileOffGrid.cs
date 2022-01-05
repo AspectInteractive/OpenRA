@@ -914,7 +914,7 @@ namespace OpenRA.Mods.Common.Traits
 															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
 								if (destActorCenter != WPos.Zero)
 								{
-									MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+									//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 									foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 										if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
 											posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
@@ -963,7 +963,7 @@ namespace OpenRA.Mods.Common.Traits
 								var destActorCenter = (destActor.CenterPosition +
 														  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
 															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
-								MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+								//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 								foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 									if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
 										posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
