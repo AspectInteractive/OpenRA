@@ -175,6 +175,8 @@ namespace OpenRA.Mods.Common.Traits
 					MoveOffGrid.RenderLineWithColor(actor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
 													Color.DarkBlue);
 					var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
+					if (!ActorOrdersInCircleSlices.ContainsKey(actorPFindex))
+						ActorOrdersInCircleSlices[actorPFindex] = new List<ActorWithOrder>();
 					ActorOrdersInCircleSlices[actorPFindex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
 				}
 			}
