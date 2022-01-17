@@ -208,6 +208,7 @@ namespace OpenRA.Mods.Common.Graphics
 					Facings = -Facings;
 				}
 
+
 				var offset = LoadField(d, "Offset", float3.Zero);
 				var blendMode = LoadField(d, "BlendMode", BlendMode.Alpha);
 

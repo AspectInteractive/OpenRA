@@ -3,7 +3,6 @@ mig:
 		Facings: 16
 		InterpolatedFacings: 1024
 	icon: migicon
-
 yak:
 	idle:
 		Facings: 16
