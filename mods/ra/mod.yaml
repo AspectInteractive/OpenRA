@@ -253,7 +253,7 @@ GameSpeeds:
 	Speeds:
 		default:
 			Name: Normal
-			Timestep: 16
+			Timestep: 40
 			OrderLatency: 6
 
 ModContent:
