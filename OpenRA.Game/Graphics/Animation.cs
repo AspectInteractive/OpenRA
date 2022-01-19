@@ -27,6 +27,7 @@ namespace OpenRA.Graphics
 		readonly Func<bool> paused;
 
 		int frame;
+		int rotAngle = 0;
 		bool backwards;
 		bool tickAlways;
 		int timeUntilNextFrame;
@@ -52,6 +53,8 @@ namespace OpenRA.Graphics
 		public int CurrentFrame => backwards ? CurrentSequence.Length - frame - 1 : frame;
 
 		public Sprite Image => CurrentSequence.GetSprite(CurrentFrame, facingFunc());
+
+		public Sprite Image => CurrentSequence.GetSprite(CurrentFrame, facingFunc(), out rotAngle);
 
 		public IRenderable[] Render(WPos pos, in WVec offset, int zOffset, PaletteReference palette)
 		{
