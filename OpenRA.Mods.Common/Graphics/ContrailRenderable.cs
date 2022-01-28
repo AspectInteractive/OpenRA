@@ -30,7 +30,6 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly WDist width;
 		int next;
 		int length;
-		int skip;
 		readonly int layer;
 		readonly int skip;
 

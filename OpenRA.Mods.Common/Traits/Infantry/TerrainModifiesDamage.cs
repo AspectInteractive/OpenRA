@@ -49,7 +49,7 @@ namespace OpenRA.Mods.Common.Traits
 			var map = world.Map;
 
 			var pos = map.CellContaining(self.CenterPosition);
-			var terrainType = map.GetTerrainTileInfo(pos).Type;
+			var terrainType = map.GetTerrainInfo(pos).Type;
 
 			if (!Info.TerrainModifier.ContainsKey(terrainType))
 				return FullDamage;

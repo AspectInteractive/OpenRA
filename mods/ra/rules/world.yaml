@@ -9,7 +9,7 @@
 		DefeatMusic: map
 	TerrainGeometryOverlay:
     ClearThetaStarPathfinderOverlay:
-	ThetaStarPathfinderOverlay:    
+	ThetaStarPathfinderOverlay:
     ThetaPathfinderExecutionManager:
 	CPosCoordsDebugOverlay:
 	DebugVisualizations:
