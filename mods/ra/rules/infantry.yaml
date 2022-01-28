@@ -879,3 +879,55 @@ WarriorAnt:
 		Prerequisites: ~disabled
 	RenderSprites:
 		Image: Ant
+
+ASSN:
+	Inherits: ^Infantry
+	Inherits@GAINSEXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetGroundAssaultMove
+	Buildable:
+		Queue: Infantry
+		BuildPaletteOrder: 220
+		Prerequisites: fix, ~vehicles.allies, ~techlevel.medium
+		Description: An assassin unit
+	Valued:
+		Cost: 850
+	Tooltip:
+		Name: Assassin
+		GenericName: Assn
+	UpdatesPlayerStatistics:
+		AddToArmyValue: true
+	Health:
+		HP: 32000
+	Armor:
+		Type: Heavy
+    MobileOffGrid:
+        Locomotor: wheeled
+		CanHover: True
+		CruiseAltitude: 0
+		TurnSpeed: 80
+		Speed: 112
+		CruisingCondition: cruising
+		WaitDistanceFromResupplyBase: 4c0
+		LandableTerrainTypes: Clear, Rough, Road, Ore, Beach, Gems
+		TakeOffOnResupply: true
+		VTOL: true
+		CanSlide: True
+	-Mobile:
+		Speed: 72
+	RevealsShroud:
+		MinRange: 4c0
+		Range: 6c0
+		RevealGeneratedShroud: False
+	RevealsShroud@GAPGEN:
+		Range: 4c0
+	Turreted:
+		TurnSpeed: 20
+	Armament:
+		Weapon: 90mm
+		Recoil: 128
+		RecoilRecovery: 38
+		LocalOffset: 720,0,80
+		MuzzleSequence: muzzle
+	AttackTurreted:
+	Selectable:
+		DecorationBounds: 1194, 1194

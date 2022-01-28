@@ -2,6 +2,7 @@ mcv:
 	idle:
 		Facings: 32
 		UseClassicFacings: True
+        InterpolateIntermediateFacings: True
 	icon: mcvicon
 
 mcvhusk:

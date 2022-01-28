@@ -23,9 +23,10 @@ namespace OpenRA.Graphics
 		readonly float scale;
 		readonly float alpha;
 		readonly int layer;
+		readonly float rotation;
 
-		public UISpriteRenderable(Sprite sprite, WPos effectiveWorldPos, int2 screenPos, int zOffset,
-									PaletteReference palette, float scale = 1f, float alpha = 1f, int layer = 0)
+		public UISpriteRenderable(Sprite sprite, WPos effectiveWorldPos, int2 screenPos, int zOffset, PaletteReference palette,
+			float scale = 1f, float alpha = 1f, float rotation = 0F, int layer = 0)
 		{
 			this.sprite = sprite;
 			this.effectiveWorldPos = effectiveWorldPos;
@@ -35,6 +36,7 @@ namespace OpenRA.Graphics
 			this.scale = scale;
 			this.alpha = alpha;
 			this.layer = layer;
+			this.rotation = rotation;
 
 			// PERF: Remove useless palette assignments for RGBA sprites
 			// HACK: This is working around the fact that palettes are defined on traits rather than sequences
@@ -61,7 +63,7 @@ namespace OpenRA.Graphics
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
-			Game.Renderer.SpriteRenderer.DrawSprite(sprite, palette, screenPos, scale, float3.Ones, alpha);
+			Game.Renderer.SpriteRenderer.DrawSprite(sprite, palette, screenPos, scale, float3.Ones, alpha, rotation);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)

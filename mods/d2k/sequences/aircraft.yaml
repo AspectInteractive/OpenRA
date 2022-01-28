@@ -2,6 +2,7 @@ carryall:
 	idle: DATA.R8
 		Start: 1923
 		Facings: -32
+		InterpolatedFacings: 1024
 	icon: DATA.R8
 		Start: 4290
 		Offset: -30,-24

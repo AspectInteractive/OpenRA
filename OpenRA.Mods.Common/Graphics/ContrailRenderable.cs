@@ -30,6 +30,7 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly WDist width;
 		int next;
 		int length;
+		readonly int layer;
 		readonly int skip;
 
 		public ContrailRenderable(World world, Color color, WDist width, int length, int skip, int zOffset, int layer = 0)

@@ -1566,3 +1566,13 @@ scoutant:
 		Tick: 400
 		ZOffset: -511
 	icon: anticon
+
+assn:
+	stand:
+		Facings: 1
+		InterpolatedFacings: 1024
+	run: 
+		Start: 1
+		Length: 10
+		InterpolatedFacings: 1024
+	icon: 2tnkicon

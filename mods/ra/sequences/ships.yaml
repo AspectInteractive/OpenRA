@@ -6,6 +6,7 @@ ss:
 ca:
 	idle:
 		Facings: 16
+		InterpolatedFacings: 1024
 	turret: turr
 		Facings: 32
 	muzzle: gunfire2

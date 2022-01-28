@@ -26,6 +26,7 @@ namespace OpenRA.Graphics
 		int Length { get; }
 		int Stride { get; }
 		int Facings { get; }
+		int InterpolatedFacings { get; }
 		int Tick { get; }
 		int ZOffset { get; }
 		int ShadowStart { get; }
@@ -36,7 +37,7 @@ namespace OpenRA.Graphics
 		float Scale { get; }
 
 		Sprite GetSprite(int frame);
-		Sprite GetSprite(int frame, WAngle facing);
+		Sprite GetSprite(int frame, WAngle facing, out WAngle rotation);
 		Sprite GetShadow(int frame, WAngle facing);
 		float GetAlpha(int frame);
 	}

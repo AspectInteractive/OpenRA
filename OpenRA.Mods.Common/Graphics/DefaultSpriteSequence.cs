@@ -107,6 +107,7 @@ namespace OpenRA.Mods.Common.Graphics
 		int ISpriteSequence.Length => throw exception;
 		int ISpriteSequence.Stride => throw exception;
 		int ISpriteSequence.Facings => throw exception;
+		int ISpriteSequence.InterpolatedFacings => throw exception;
 		int ISpriteSequence.Tick => throw exception;
 		int ISpriteSequence.ZOffset => throw exception;
 		int ISpriteSequence.ShadowStart => throw exception;
@@ -116,7 +117,7 @@ namespace OpenRA.Mods.Common.Graphics
 		bool ISpriteSequence.IgnoreWorldTint => throw exception;
 		float ISpriteSequence.Scale => throw exception;
 		Sprite ISpriteSequence.GetSprite(int frame) { throw exception; }
-		Sprite ISpriteSequence.GetSprite(int frame, WAngle facing) { throw exception; }
+		Sprite ISpriteSequence.GetSprite(int frame, WAngle facing, out WAngle rotation) { throw exception; }
 		Sprite ISpriteSequence.GetShadow(int frame, WAngle facing) { throw exception; }
 		float ISpriteSequence.GetAlpha(int frame) { throw exception; }
 	}
@@ -136,6 +137,7 @@ namespace OpenRA.Mods.Common.Graphics
 		public int Length { get; private set; }
 		public int Stride { get; private set; }
 		public int Facings { get; private set; }
+		public int InterpolatedFacings { get; private set; }
 		public int Tick { get; private set; }
 		public int ZOffset { get; private set; }
 		public float ZRamp { get; private set; }
@@ -195,6 +197,11 @@ namespace OpenRA.Mods.Common.Graphics
 				var flipY = LoadField(d, "FlipY", false);
 
 				Facings = LoadField(d, "Facings", 1);
+				InterpolatedFacings = LoadField(d, "InterpolatedFacings", -1);
+				if (InterpolatedFacings != -1 && !(InterpolatedFacings > 1 && InterpolatedFacings > Facings && InterpolatedFacings <= 1024
+					&& Exts.IsPowerOf2(InterpolatedFacings)))
+					throw new YamlException($"InterpolatedFacings must be greater than Facings, within the range of 2 to 1024, and a power of 2.");
+
 				if (Facings < 0)
 				{
 					reverseFacings = true;
@@ -415,8 +422,14 @@ namespace OpenRA.Mods.Common.Graphics
 			return GetSprite(Start, frame, WAngle.Zero);
 		}
 
-		public Sprite GetSprite(int frame, WAngle facing)
+		public Sprite GetSprite(int frame, WAngle facing, out WAngle rotation)
 		{
+			// Note: Error checking is not done here as it is done on load
+			if (InterpolatedFacings != -1)
+				rotation = Util.GetInterpolatedFacing(facing, Facings, InterpolatedFacings);
+			else
+				rotation = WAngle.Zero;
+
 			return GetSprite(Start, frame, facing);
 		}
 
