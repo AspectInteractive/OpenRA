@@ -154,13 +154,13 @@ namespace OpenRA.Mods.Common.Traits
 			var i = 0;
 			foreach (var c in footprint.Keys)
 			{
-				var tileInfo = GetTerrainTileInfo(c);
+				var tileInfo = GetTerrainInfo(c);
 				self.World.Map.CustomTerrain[c] = tileInfo.TerrainType;
 				radarSignature[i++] = (c, tileInfo.GetColor(self.World.LocalRandom));
 			}
 		}
 
-		TerrainTileInfo GetTerrainTileInfo(CPos cell)
+		TerrainTileInfo GetTerrainInfo(CPos cell)
 		{
 			var dx = cell - self.Location;
 			var index = dx.X + terrainInfo.Templates[template].Size.X * dx.Y;
@@ -318,7 +318,7 @@ namespace OpenRA.Mods.Common.Traits
 			var i = 0;
 			foreach (var c in footprint.Keys)
 			{
-				var tileInfo = GetTerrainTileInfo(c);
+				var tileInfo = GetTerrainInfo(c);
 				self.World.Map.CustomTerrain[c] = tileInfo.TerrainType;
 				radarSignature[i++] = (c, tileInfo.GetColor(self.World.LocalRandom));
 			}
