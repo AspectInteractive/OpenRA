@@ -1,1 +1,0 @@
-﻿C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Microsoft\NuGet\16.0\Microsoft.NuGet.targets(198,5): error : Your project does not reference ".NETFramework,Version=v4.0" framework. Add a reference to ".NETFramework,Version=v4.0" in the "TargetFrameworks" property of your project file and then re-run NuGet restore.
