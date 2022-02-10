@@ -109,7 +109,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (!self.World.Map.Contains(cell))
 				return false;
 
-			if (!info.AllowedTerrain.Contains(self.World.Map.GetTerrainTileInfo(cell).Type))
+			if (!info.AllowedTerrain.Contains(self.World.Map.GetTerrainInfo(cell).Type))
 				return false;
 
 			return true;

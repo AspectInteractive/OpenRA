@@ -96,7 +96,7 @@ namespace OpenRA.Mods.Cnc.Traits
 				return false;
 
 			// Neighbour must be have a compatible terrain type (which also implies no other resources)
-			var neighbourTerrain = Map.GetTerrainTileInfo(neighbour).Type;
+			var neighbourTerrain = Map.GetTerrainInfo(neighbour).Type;
 			var veinInfo = info.ResourceTypes[info.VeinType];
 			return neighbourTerrain == veinInfo.TerrainType || veinInfo.AllowedTerrainTypes.Contains(neighbourTerrain);
 		}
@@ -113,7 +113,7 @@ namespace OpenRA.Mods.Cnc.Traits
 			if (!info.ResourceTypes.TryGetValue(resourceType, out var resourceInfo))
 				return false;
 
-			if (!resourceInfo.AllowedTerrainTypes.Contains(Map.GetTerrainTileInfo(cell).Type))
+			if (!resourceInfo.AllowedTerrainTypes.Contains(Map.GetTerrainInfo(cell).Type))
 				return false;
 
 			// Ensure there is space for the vein border tiles (not needed on ramps)

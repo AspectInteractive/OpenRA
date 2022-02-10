@@ -164,7 +164,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var dx = cell - self.Location;
 			var index = dx.X + terrainInfo.Templates[template].Size.X * dx.Y;
-			return terrainInfo.GetTerrainTileInfo(new TerrainTile(template, (byte)index));
+			return terrainInfo.GetTerrainInfo(new TerrainTile(template, (byte)index));
 		}
 
 		public void LinkNeighbouringBridges(World world, LegacyBridgeLayer bridges)

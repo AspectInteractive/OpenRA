@@ -93,7 +93,9 @@ namespace OpenRA.Mods.Common.Traits
 		public List<ThetaStarPathSearch> ThetaPFsToRun = new List<ThetaStarPathSearch>();
 
 		public bool GreaterThanMinDistanceForCircles(Actor actor, WPos targetPos)
-		{ return (targetPos - actor.CenterPosition).LengthSquared > minDistanceForCircles * minDistanceForCircles; }
+		{
+			return (targetPos - actor.CenterPosition).LengthSquared > minDistanceForCircles * minDistanceForCircles;
+		}
 
 		public int GetOppositeSlice(int slice) { return (int)(((Fix64)slice + (Fix64)maxCircleSlices / (Fix64)2) % (Fix64)maxCircleSlices); }
 

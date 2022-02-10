@@ -138,27 +138,27 @@ namespace OpenRA.Mods.Common.Terrain
 			return defaultWalkableTerrainIndex;
 		}
 
-		public TerrainTileInfo GetTerrainTileInfo(TerrainTile tile)
+		public TerrainTileInfo GetTileInfo(TerrainTile r)
 		{
-			return Templates[tile.Type][tile.Index];
+			return Templates[r.Type][r.Index];
 		}
 
-		public bool TryGetTerrainTileInfo(TerrainTile tile, out TerrainTileInfo info)
+		public bool TryGetTileInfo(TerrainTile r, out TerrainTileInfo info)
 		{
-			if (!Templates.TryGetValue(tile.Type, out var terrainTemplateInfo) || !terrainTemplateInfo.Contains(tile.Index))
+			if (!Templates.TryGetValue(r.Type, out var tpl) || !tpl.Contains(r.Index))
 			{
 				info = null;
 				return false;
 			}
 
-			info = terrainTemplateInfo[tile.Index];
+			info = tpl[r.Index];
 			return info != null;
 		}
 
 		string ITerrainInfo.Id => Id;
 		TerrainTypeInfo[] ITerrainInfo.TerrainTypes => TerrainInfo;
-		TerrainTileInfo ITerrainInfo.GetTerrainTileInfo(TerrainTile tile) {	return GetTerrainTileInfo(tile); }
-		bool ITerrainInfo.TryGetTerrainTileInfo(TerrainTile tile, out TerrainTileInfo info) { return TryGetTerrainTileInfo(tile, out info); }
+		TerrainTileInfo ITerrainInfo.GetTerrainInfo(TerrainTile r) { return GetTileInfo(r); }
+		bool ITerrainInfo.TryGetTerrainInfo(TerrainTile r, out TerrainTileInfo info) { return TryGetTileInfo(r, out info); }
 		Color[] ITerrainInfo.HeightDebugColors => HeightDebugColors;
 		IEnumerable<Color> ITerrainInfo.RestrictedPlayerColors { get { return TerrainInfo.Where(ti => ti.RestrictPlayerColor).Select(ti => ti.Color); } }
 		float ITerrainInfo.MinHeightColorBrightness => MinHeightColorBrightness;
