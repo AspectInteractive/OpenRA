@@ -145,7 +145,7 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly LocomotorInfo Info;
 		public readonly uint MovementClass;
 
-		readonly LocomotorInfo.TerrainInfo[] terrainTypeInfoTypes;
+		readonly LocomotorInfo.TerrainInfo[] terrainInfos;
 		readonly World world;
 		readonly HashSet<CPos> dirtyCells = new HashSet<CPos>();
 		readonly bool sharesCell;
@@ -162,12 +162,12 @@ namespace OpenRA.Mods.Common.Traits
 			world = self.World;
 
 			var terrainInfo = world.Map.Rules.TerrainInfo;
-			terrainTypeInfoTypes = new LocomotorInfo.TerrainInfo[terrainInfo.TerrainTypes.Length];
-			for (var i = 0; i < terrainTypeInfoTypes.Length; i++)
-				if (!info.TerrainSpeeds.TryGetValue(terrainInfo.TerrainTypes[i].Type, out terrainTypeInfoTypes[i]))
-					terrainTypeInfoTypes[i] = LocomotorInfo.TerrainInfo.Impassable;
+			terrainInfos = new LocomotorInfo.TerrainInfo[terrainInfo.TerrainTypes.Length];
+			for (var i = 0; i < terrainInfos.Length; i++)
+				if (!info.TerrainSpeeds.TryGetValue(terrainInfo.TerrainTypes[i].Type, out terrainInfos[i]))
+					terrainInfos[i] = LocomotorInfo.TerrainInfo.Impassable;
 
-			MovementClass = (uint)terrainTypeInfoTypes.Select(ti => ti.Cost < short.MaxValue).ToBits();
+			MovementClass = (uint)terrainInfos.Select(ti => ti.Cost < short.MaxValue).ToBits();
 		}
 
 		public short MovementCostForCell(CPos cell) { return MovementCostForCell(cell, null); }
@@ -193,7 +193,7 @@ namespace OpenRA.Mods.Common.Traits
 			var index = cell.Layer == 0 ? world.Map.GetTerrainIndex(cell) :
 				world.GetCustomMovementLayers()[cell.Layer].GetTerrainIndex(cell);
 
-			return terrainTypeInfoTypes[index].Speed;
+			return terrainInfos[index].Speed;
 		}
 		public short MovementCostToEnterCell(Actor actor, CPos destNode, BlockedByActor check, Actor ignoreActor)
 		{
@@ -405,7 +405,7 @@ namespace OpenRA.Mods.Common.Traits
 						var cost = PathGraph.MovementCostForUnreachableCell;
 
 						if (index != byte.MaxValue)
-							cost = terrainTypeInfoTypes[index].Cost;
+							cost = terrainInfos[index].Cost;
 
 						cellLayer[cell] = cost;
 					}
@@ -437,7 +437,7 @@ namespace OpenRA.Mods.Common.Traits
 			var cost = PathGraph.MovementCostForUnreachableCell;
 
 			if (index != byte.MaxValue)
-				cost = terrainTypeInfoTypes[index].Cost;
+				cost = terrainInfos[index].Cost;
 
 			var cache = cellsCost[cell.Layer];
 
