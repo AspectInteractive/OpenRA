@@ -70,6 +70,7 @@ namespace OpenRA.Platforms.Default
 		{
 			var vertexShader = CompileShaderObject(OpenGL.GL_VERTEX_SHADER, name);
 			var fragmentShader = CompileShaderObject(OpenGL.GL_FRAGMENT_SHADER, name);
+			//OpenGL.glEnable(OpenGL.GL_MULTISAMPLE);
 
 			// Assemble program
 			program = OpenGL.glCreateProgram();

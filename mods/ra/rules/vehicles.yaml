@@ -111,7 +111,7 @@ V2RL:
 		Type: Heavy       
 	HitShape:
 		Type: Circle
-			Radius: 300 
+			Radius: 600 
     MobileOffGrid:
         Locomotor: wheeled
 		CanHover: True

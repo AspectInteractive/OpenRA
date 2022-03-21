@@ -8,12 +8,12 @@
 		VictoryMusic: score
 		DefeatMusic: map
 	TerrainGeometryOverlay:
-    ClearThetaStarPathfinderOverlay:
+	ClearThetaStarPathfinderOverlay:
 	ThetaStarPathfinderOverlay:    
-    ThetaPathfinderExecutionManager:
+	ThetaPathfinderExecutionManager:
 	CPosCoordsDebugOverlay:
 	DebugVisualizations:
-    ThetaStarCache:
+	ThetaStarCache:
 	Locomotor@FOOT:
 		Name: foot
 		Crushes: mine, crate

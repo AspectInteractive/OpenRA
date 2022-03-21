@@ -840,11 +840,11 @@ namespace OpenRA.Mods.Common.Traits
 																	lookAheadDist)
 												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 			{
-				if (!destActor.IsDead && ValidCollisionActor(destActor))
+				var destActorMobileOffGrids = destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
+				if (!destActor.IsDead && ValidCollisionActor(destActor) && destActorMobileOffGrids.Any())
 				{
-					var destActorCenter = (destActor.CenterPosition +
-											  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
-												.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
+					// adding move to use future pos
+					var destActorCenter = (destActor.CenterPosition + destActorMobileOffGrids.FirstOrDefault().GenFinalWVec());
 					if (destActorCenter != WPos.Zero)
 					{
 						//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
