@@ -817,13 +817,16 @@ namespace OpenRA.Mods.Common.Traits
 		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
 										   bool attackingUnitsOnly = false, bool includeCellCollision = false)
 		{
+			if (self.CurrentActivity is ReturnToCellActivity)
+				return null;
+
 			var intersections = new List<WPos>();
 			var selfCenter = self.CenterPosition;
 			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
 			// Ray cast to cell collisions
-			if (includeCellCollision && !(self.CurrentActivity is ReturnToCellActivity))
+			if (includeCellCollision)
 				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
 				{
 					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
