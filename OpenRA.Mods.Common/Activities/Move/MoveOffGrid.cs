@@ -123,7 +123,15 @@ namespace OpenRA.Mods.Common.Activities
 			currPathTarget = target;
 		}
 
-		public WDist MaxRangeToTarget() => mobileOffGrid.UnitRadius * Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling);
+		public WDist MaxRangeToTarget()
+		{
+			var actorMobileOgs = actorsSharingMove.Where(a => !a.IsDead).Select(a => a.TraitsImplementing<MobileOffGrid>().FirstEnabledTraitOrDefault())
+												  .Where(m => m != null);
+
+			return actorMobileOgs.Count() > 0 ? new WDist(actorMobileOgs.Select(m => m.UnitRadius.Length).Sum()
+														/ Math.Max(actorsSharingMove.Count, 1)
+														* Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling)) : WDist.Zero;
+		}
 
 		private WPos PopNextTarget()
 		{
@@ -324,6 +332,9 @@ namespace OpenRA.Mods.Common.Activities
 
 		public WVec AvgOfVectors(List<WVec> wvecList)
 		{
+			if (wvecList.Count == 0)
+				return WVec.Zero;
+
 			var newWvec = WVec.Zero;
 			foreach (var wvec in wvecList)
 				newWvec += wvec;
@@ -510,17 +521,22 @@ namespace OpenRA.Mods.Common.Activities
 			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
 			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
 			cellsCollidingSet.Add(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
-			for (var i = 0; i < cellsCollidingSet.Count; i++)
-			{
-				var currCellsColliding = cellsCollidingSet.ElementAt(i);
-				if (currCellsColliding.Count > 0)
-				{
-					var fleeVecs = currCellsColliding.Select(c => self.World.Map.CenterOfCell(c))    // Note: we add scalar prop. to i
-													 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
-					var fleeVecToUse = AvgOfVectors(fleeVecs);
-					mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
-				}
-			}
+
+			var fleeVecToUse = AvgOfVectors(cellsCollidingSet.SelectMany(c => c).Distinct().Select(c => self.World.Map.CenterOfCell(c))
+														 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList());
+			mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
+
+			//for (var i = 0; i < cellsCollidingSet.Count; i++)
+			//{
+			//	var currCellsColliding = cellsCollidingSet.ElementAt(i);
+			//	if (currCellsColliding.Count > 0)
+			//	{
+			//		var fleeVecs = currCellsColliding.Select(c => self.World.Map.CenterOfCell(c))    // Note: we add scalar prop. to i
+			//										 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
+			//		var fleeVecToUse = AvgOfVectors(fleeVecs);
+			//		mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
+			//	}
+			//}
 
 			var move = mobileOffGrid.GenFinalWVec();
 
@@ -530,7 +546,7 @@ namespace OpenRA.Mods.Common.Activities
 				var deltaFirst = currPathTarget - mobileOffGrid.PositionBuffer.ElementAt(0);
 				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
 
-				if (lengthMoved < 512 && !searchingForNextTarget)
+				if (lengthMoved < 1024 && !searchingForNextTarget)
 				{
 					// Create new path to the next path, then join it to the remainder of the existing path
 					// Make sure we are not re-running this if we received the same result last time
@@ -567,15 +583,16 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
-			var selfHasReachedGoal = Delta.HorizontalLengthSquared < move.HorizontalLengthSquared + mobileOffGrid.UnitRadius.LengthSquared;
+			var selfHasReachedGoal = Delta.HorizontalLengthSquared < mobileOffGrid.UnitRadius.LengthSquared;
 			var completedTargsOfNearbyActors = CompletedTargetsOfActors(GetNearbyActorsSharingMove(self));
 			tickCount = tickCount >= maxTicksBeforeLOScheck ? tickCount = 0 : tickCount + 1;
-			var hasReachedGoal = selfHasReachedGoal ||
-								 (tickCount == 0 && completedTargsOfNearbyActors.Contains(currPathTarget) &&
+			var nearbyActorHasReachedGoal = (tickCount == 0 && completedTargsOfNearbyActors.Contains(currPathTarget) &&
 								  pathRemaining.Count == 0 && Delta.Length < move.Length + MaxRangeToTarget().Length);
+			var hasReachedGoal = selfHasReachedGoal || nearbyActorHasReachedGoal;
 
 			if (hasReachedGoal)
 			{
+				System.Console.WriteLine($"selfHasReachedGoal: {selfHasReachedGoal}, nearbyActorHasReachedGoal: {nearbyActorHasReachedGoal}");
 				#if DEBUG || DEBUGWITHOVERLAY
 				// System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
 				#endif
@@ -583,7 +600,7 @@ namespace OpenRA.Mods.Common.Activities
 				if (Delta.HorizontalLengthSquared != 0 && selfHasReachedGoal)
 				{
 					// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
-					var deltaMove = new WVec(Delta.X, Delta.Y, 0);
+					var deltaMove = new WVec(Math.Min(Delta.X, move.X), Math.Min(Delta.Y, move.Y), 0);
 					mobileOffGrid.SeekVectors.Clear();
 					mobileOffGrid.SetDesiredFacingToFacing();
 					mobileOffGrid.SetDesiredAltitude(dat);
@@ -633,7 +650,8 @@ namespace OpenRA.Mods.Common.Activities
 		public List<WPos> CompletedTargetsOfActors(List<Actor> actorList)
 		{
 			var actorListMobileOGs = actorList.Where(a => !a.IsDead)
-										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault());
+										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
+										.Where(m => m != null);
 			var completedTargs = actorListMobileOGs.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
 			completedTargs = completedTargs.Union(actorListMobileOGs.Select(m => m.LastCompletedTarget)).ToList();
 			return completedTargs;
