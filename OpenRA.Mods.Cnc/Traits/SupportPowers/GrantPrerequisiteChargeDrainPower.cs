@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -70,13 +70,13 @@ namespace OpenRA.Mods.Cnc.Traits
 			return new DischargeableSupportPowerInstance(key, info, manager);
 		}
 
-		public void Activate(Actor self, SupportPowerInstance instance)
+		public void Activate(Actor self)
 		{
 			active = true;
 			techTree.ActorChanged(self);
 		}
 
-		public void Deactivate(Actor self, SupportPowerInstance instance)
+		public void Deactivate(Actor self)
 		{
 			active = false;
 			techTree.ActorChanged(self);
@@ -119,7 +119,7 @@ namespace OpenRA.Mods.Cnc.Traits
 					available = false;
 
 				foreach (var p in Instances)
-					((GrantPrerequisiteChargeDrainPower)p).Deactivate(p.Self, this);
+					((GrantPrerequisiteChargeDrainPower)p).Deactivate(p.Self);
 			}
 
 			public override void Tick()
@@ -178,7 +178,7 @@ namespace OpenRA.Mods.Cnc.Traits
 				power.PlayLaunchSounds();
 
 				foreach (var p in Instances)
-					((GrantPrerequisiteChargeDrainPower)p).Activate(p.Self, this);
+					((GrantPrerequisiteChargeDrainPower)p).Activate(p.Self);
 			}
 
 			public override string IconOverlayTextOverride()

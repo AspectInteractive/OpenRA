@@ -142,6 +142,9 @@ ChromeLayout:
 	cnc|chrome/editor.yaml
 	common|chrome/text-notifications.yaml
 
+Translations:
+	common|languages/en.ftl
+
 Voices:
 	cnc|audio/voices.yaml
 
@@ -159,6 +162,8 @@ Hotkeys:
 	common|hotkeys/supportpowers.yaml
 	common|hotkeys/viewport.yaml
 	common|hotkeys/chat.yaml
+	common|hotkeys/editor.yaml
+	common|hotkeys/control-groups.yaml
 	cnc|hotkeys.yaml
 
 LoadScreen: CncLoadScreen
@@ -217,6 +222,8 @@ Missions:
 MapGrid:
 	TileSize: 24,24
 	Type: Rectangular
+
+DefaultOrderGenerator: UnitOrderGenerator
 
 SupportsMapsFrom: cnc
 

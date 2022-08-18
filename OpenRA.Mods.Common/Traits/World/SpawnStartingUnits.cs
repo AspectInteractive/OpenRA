@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -20,7 +20,7 @@ namespace OpenRA.Mods.Common.Traits
 {
 	[TraitLocation(SystemActors.World)]
 	[Desc("Spawn base actor at the spawnpoint and support units in an annulus around the base actor. Both are defined at MPStartUnits. Attach this to the world actor.")]
-	public class SpawnStartingUnitsInfo : TraitInfo, Requires<StartingUnitsInfo>, ILobbyOptions
+	public class SpawnStartingUnitsInfo : TraitInfo, Requires<StartingUnitsInfo>, NotBefore<LocomotorInfo>, ILobbyOptions
 	{
 		public readonly string StartingUnitsClass = "none";
 
@@ -47,7 +47,7 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var t in map.WorldActorInfo.TraitInfos<StartingUnitsInfo>())
 				startingUnits[t.Class] = t.ClassName;
 
-			if (startingUnits.Any())
+			if (startingUnits.Count > 0)
 				yield return new LobbyOption("startingunits", DropdownLabel, DropdownDescription, DropdownVisible, DropdownDisplayOrder,
 					startingUnits, StartingUnitsClass, DropdownLocked);
 		}
@@ -95,7 +95,7 @@ namespace OpenRA.Mods.Common.Traits
 				});
 			}
 
-			if (!unitGroup.SupportActors.Any())
+			if (unitGroup.SupportActors.Length == 0)
 				return;
 
 			var supportSpawnCells = w.Map.FindTilesInAnnulus(p.HomeLocation, unitGroup.InnerSupportRadius + 1, unitGroup.OuterSupportRadius);

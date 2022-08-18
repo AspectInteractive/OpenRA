@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -13,7 +13,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Activities;
-using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -22,8 +21,6 @@ namespace OpenRA.Mods.Common.Activities
 {
 	public class Move : Activity
 	{
-		static readonly List<CPos> NoPath = new List<CPos>();
-
 		readonly Mobile mobile;
 		readonly WDist nearEnough;
 		readonly Func<BlockedByActor, List<CPos>> getPath;
@@ -43,6 +40,7 @@ namespace OpenRA.Mods.Common.Activities
 
 		List<CPos> path;
 		CPos? destination;
+		int startTicks;
 
 		// For dealing with blockers
 		bool hasWaited;
@@ -52,7 +50,7 @@ namespace OpenRA.Mods.Common.Activities
 		readonly bool evaluateNearestMovableCell;
 
 		// Scriptable move order
-		// Ignores lane bias and nearby units
+		// Ignores lane bias
 		public Move(Actor self, CPos destination, Color? targetLineColor = null)
 		{
 			// PERF: Because we can be sure that OccupiesSpace is Mobile here, we can save some performance by avoiding querying for the trait.
@@ -60,12 +58,8 @@ namespace OpenRA.Mods.Common.Activities
 
 			getPath = check =>
 			{
-				List<CPos> path;
-				using (var search =
-					PathSearch.FromPoint(self.World, mobile.Locomotor, self, mobile.ToCell, destination, check)
-					.WithoutLaneBias())
-					path = mobile.Pathfinder.FindPath(search);
-				return path;
+				return mobile.PathFinder.FindPathToTargetCell(
+					self, new[] { mobile.ToCell }, destination, check, laneBias: false);
 			};
 
 			this.destination = destination;
@@ -82,9 +76,10 @@ namespace OpenRA.Mods.Common.Activities
 			getPath = check =>
 			{
 				if (!this.destination.HasValue)
-					return NoPath;
+					return PathFinder.NoPath;
 
-				return mobile.Pathfinder.FindUnitPath(mobile.ToCell, this.destination.Value, self, ignoreActor, check);
+				return mobile.PathFinder.FindPathToTargetCell(
+					self, new[] { mobile.ToCell }, this.destination.Value, check, ignoreActor: ignoreActor);
 			};
 
 			// Note: Will be recalculated from OnFirstRun if evaluateNearestMovableCell is true
@@ -116,6 +111,8 @@ namespace OpenRA.Mods.Common.Activities
 
 		protected override void OnFirstRun(Actor self)
 		{
+			startTicks = self.World.WorldTick;
+
 			if (evaluateNearestMovableCell && destination.HasValue)
 			{
 				var movableDestination = mobile.NearestMoveableCell(destination.Value);
@@ -161,6 +158,10 @@ namespace OpenRA.Mods.Common.Activities
 				return false;
 
 			var firstFacing = self.World.Map.FacingBetween(mobile.FromCell, nextCell.Value.Cell, mobile.Facing);
+
+			if (mobile.Info.CanMoveBackward && self.World.WorldTick - startTicks < mobile.Info.BackwardDuration && Math.Abs(firstFacing.Angle - mobile.Facing.Angle) > 256)
+				firstFacing = new WAngle(firstFacing.Angle + 512);
+
 			if (firstFacing != mobile.Facing)
 			{
 				path.Add(nextCell.Value.Cell);
@@ -203,7 +204,7 @@ namespace OpenRA.Mods.Common.Activities
 				return null;
 			}
 
-			var containsTemporaryBlocker = WorldUtils.ContainsTemporaryBlocker(self.World, nextCell, self);
+			var containsTemporaryBlocker = self.World.ContainsTemporaryBlocker(nextCell, self);
 
 			// Next cell in the move is blocked by another actor
 			if (containsTemporaryBlocker || !mobile.CanEnterCell(nextCell, ignoreActor))
@@ -308,8 +309,7 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			foreach (var actor in self.World.ActorMap.GetActorsAt(cell))
 			{
-				var move = actor.OccupiesSpace as Mobile;
-				if (move == null || !move.IsTraitEnabled() || !move.IsLeaving())
+				if (!(actor.OccupiesSpace is Mobile move) || !move.IsTraitEnabled() || !move.IsLeaving())
 					return false;
 			}
 
@@ -413,7 +413,7 @@ namespace OpenRA.Mods.Common.Activities
 				// Only move by a full speed step if we didn't already move this tick.
 				// If we did, we limit the move to any carried-over leftover progress.
 				if (Move.lastMovePartCompletedTick < self.World.WorldTick)
-					progress += mobile.MovementSpeedForCell(self, mobile.ToCell);
+					progress += mobile.MovementSpeedForCell(mobile.ToCell);
 
 				if (progress >= Distance)
 				{
@@ -446,13 +446,13 @@ namespace OpenRA.Mods.Common.Activities
 				{
 					var currentCellOrientation = self.World.Map.TerrainOrientation(mobile.FromCell);
 					var orientation = WRot.SLerp(FromTerrainOrientation.Value, currentCellOrientation, progress, terrainOrientationMargin);
-					mobile.SetTerrainRampOrientation(self, orientation);
+					mobile.SetTerrainRampOrientation(orientation);
 				}
 				else if (ToTerrainOrientation.HasValue && Distance - progress < terrainOrientationMargin)
 				{
 					var currentCellOrientation = self.World.Map.TerrainOrientation(mobile.FromCell);
 					var orientation = WRot.SLerp(ToTerrainOrientation.Value, currentCellOrientation, Distance - progress, terrainOrientationMargin);
-					mobile.SetTerrainRampOrientation(self, orientation);
+					mobile.SetTerrainRampOrientation(orientation);
 				}
 
 				mobile.Facing = WAngle.Lerp(FromFacing, ToFacing, progress, Distance);

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -52,11 +52,11 @@ namespace OpenRA.Mods.Common.Traits
 		readonly IActorPreview[] preview;
 
 		public ActorPreviewPlaceBuildingPreviewPreview(WorldRenderer wr, ActorInfo ai, ActorPreviewPlaceBuildingPreviewInfo info, TypeDictionary init)
-			: base(wr, ai, info, init)
+			: base(wr, ai, info)
 		{
 			this.info = info;
-			var previewInit = new ActorPreviewInitializer(actorInfo, wr, init);
-			preview = actorInfo.TraitInfos<IRenderActorPreviewInfo>()
+			var previewInit = new ActorPreviewInitializer(ActorInfo, wr, init);
+			preview = ActorInfo.TraitInfos<IRenderActorPreviewInfo>()
 				.SelectMany(rpi => rpi.RenderPreview(previewInit))
 				.ToArray();
 		}
@@ -72,7 +72,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected override IEnumerable<IRenderable> RenderInner(WorldRenderer wr, CPos topLeft, Dictionary<CPos, PlaceBuildingCellType> footprint)
 		{
-			var centerPosition = wr.World.Map.CenterOfCell(topLeft) + centerOffset;
+			var centerPosition = wr.World.Map.CenterOfCell(topLeft) + CenterOffset;
 			var previewRenderables = preview
 				.SelectMany(p => p.Render(wr, centerPosition));
 

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,7 +16,11 @@ namespace OpenRA.Mods.Common.Traits.Sound
 	class ActorLostNotificationInfo : ConditionalTraitInfo
 	{
 		[NotificationReference("Speech")]
+		[Desc("Speech notification to play.")]
 		public readonly string Notification = "UnitLost";
+
+		[Desc("Text notification to display.")]
+		public readonly string TextNotification = null;
 
 		public readonly bool NotifyAll = false;
 
@@ -33,8 +37,15 @@ namespace OpenRA.Mods.Common.Traits.Sound
 			if (IsTraitDisabled)
 				return;
 
-			var player = Info.NotifyAll ? self.World.LocalPlayer : self.Owner;
+			var localPlayer = self.World.LocalPlayer;
+
+			if (localPlayer == null || localPlayer.Spectating)
+				return;
+
+			var player = Info.NotifyAll ? localPlayer : self.Owner;
+
 			Game.Sound.PlayNotification(self.World.Map.Rules, player, "Speech", Info.Notification, self.Owner.Faction.InternalName);
+			TextNotificationsManager.AddTransientLine(Info.TextNotification, player);
 		}
 	}
 }

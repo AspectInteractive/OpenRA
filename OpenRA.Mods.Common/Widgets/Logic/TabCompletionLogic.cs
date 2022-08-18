@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -24,7 +24,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		string prefix;
 		string suffix;
 
-		public IList<string> Commands { get; set; }
+		public IEnumerable<string> Commands { get; set; }
 
 		public IList<string> Names { get; set; }
 
@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (string.IsNullOrWhiteSpace(text))
 				return text;
 
-			if (lastCompleted == text && candidates.Any())
+			if (lastCompleted == text && candidates.Count > 0)
 			{
 				lastCompleted = prefix + candidates[++currentCandidateIndex % candidates.Count] + suffix;
 				return lastCompleted;

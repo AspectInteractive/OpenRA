@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -61,7 +61,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		[Desc("Should the trail spawn relative to last position or current position?")]
 		public readonly bool SpawnAtLastPosition = true;
 
-		public override object Create(ActorInitializer init) { return new LeavesTrails(init.Self, this); }
+		public override object Create(ActorInitializer init) { return new LeavesTrails(this); }
 	}
 
 	public class LeavesTrails : ConditionalTrait<LeavesTrailsInfo>, ITick
@@ -71,7 +71,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		WAngle cachedFacing;
 		int cachedInterval;
 
-		public LeavesTrails(Actor self, LeavesTrailsInfo info)
+		public LeavesTrails(LeavesTrailsInfo info)
 			: base(info)
 		{
 			cachedInterval = Info.StartDelay;
@@ -92,6 +92,10 @@ namespace OpenRA.Mods.Common.Traits.Render
 		int offset;
 		bool wasStationary;
 		bool isMoving;
+
+		bool previouslySpawned;
+		CPos previousSpawnCell;
+		WAngle previousSpawnFacing;
 
 		void ITick.Tick(Actor self)
 		{
@@ -120,17 +124,25 @@ namespace OpenRA.Mods.Common.Traits.Render
 				if (++offset >= Info.Offsets.Length)
 					offset = 0;
 
-				var offsetRotation = Info.Offsets[offset].Rotate(body.QuantizeOrientation(self, self.Orientation));
-				var spawnPosition = Info.SpawnAtLastPosition ? cachedPosition : self.CenterPosition;
+				if (Info.TerrainTypes.Count == 0 || Info.TerrainTypes.Contains(type))
+				{
+					var spawnFacing = Info.SpawnAtLastPosition ? cachedFacing : facing?.Facing ?? WAngle.Zero;
 
-				var pos = Info.Type == TrailType.CenterPosition ? spawnPosition + body.LocalToWorld(offsetRotation) :
-					self.World.Map.CenterOfCell(spawnCell);
+					if (previouslySpawned && previousSpawnCell == spawnCell)
+						spawnFacing = previousSpawnFacing;
 
-				var spawnFacing = Info.SpawnAtLastPosition ? cachedFacing : facing?.Facing ?? WAngle.Zero;
+					var offsetRotation = Info.Offsets[offset].Rotate(body.QuantizeOrientation(self.Orientation));
+					var spawnPosition = Info.SpawnAtLastPosition ? cachedPosition : self.CenterPosition;
+					var pos = Info.Type == TrailType.CenterPosition ? spawnPosition + body.LocalToWorld(offsetRotation) :
+						self.World.Map.CenterOfCell(spawnCell);
 
-				if ((Info.TerrainTypes.Count == 0 || Info.TerrainTypes.Contains(type)) && !string.IsNullOrEmpty(Info.Image))
 					self.World.AddFrameEndTask(w => w.Add(new SpriteEffect(pos, spawnFacing, self.World, Info.Image,
 						Info.Sequences.Random(Game.CosmeticRandom), Info.Palette, Info.VisibleThroughFog)));
+
+					previouslySpawned = true;
+					previousSpawnCell = spawnCell;
+					previousSpawnFacing = spawnFacing;
+				}
 
 				cachedPosition = self.CenterPosition;
 				cachedFacing = facing?.Facing ?? WAngle.Zero;

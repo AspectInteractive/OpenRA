@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -46,8 +46,11 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly CVec[] Path = Array.Empty<CVec>();
 
 		[NotificationReference("Speech")]
-		[Desc("The speech notification to play when setting a new rallypoint.")]
+		[Desc("Speech notification to play when setting a new rallypoint.")]
 		public readonly string Notification = null;
+
+		[Desc("Text notification to display when setting a new rallypoint.")]
+		public readonly string TextNotification = null;
 
 		[Desc("Used to group equivalent actors to allow force-setting a rallypoint (e.g. for Primary production).")]
 		public readonly string ForceSetType = null;
@@ -101,6 +104,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (order.OrderID == OrderID)
 			{
 				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", Info.Notification, self.Owner.Faction.InternalName);
+				TextNotificationsManager.AddTransientLine(Info.TextNotification, self.Owner);
 
 				return new Order(order.OrderID, self, target, queued)
 				{
@@ -143,7 +147,7 @@ namespace OpenRA.Mods.Common.Traits
 			public bool ForceSet { get; private set; }
 			public bool IsQueued { get; protected set; }
 
-			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+			public bool CanTarget(Actor self, in Target target, ref TargetModifiers modifiers, ref string cursor)
 			{
 				if (!target.SelfIsTerrainType())
 					return false;

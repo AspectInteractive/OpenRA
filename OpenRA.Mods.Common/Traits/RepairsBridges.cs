@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -41,6 +41,9 @@ namespace OpenRA.Mods.Common.Traits
 		[NotificationReference("Speech")]
 		[Desc("Speech notification to play when a bridge is repaired.")]
 		public readonly string RepairNotification = null;
+
+		[Desc("Text notification to display when a bridge is repaired.")]
+		public readonly string RepairTextNotification = null;
 
 		public override object Create(ActorInitializer init) { return new RepairsBridges(this); }
 	}
@@ -107,7 +110,7 @@ namespace OpenRA.Mods.Common.Traits
 				else
 					return;
 
-				self.QueueActivity(order.Queued, new RepairBridge(self, order.Target, info.EnterBehaviour, info.RepairNotification, info.TargetLineColor));
+				self.QueueActivity(order.Queued, new RepairBridge(self, order.Target, info.EnterBehaviour, info.RepairNotification, info.RepairTextNotification, info.TargetLineColor));
 				self.ShowTargetLines();
 			}
 		}

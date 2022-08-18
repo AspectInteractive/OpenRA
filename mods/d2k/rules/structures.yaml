@@ -608,6 +608,7 @@ starport:
 	ProductionAirdrop:
 		Produces: Starport
 		ActorType: frigate
+		ReadyTextNotification: Reinforcements have arrived.
 	RenderSprites:
 		Image: starport.ordos
 		FactionImages:
@@ -758,7 +759,7 @@ medium_gun_turret:
 large_gun_turret:
 	Inherits: ^Defense
 	Inherits@IDISABLE: ^DisableOnLowPowerOrPowerDown
-	Inherits@AUTOTARGET: ^AutoTargetGround
+	Inherits@AUTOTARGET: ^AutoTargetAll
 	AttackTurreted:
 		PauseOnCondition: disabled || build-incomplete
 	Buildable:
@@ -836,7 +837,9 @@ repair_pad:
 		Interval: 10
 		HpPerStep: 800
 		StartRepairingNotification: Repairing
+		StartRepairingTextNotification: Repairing.
 		FinishRepairingNotification: UnitRepaired
+		FinishRepairingTextNotification: Unit repaired.
 		PlayerExperience: 15
 	RallyPoint:
 	RenderSprites:
@@ -928,7 +931,11 @@ high_tech_factory:
 		CameraActor: camera
 		ArrowSequence: arrow
 		CircleSequence: circles
+		UseDirectionalTarget: True
+		DirectionArrowAnimation: ornidirection
 		SupportPowerPaletteOrder: 10
+		EndChargeTextNotification: Airstrike ready.
+		SelectTargetTextNotification: Select target.
 	Power:
 		Amount: -75
 	GrantConditionOnPrerequisite@UPGRADEABLE:
@@ -1065,7 +1072,12 @@ palace:
 		BeginChargeSpeechNotification: DeathHandMissilePrepping
 		EndChargeSpeechNotification: DeathHandMissileReady
 		IncomingSpeechNotification: MissileLaunchDetected
+		BeginChargeTextNotification: Death Hand missile prepping.
+		EndChargeTextNotification: Death Hand missile ready.
+		IncomingTextNotification: Missile launch detected.
+		SelectTargetTextNotification: Select target.
 		MissileWeapon: deathhand
+		MissileImage: deathhand
 		MissileDelay: 18
 		SpawnOffset: 32,816,0
 		DetonationAltitude: 3c0
@@ -1090,8 +1102,11 @@ palace:
 		Actors: fremen, fremen
 		Type: Fremen
 		ChargeInterval: 2250
+		EndChargeTextNotification: Fremen ready.
 		ReadyAudio: Reinforce
+		ReadyTextNotification: Reinforcements have arrived.
 		BlockedAudio: NoRoom
+		BlockedTextNotification: No room for new unit.
 		OrderName: ProduceActorPower.Fremen
 		SupportPowerPaletteOrder: 20
 	ProduceActorPower@saboteur:
@@ -1104,8 +1119,11 @@ palace:
 		Actors: saboteur
 		Type: Saboteur
 		ChargeInterval: 2250
+		EndChargeTextNotification: Saboteur ready.
 		ReadyAudio: Reinforce
+		ReadyTextNotification: Reinforcements have arrived.
 		BlockedAudio: NoRoom
+		BlockedTextNotification: No room for new unit.
 		OrderName: ProduceActorPower.Saboteur
 		SupportPowerPaletteOrder: 30
 	Exit@1:

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -60,6 +60,13 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Color Color;
 
+		[TranslationReference]
+		static readonly string PlayerColorTerrain = "player-color-terrain";
+		[TranslationReference]
+		static readonly string PlayerColorPlayer = "player-color-player";
+		[TranslationReference]
+		static readonly string InvalidPlayerColor = "invalid-player-color";
+
 		bool TryGetBlockingColor((float R, float G, float B) color, List<(float R, float G, float B)> candidateBlockers, out (float R, float G, float B) closestBlocker)
 		{
 			var closestDistance = SimilarityThreshold;
@@ -93,7 +100,7 @@ namespace OpenRA.Mods.Common.Traits
 			var terrainLinear = terrainColors.Select(c => c.ToLinear()).ToList();
 			var playerLinear = playerColors.Select(c => c.ToLinear()).ToList();
 
-			if (PresetHues.Any())
+			if (PresetHues.Length > 0)
 			{
 				foreach (var i in Exts.MakeArray(PresetHues.Length, x => x).Shuffle(random))
 				{
@@ -148,9 +155,9 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var linear = Color.FromAhsv(hue, sat, V).ToLinear();
 				if (TryGetBlockingColor(linear, terrainLinear, out var blocker))
-					errorMessage = "Color was adjusted to be less similar to the terrain.";
+					errorMessage = PlayerColorTerrain;
 				else if (TryGetBlockingColor(linear, playerLinear, out blocker))
-					errorMessage = "Color was adjusted to be less similar to another player.";
+					errorMessage = PlayerColorPlayer;
 				else
 				{
 					if (errorMessage != null)
@@ -169,7 +176,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// Failed to find a solution within a reasonable time: return a random color without any validation
-			onError?.Invoke("Unable to determine a valid player color. A random color has been selected.");
+			onError?.Invoke(InvalidPlayerColor);
 			return Color.FromAhsv(random.NextFloat(), float2.Lerp(HsvSaturationRange[0], HsvSaturationRange[1], random.NextFloat()), V);
 		}
 	}

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -272,7 +272,7 @@ namespace OpenRA.Mods.Common.Projectiles
 				trailPalette += args.SourceActor.Owner.InternalName;
 
 			shadowColor = new float3(info.ShadowColor.R, info.ShadowColor.G, info.ShadowColor.B) / 255f;
-			shadowAlpha = info.ShadowColor.A;
+			shadowAlpha = info.ShadowColor.A / 255f;
 		}
 
 		static int LoopRadius(int speed, int rot)
@@ -302,7 +302,7 @@ namespace OpenRA.Mods.Common.Projectiles
 			if ((sbyte)vFacing < 0)
 				speed = minSpeed;
 			else if (!WillClimbWithinDistance(vFacing, loopRadius, predClfDist, diffClfMslHgt)
-				&& !WillClimbAroundInclineTop(vFacing, loopRadius, predClfDist, diffClfMslHgt, speed))
+				&& !WillClimbAroundInclineTop(vFacing, loopRadius, predClfDist, diffClfMslHgt))
 			{
 				// Find highest speed greater than the above minimum that allows the missile
 				// to surmount the incline
@@ -311,7 +311,7 @@ namespace OpenRA.Mods.Common.Projectiles
 				{
 					var lpRds = LoopRadius(spd, info.VerticalRateOfTurn.Facing);
 					return WillClimbWithinDistance(vFac, lpRds, predClfDist, diffClfMslHgt)
-						|| WillClimbAroundInclineTop(vFac, lpRds, predClfDist, diffClfMslHgt, spd);
+						|| WillClimbAroundInclineTop(vFac, lpRds, predClfDist, diffClfMslHgt);
 				});
 			}
 			else
@@ -401,7 +401,7 @@ namespace OpenRA.Mods.Common.Projectiles
 		// Will missile climb around incline top if bringing vertical facing
 		// down to zero on an arc of radius loopRadius
 		// Calling this function only makes sense when IsNearInclineTop returns true
-		static bool WillClimbAroundInclineTop(int vFacing, int loopRadius, int predClfDist, int diffClfMslHgt, int speed)
+		static bool WillClimbAroundInclineTop(int vFacing, int loopRadius, int predClfDist, int diffClfMslHgt)
 		{
 			// Vector from missile's current position pointing to the loop's center
 			var radius = new WVec(loopRadius, 0, 0)
@@ -523,7 +523,7 @@ namespace OpenRA.Mods.Common.Projectiles
 			// Missile will climb around incline top if bringing vertical facing
 			// down to zero on an arc of radius loopRadius
 			else if (IsNearInclineTop(vFacing, loopRadius, predClfDist)
-				&& WillClimbAroundInclineTop(vFacing, loopRadius, predClfDist, diffClfMslHgt, speed))
+				&& WillClimbAroundInclineTop(vFacing, loopRadius, predClfDist, diffClfMslHgt))
 				desiredVFacing = 0;
 
 			// Missile will not climb terrAltDiff w-units within hHeightChange w-units
@@ -537,7 +537,7 @@ namespace OpenRA.Mods.Common.Projectiles
 				for (var vFac = System.Math.Min(vFacing + info.VerticalRateOfTurn.Facing - 1, 63); vFac >= vFacing; vFac--)
 					if (!WillClimbWithinDistance(vFac, loopRadius, predClfDist, diffClfMslHgt)
 						&& !(predClfDist <= loopRadius * (1024 - WAngle.FromFacing(vFac).Sin()) / 1024
-							&& WillClimbAroundInclineTop(vFac, loopRadius, predClfDist, diffClfMslHgt, speed)))
+							&& WillClimbAroundInclineTop(vFac, loopRadius, predClfDist, diffClfMslHgt)))
 					{
 						desiredVFacing = vFac + 1;
 						break;
@@ -568,7 +568,7 @@ namespace OpenRA.Mods.Common.Projectiles
 		}
 
 		int HomingInnerTick(int predClfDist, int diffClfMslHgt, int relTarHorDist, int lastHtChg, int lastHt,
-			int nxtRelTarHorDist, int relTarHgt, int vFacing, bool targetPassedBy)
+			int relTarHgt, int vFacing, bool targetPassedBy)
 		{
 			int desiredVFacing = vFacing;
 
@@ -772,7 +772,7 @@ namespace OpenRA.Mods.Common.Projectiles
 				targetPassedBy = false;
 
 			var desiredVFacing = HomingInnerTick(predClfDist, diffClfMslHgt, relTarHorDist, lastHtChg, lastHt,
-				nxtRelTarHorDist, relTarHgt, vFacing, targetPassedBy);
+				relTarHgt, vFacing, targetPassedBy);
 
 			// The target has been passed by
 			if (tarDistVec.HorizontalLength < speed * WAngle.FromFacing(vFacing).Cos() / 1024)
@@ -921,17 +921,22 @@ namespace OpenRA.Mods.Common.Projectiles
 			var world = args.SourceActor.World;
 			if (!world.FogObscures(pos))
 			{
+				var paletteName = info.Palette;
+				if (paletteName != null && info.IsPlayerPalette)
+					paletteName += args.SourceActor.Owner.InternalName;
+
+				var palette = wr.Palette(paletteName);
+
 				if (info.Shadow)
 				{
 					var dat = world.Map.DistanceAboveTerrain(pos);
 					var shadowPos = pos - new WVec(0, 0, dat.Length);
-					foreach (var r in anim.Render(shadowPos, wr.Palette(info.Palette)))
+					foreach (var r in anim.Render(shadowPos, palette))
 						yield return ((IModifyableRenderable)r)
 							.WithTint(shadowColor, ((IModifyableRenderable)r).TintModifiers | TintModifiers.ReplaceColor)
 							.WithAlpha(shadowAlpha);
 				}
 
-				var palette = wr.Palette(info.Palette + (info.IsPlayerPalette ? args.SourceActor.Owner.InternalName : ""));
 				foreach (var r in anim.Render(pos, palette))
 					yield return r;
 			}

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -75,11 +75,11 @@ namespace OpenRA
 		/// <summary>Gets or sets the <see cref="CellLayer"/> using cell coordinates</summary>
 		public T this[CPos cell]
 		{
-			get => entries[Index(cell)];
+			get => Entries[Index(cell)];
 
 			set
 			{
-				entries[Index(cell)] = value;
+				Entries[Index(cell)] = value;
 
 				CellEntryChanged?.Invoke(cell);
 			}
@@ -88,14 +88,36 @@ namespace OpenRA
 		/// <summary>Gets or sets the layer contents using raw map coordinates (not CPos!)</summary>
 		public T this[MPos uv]
 		{
-			get => entries[Index(uv)];
+			get => Entries[Index(uv)];
 
 			set
 			{
-				entries[Index(uv)] = value;
+				Entries[Index(uv)] = value;
 
 				CellEntryChanged?.Invoke(uv.ToCPos(GridType));
 			}
+		}
+
+		public bool TryGetValue(CPos cell, out T value)
+		{
+			// .ToMPos() returns the same result if the X and Y coordinates
+			// are switched. X < Y is invalid in the RectangularIsometric coordinate system,
+			// so we pre-filter these to avoid returning the wrong result
+			if (GridType == MapGridType.RectangularIsometric && cell.X < cell.Y)
+			{
+				value = default(T);
+				return false;
+			}
+
+			var uv = cell.ToMPos(GridType);
+			if (Bounds.Contains(uv.U, uv.V))
+			{
+				value = Entries[Index(uv)];
+				return true;
+			}
+
+			value = default(T);
+			return false;
 		}
 
 		public bool Contains(CPos cell)
@@ -111,7 +133,7 @@ namespace OpenRA
 
 		public bool Contains(MPos uv)
 		{
-			return bounds.Contains(uv.U, uv.V);
+			return Bounds.Contains(uv.U, uv.V);
 		}
 
 		public CPos Clamp(CPos uv)

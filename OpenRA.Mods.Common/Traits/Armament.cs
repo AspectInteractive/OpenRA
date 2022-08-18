@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -127,7 +127,7 @@ namespace OpenRA.Mods.Common.Traits
 		int currentBarrel;
 		readonly int barrelCount;
 
-		readonly List<(int Ticks, Action Func)> delayedActions = new List<(int, Action)>();
+		readonly List<(int Ticks, int Burst, Action<int> Func)> delayedActions = new List<(int, int, Action<int>)>();
 
 		public WDist Recoil;
 		public int FireDelay { get; protected set; }
@@ -212,7 +212,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var x = delayedActions[i];
 				if (--x.Ticks <= 0)
-					x.Func();
+					x.Func(x.Burst);
 				delayedActions[i] = x;
 			}
 
@@ -225,12 +225,12 @@ namespace OpenRA.Mods.Common.Traits
 			Tick(self);
 		}
 
-		protected void ScheduleDelayedAction(int t, Action a)
+		protected void ScheduleDelayedAction(int t, int b, Action<int> a)
 		{
 			if (t > 0)
-				delayedActions.Add((t, a));
+				delayedActions.Add((t, b, a));
 			else
-				a();
+				a(b);
 		}
 
 		protected virtual bool CanFire(Actor self, in Target target)
@@ -322,7 +322,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Lambdas can't use 'in' variables, so capture a copy for later
 			var delayedTarget = target;
-			ScheduleDelayedAction(Info.FireDelay, () =>
+			ScheduleDelayedAction(Info.FireDelay, Burst, (burst) =>
 			{
 				if (args.Weapon.Projectile != null)
 				{
@@ -330,10 +330,10 @@ namespace OpenRA.Mods.Common.Traits
 					if (projectile != null)
 						self.World.Add(projectile);
 
-					if (args.Weapon.Report != null && args.Weapon.Report.Any())
+					if (args.Weapon.Report != null && args.Weapon.Report.Length > 0)
 						Game.Sound.Play(SoundType.World, args.Weapon.Report, self.World, self.CenterPosition);
 
-					if (Burst == args.Weapon.Burst && args.Weapon.StartBurstReport != null && args.Weapon.StartBurstReport.Any())
+					if (burst == args.Weapon.Burst && args.Weapon.StartBurstReport != null && args.Weapon.StartBurstReport.Length > 0)
 						Game.Sound.Play(SoundType.World, args.Weapon.StartBurstReport, self.World, self.CenterPosition);
 
 					foreach (var na in notifyAttacks)
@@ -359,8 +359,8 @@ namespace OpenRA.Mods.Common.Traits
 				FireDelay = Util.ApplyPercentageModifiers(Weapon.ReloadDelay, modifiers);
 				Burst = Weapon.Burst;
 
-				if (Weapon.AfterFireSound != null && Weapon.AfterFireSound.Any())
-					ScheduleDelayedAction(Weapon.AfterFireSoundDelay, () => Game.Sound.Play(SoundType.World, Weapon.AfterFireSound, self.World, self.CenterPosition));
+				if (Weapon.AfterFireSound != null && Weapon.AfterFireSound.Length > 0)
+					ScheduleDelayedAction(Weapon.AfterFireSoundDelay, Burst, (burst) => Game.Sound.Play(SoundType.World, Weapon.AfterFireSound, self.World, self.CenterPosition));
 
 				foreach (var nbc in notifyBurstComplete)
 					nbc.FiredBurst(self, target, this);
@@ -380,7 +380,7 @@ namespace OpenRA.Mods.Common.Traits
 			var localOffset = b.Offset + new WVec(-Recoil, WDist.Zero, WDist.Zero);
 
 			// Turret coordinates to body coordinates
-			var bodyOrientation = coords.QuantizeOrientation(self, self.Orientation);
+			var bodyOrientation = coords.QuantizeOrientation(self.Orientation);
 			if (turret != null)
 				localOffset = localOffset.Rotate(turret.WorldOrientation) + turret.Offset.Rotate(bodyOrientation);
 			else

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -104,8 +104,8 @@ namespace OpenRA.Mods.Cnc.Traits
 			{
 				case "BeginMinefield":
 					var start = self.World.Map.CellContaining(target.CenterPosition);
-					if (self.World.OrderGenerator is MinefieldOrderGenerator)
-						((MinefieldOrderGenerator)self.World.OrderGenerator).AddMinelayer(self);
+					if (self.World.OrderGenerator is MinefieldOrderGenerator generator)
+						generator.AddMinelayer(self);
 					else
 						self.World.OrderGenerator = new MinefieldOrderGenerator(self, start, queued);
 
@@ -289,7 +289,7 @@ namespace OpenRA.Mods.Cnc.Traits
 			{
 				minelayers.Clear();
 				minelayers.AddRange(selected.Where(s => !s.IsDead && s.Info.HasTraitInfo<MinelayerInfo>()));
-				if (!minelayers.Any())
+				if (minelayers.Count == 0)
 					world.CancelInputMode();
 			}
 
@@ -360,7 +360,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers) { return true; }
 
-			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+			public bool CanTarget(Actor self, in Target target, ref TargetModifiers modifiers, ref string cursor)
 			{
 				if (!target.SelfIsTerrainType())
 					return false;

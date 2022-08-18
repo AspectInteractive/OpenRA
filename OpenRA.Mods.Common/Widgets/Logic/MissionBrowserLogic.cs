@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -97,7 +97,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			missionList.RemoveChildren();
 
 			// Add a group for each campaign
-			if (modData.Manifest.Missions.Any())
+			if (modData.Manifest.Missions.Length > 0)
 			{
 				var yaml = MiniYaml.Merge(modData.Manifest.Missions.Select(
 					m => MiniYaml.FromStream(modData.DefaultFileSystem.Open(m), m)));
@@ -119,7 +119,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 					if (previews.Any())
 					{
-						CreateMissionGroup(kv.Key, previews);
+						CreateMissionGroup(kv.Key, previews, onExit);
 						allPreviews.AddRange(previews);
 					}
 				}
@@ -131,11 +131,11 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			if (loosePreviews.Any())
 			{
-				CreateMissionGroup("Missions", loosePreviews);
+				CreateMissionGroup("Missions", loosePreviews, onExit);
 				allPreviews.AddRange(loosePreviews);
 			}
 
-			if (allPreviews.Any())
+			if (allPreviews.Count > 0)
 				SelectMap(allPreviews.First());
 
 			// Preload map preview to reduce jank
@@ -146,7 +146,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}).Start();
 
 			var startButton = widget.Get<ButtonWidget>("STARTGAME_BUTTON");
-			startButton.OnClick = StartMissionClicked;
+			startButton.OnClick = () => StartMissionClicked(onExit);
 			startButton.IsDisabled = () => selectedMap == null;
 
 			widget.Get<ButtonWidget>("BACK_BUTTON").OnClick = () =>
@@ -179,7 +179,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			base.Dispose(disposing);
 		}
 
-		void CreateMissionGroup(string title, IEnumerable<MapPreview> previews)
+		void CreateMissionGroup(string title, IEnumerable<MapPreview> previews, Action onExit)
 		{
 			var header = ScrollItemWidget.Setup(headerTemplate, () => true, () => { });
 			header.Get<LabelWidget>("LABEL").GetText = () => title;
@@ -190,7 +190,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				var item = ScrollItemWidget.Setup(template,
 					() => selectedMap != null && selectedMap.Uid == preview.Uid,
 					() => SelectMap(preview),
-					StartMissionClicked);
+					() => StartMissionClicked(onExit));
 
 				var label = item.Get<LabelWithTooltipWidget>("TITLE");
 				WidgetUtils.TruncateLabelToTooltip(label, preview.Title);
@@ -234,7 +234,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					infoVideo = missionData.BackgroundVideo;
 					infoVideoVisible = infoVideo != null;
 
-					var briefing = WidgetUtils.WrapText(missionData.Briefing.Replace("\\n", "\n"), description.Bounds.Width, descriptionFont);
+					var briefing = WidgetUtils.WrapText(missionData.Briefing?.Replace("\\n", "\n"), description.Bounds.Width, descriptionFont);
 					var height = descriptionFont.Measure(briefing).Y;
 					Game.RunAfterTick(() =>
 					{
@@ -343,15 +343,28 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				playingVideo = pv;
 				player.Load(video);
 
-				// video playback runs asynchronously
-				player.PlayThen(() =>
+				if (player.Video == null)
 				{
 					StopVideo(player);
-					onComplete?.Invoke();
-				});
 
-				// Mute other distracting sounds
-				MuteSounds();
+					ConfirmationDialogs.ButtonPrompt(
+						title: "Unable to play video",
+						text: "Something went wrong during video playback.",
+						cancelText: "Back",
+						onCancel: () => { });
+				}
+				else
+				{
+					// video playback runs asynchronously
+					player.PlayThen(() =>
+					{
+						StopVideo(player);
+						onComplete?.Invoke();
+					});
+
+					// Mute other distracting sounds
+					MuteSounds();
+				}
 			}
 		}
 
@@ -365,9 +378,18 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			playingVideo = PlayingVideo.None;
 		}
 
-		void StartMissionClicked()
+		void StartMissionClicked(Action onExit)
 		{
 			StopVideo(videoPlayer);
+
+			// If selected mission becomes unavailable, exit MissionBrowser to refresh
+			if (modData.MapCache[selectedMap.Uid].Status != MapStatus.Available)
+			{
+				Game.Disconnect();
+				Ui.CloseWindow();
+				onExit();
+				return;
+			}
 
 			var orders = new List<Order>();
 			if (difficulty != null)

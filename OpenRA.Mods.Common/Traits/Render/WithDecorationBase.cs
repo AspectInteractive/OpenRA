@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -57,14 +57,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	public abstract class WithDecorationBase<InfoType> : ConditionalTrait<InfoType>, IDecoration where InfoType : WithDecorationBaseInfo
 	{
-		protected readonly Actor self;
+		protected readonly Actor Self;
 		int2 conditionalOffset;
 		BlinkState[] blinkPattern;
 
 		public WithDecorationBase(Actor self, InfoType info)
 			: base(info)
 		{
-			this.self = self;
+			Self = self;
 			blinkPattern = info.BlinkPattern;
 		}
 
@@ -73,7 +73,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			if (self.World.FogObscures(self))
 				return false;
 
-			if (blinkPattern != null && blinkPattern.Any())
+			if (blinkPattern != null && blinkPattern.Length > 0)
 			{
 				var i = (self.World.WorldTick / Info.BlinkInterval) % blinkPattern.Length;
 				if (blinkPattern[i] != BlinkState.On)

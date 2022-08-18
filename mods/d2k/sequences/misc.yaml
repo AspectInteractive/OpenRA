@@ -128,8 +128,8 @@ sandtrail:
 
 pips:
 	groups: DATA.R8
-		Start: 17
 		Length: 10
+		Frames: 18, 19, 20, 21, 22, 23, 24, 25, 26, 17
 		Offset: 3, 3
 	pickup-indicator: DATA.R8
 		Start: 112
@@ -441,7 +441,7 @@ moveflsh:
 		Tick: 80
 		BlendMode: Multiply
 		ZOffset: 2047
-		EmbeddedPalette: moveflash
+		HasEmbeddedPalette: True
 
 resources:
 	spicea: BLOXBASE.R8
@@ -468,7 +468,7 @@ shroud:
 		Length: 14
 	palette: DATA.R8
 		Start: 38
-		EmbeddedPalette: shroud
+		HasEmbeddedPalette: True
 	shrouda: DATA.R8
 		Start: 40
 	shroudb: DATA.R8
@@ -516,6 +516,32 @@ sandcraters:
 		Start: 162
 		Length: 16
 		Offset: -16,-16
+
+ornidirection:
+	arrow-t: MOUSE.R8
+		Start: 112
+		Offset: -25, -53, 0
+	arrow-tr: MOUSE.R8
+		Start: 120
+		Offset: 6, -47, 0
+	arrow-r: MOUSE.R8
+		Start: 128
+		Offset: 17, -26, 0
+	arrow-br: MOUSE.R8
+		Start: 136
+		Offset: 6, -1, 0
+	arrow-b: MOUSE.R8
+		Start: 148
+		Offset: -25, 7, 0
+	arrow-bl: MOUSE.R8
+		Start: 156
+		Offset: -52, -3, 0
+	arrow-l: MOUSE.R8
+		Start: 164
+		Offset: -61, -26, 0
+	arrow-tl: MOUSE.R8
+		Start: 172
+		Offset: -52, -44, 0
 
 null:
 	idle: DATA.R8

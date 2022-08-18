@@ -29,6 +29,7 @@ MCV:
 		Facing: 432
 		TransformSounds: constru2.aud, hvydoor1.aud
 		NoTransformNotification: BuildingCannotPlaceAudio
+		NoTransformTextNotification: Cannot deploy here.
 		Voice: Unload
 	MustBeDestroyed:
 		RequiredForShortGame: true
@@ -75,6 +76,7 @@ HARV:
 		Range: 4c0
 	ActorLostNotification:
 		Notification: HarvesterLost
+		TextNotification: Harvester lost.
 	SpawnActorOnDeath:
 		Actor: HARV.Husk
 		OwnerType: InternalName
@@ -211,6 +213,7 @@ ARTY:
 		TargetFrozenActors: True
 		ForceFireIgnoresActors: True
 		Voice: Attack
+		FacingTolerance: 0
 	AttackMove:
 		Voice: Attack
 	WithMuzzleOverlay:
@@ -257,6 +260,7 @@ FTNK:
 		MuzzleSequence: muzzle
 	AttackFrontal:
 		Voice: Attack
+		FacingTolerance: 0
 	AttackMove:
 		Voice: Attack
 	WithMuzzleOverlay:
@@ -347,6 +351,7 @@ BIKE:
 		LocalYaw: 100, -100
 	AttackFrontal:
 		Voice: Attack
+		FacingTolerance: 0
 	AttackMove:
 		Voice: Attack
 	SpawnActorOnDeath:
@@ -600,6 +605,7 @@ MSAM:
 		TargetFrozenActors: True
 		ForceFireIgnoresActors: True
 		Voice: Attack
+		FacingTolerance: 0
 	AttackMove:
 		Voice: Attack
 	WithSpriteTurret:
@@ -717,6 +723,7 @@ STNK:
 		LocalOffset: 213,43,128, 213,-43,128
 	AttackFrontal:
 		Voice: Attack
+		FacingTolerance: 0
 	AttackMove:
 		Voice: Attack
 	AutoTarget:
@@ -774,7 +781,7 @@ TRUCK:
 		Range: 4c0
 	DeliversCash:
 		Payload: 1000
-		PlayerExperience: 100
+		PlayerExperience: 10
 	SpawnActorOnDeath:
 		Actor: TRUCK.Husk
 		OwnerType: InternalName

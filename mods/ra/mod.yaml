@@ -138,6 +138,9 @@ ChromeLayout:
 	common|chrome/playerprofile.yaml
 	common|chrome/text-notifications.yaml
 
+Translations:
+	common|languages/en.ftl
+
 Weapons:
 	ra|weapons/explosions.yaml
 	ra|weapons/ballistics.yaml
@@ -155,9 +158,6 @@ Notifications:
 Music:
 	ra|audio/music.yaml
 
-Translations:
-	ra|languages/english.yaml
-
 Hotkeys:
 	common|hotkeys/game.yaml
 	common|hotkeys/observer.yaml
@@ -165,6 +165,8 @@ Hotkeys:
 	common|hotkeys/supportpowers.yaml
 	common|hotkeys/viewport.yaml
 	common|hotkeys/chat.yaml
+	common|hotkeys/editor.yaml
+	common|hotkeys/control-groups.yaml
 	ra|hotkeys.yaml
 
 LoadScreen: LogoStripeLoadScreen
@@ -223,6 +225,8 @@ Missions:
 MapGrid:
 	TileSize: 24,24
 	Type: Rectangular
+
+DefaultOrderGenerator: UnitOrderGenerator
 
 SupportsMapsFrom: ra
 

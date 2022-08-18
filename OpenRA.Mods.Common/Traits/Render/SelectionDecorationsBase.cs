@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -27,11 +27,11 @@ namespace OpenRA.Mods.Common.Traits.Render
 		IDecoration[] decorations;
 		IDecoration[] selectedDecorations;
 
-		protected readonly SelectionDecorationsBaseInfo info;
+		protected readonly SelectionDecorationsBaseInfo Info;
 
 		public SelectionDecorationsBase(SelectionDecorationsBaseInfo info)
 		{
-			this.info = info;
+			Info = info;
 		}
 
 		void INotifyCreated.Created(Actor self)
@@ -86,7 +86,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var displayExtra = selected || rollover || (regularWorld && statusBars != StatusBarsType.Standard);
 
 			if (selected)
-				foreach (var r in RenderSelectionBox(self, wr, info.SelectionBoxColor))
+				foreach (var r in RenderSelectionBox(self, wr, Info.SelectionBoxColor))
 					yield return r;
 
 			if (displayHealth || displayExtra)

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -317,7 +317,7 @@ namespace OpenRA.Mods.Common.Traits
 				.Where(unit => unit.IsIdle && unit.Info.HasTraitInfo<AttackBaseInfo>()
 					&& !Info.AirUnitsTypes.Contains(unit.Info.Name) && !Info.NavalUnitsTypes.Contains(unit.Info.Name) && !Info.ExcludeFromSquadsTypes.Contains(unit.Info.Name)).ToList();
 
-			if (!allEnemyBaseBuilder.Any() || ownUnits.Count < Info.SquadSize)
+			if (allEnemyBaseBuilder.Count == 0 || ownUnits.Count < Info.SquadSize)
 				return;
 
 			foreach (var b in allEnemyBaseBuilder)
@@ -328,7 +328,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				if (AttackOrFleeFuzzy.Rush.CanAttack(ownUnits, enemies))
 				{
-					var target = enemies.Any() ? enemies.Random(World.LocalRandom) : b;
+					var target = enemies.Count > 0 ? enemies.Random(World.LocalRandom) : b;
 					var rush = GetSquadOfType(SquadType.Rush);
 					if (rush == null)
 						rush = RegisterNewSquad(bot, SquadType.Rush, target);

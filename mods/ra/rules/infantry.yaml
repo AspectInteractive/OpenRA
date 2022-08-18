@@ -103,6 +103,9 @@ E1:
 		IsPlayerPalette: true
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
+	WithProductionIconOverlay:
+		Types: Veterancy
+		Prerequisites: barracks.upgraded
 
 E1R1:
 	Inherits: E1
@@ -114,6 +117,9 @@ E1R1:
 	UpdatesPlayerStatistics:
 		OverrideActor: e1
 	-Buildable:
+	WithProductionIconOverlay:
+		Types: Veterancy
+		Prerequisites: techlevel.infonly
 
 E2:
 	Inherits: ^Soldier
@@ -157,6 +163,9 @@ E2:
 		EmptyWeapon: UnitExplodeSmall
 		DamageSource: Killer
 	ProducibleWithLevel:
+		Prerequisites: barracks.upgraded
+	WithProductionIconOverlay:
+		Types: Veterancy
 		Prerequisites: barracks.upgraded
 
 E3:
@@ -202,6 +211,9 @@ E3:
 		Prerequisites: barracks.upgraded
 	AutoTarget:
 		ScanRadius: 5
+	WithProductionIconOverlay:
+		Types: Veterancy
+		Prerequisites: barracks.upgraded
 
 E3R1:
 	Inherits: E3
@@ -213,6 +225,9 @@ E3R1:
 	UpdatesPlayerStatistics:
 		OverrideActor: e3
 	-Buildable:
+	WithProductionIconOverlay:
+		Types: Veterancy
+		Prerequisites: techlevel.infonly
 
 E4:
 	Inherits: ^Soldier
@@ -253,6 +268,9 @@ E4:
 		Palette: player-noshadow
 		IsPlayerPalette: true
 	ProducibleWithLevel:
+		Prerequisites: barracks.upgraded
+	WithProductionIconOverlay:
+		Types: Veterancy
 		Prerequisites: barracks.upgraded
 
 E6:
@@ -332,6 +350,7 @@ SPY:
 	Infiltrates:
 		Types: SpyInfiltrate
 		Notification: BuildingInfiltrated
+		TextNotification: Building infiltrated.
 		PlayerExperience: 50
 	AutoTarget:
 		InitialStance: HoldFire
@@ -435,6 +454,9 @@ E7:
 		VoiceSet: TanyaVoice
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
+	WithProductionIconOverlay:
+		Types: Veterancy
+		Prerequisites: barracks.upgraded
 
 MEDI:
 	Inherits: ^Soldier
@@ -511,6 +533,7 @@ MECH:
 		ForceTargetRelationships: None
 	AttackFrontal:
 		Voice: Action
+		FacingTolerance: 0
 	CaptureManager:
 	Captures:
 		CaptureTypes: husk
@@ -574,6 +597,7 @@ GNRL:
 		Voice: Move
 	AttackFrontal:
 		Voice: Attack
+		FacingTolerance: 0
 	AttackMove:
 		Voice: Move
 	Passenger:
@@ -623,6 +647,7 @@ THF:
 	Infiltrates:
 		Types: ThiefInfiltrate
 		Notification: BuildingInfiltrated
+		TextNotification: Building infiltrated.
 		PlayerExperience: 50
 	Voiced:
 		VoiceSet: ThiefVoice
@@ -641,13 +666,14 @@ THF:
 		InitialDelay: 250
 		CloakDelay: 120
 		UncloakOn: Attack, Unload, Infiltrate, Demolish, Move
-		CloakTypes: Cloak
+		DetectionTypes: Cloak
 		IsPlayerPalette: true
 		PauseOnCondition: cloak-force-disabled
 	GrantConditionOnDamageState@UNCLOAK:
 		Condition: cloak-force-disabled
 		ValidDamageStates: Critical
 	Mobile:
+		Voice: Move
 		Speed: 68
 	-AttackFrontal:
 
@@ -682,6 +708,7 @@ SHOK:
 		ProneOffset: 227,0,-245
 	AttackFrontal:
 		Voice: Attack
+		FacingTolerance: 0
 	AttackMove:
 		Voice: Move
 	Passenger:
@@ -699,6 +726,9 @@ SHOK:
 	Voiced:
 		VoiceSet: ShokVoice
 	ProducibleWithLevel:
+		Prerequisites: barracks.upgraded
+	WithProductionIconOverlay:
+		Types: Veterancy
 		Prerequisites: barracks.upgraded
 
 SNIPER:
@@ -752,6 +782,9 @@ SNIPER:
 		ValidDamageStates: Critical
 	-MustBeDestroyed:
 	ProducibleWithLevel:
+		Prerequisites: barracks.upgraded
+	WithProductionIconOverlay:
+		Types: Veterancy
 		Prerequisites: barracks.upgraded
 
 Zombie:
@@ -818,6 +851,7 @@ Ant:
 	AutoTarget:
 		ScanRadius: 5
 	AttackFrontal:
+		FacingTolerance: 0
 	WithInfantryBody:
 		DefaultAttackSequence: bite
 	Armament:

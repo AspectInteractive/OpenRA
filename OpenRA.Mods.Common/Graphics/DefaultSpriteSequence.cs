@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -41,6 +41,7 @@ namespace OpenRA.Mods.Common.Graphics
 
 	public class DefaultSpriteSequenceLoader : ISpriteSequenceLoader
 	{
+		[System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "IDE0060:Remove unused parameter", Justification = "Load game API")]
 		public DefaultSpriteSequenceLoader(ModData modData) { }
 
 		public virtual ISpriteSequence CreateSequence(ModData modData, string tileSet, SpriteCache cache, string sequence, string animation, MiniYaml info)
@@ -117,36 +118,142 @@ namespace OpenRA.Mods.Common.Graphics
 		bool ISpriteSequence.IgnoreWorldTint => throw exception;
 		float ISpriteSequence.Scale => throw exception;
 		Sprite ISpriteSequence.GetSprite(int frame) { throw exception; }
-		Sprite ISpriteSequence.GetSprite(int frame, WAngle facing, out WAngle rotation) { throw exception; }
+		Sprite ISpriteSequence.GetSprite(int frame, WAngle facing) { throw exception; }
+		(Sprite, WAngle) ISpriteSequence.GetSpriteWithRotation(int frame, WAngle facing) { throw exception; }
 		Sprite ISpriteSequence.GetShadow(int frame, WAngle facing) { throw exception; }
 		float ISpriteSequence.GetAlpha(int frame) { throw exception; }
 	}
 
+	public struct SpriteSequenceField<T>
+	{
+		public string Key;
+		public T DefaultValue;
+
+		public SpriteSequenceField(string key, T defaultValue)
+		{
+			Key = key;
+			DefaultValue = defaultValue;
+		}
+	}
+
+	[Desc("Generic sprite sequence implementation, mostly unencumbered with game- or artwork-specific logic.")]
 	public class DefaultSpriteSequence : ISpriteSequence
 	{
-		static readonly WDist DefaultShadowSpriteZOffset = new WDist(-5);
 		protected Sprite[] sprites;
 		readonly bool reverseFacings, transpose;
 		readonly string sequence;
-		readonly float[] alpha;
 
 		protected readonly ISpriteSequenceLoader Loader;
 
-		public string Name { get; private set; }
-		public int Start { get; private set; }
-		public int Length { get; private set; }
-		public int Stride { get; private set; }
-		public int Facings { get; private set; }
-		public int InterpolatedFacings { get; private set; }
-		public int Tick { get; private set; }
-		public int ZOffset { get; private set; }
-		public float ZRamp { get; private set; }
-		public int ShadowStart { get; private set; }
-		public int ShadowZOffset { get; private set; }
-		public int[] Frames { get; private set; }
-		public Rectangle Bounds { get; private set; }
-		public bool IgnoreWorldTint { get; private set; }
-		public float Scale { get; private set; }
+		public Rectangle Bounds { get; }
+
+		public string Name { get; }
+
+		[Desc("Frame index to start from.")]
+		static readonly SpriteSequenceField<int> Start = new SpriteSequenceField<int>(nameof(Start), 0);
+		int ISpriteSequence.Start => start;
+		int start;
+
+		[Desc("Number of frames to use. Does not have to be the total amount the sprite sheet has.")]
+		static readonly SpriteSequenceField<int> Length = new SpriteSequenceField<int>(nameof(Length), 1);
+		int ISpriteSequence.Length => length;
+		int length;
+
+		[Desc("Overrides Length if a different number of frames is defined between facings.")]
+		static readonly SpriteSequenceField<int> Stride = new SpriteSequenceField<int>(nameof(Stride), -1);
+		int ISpriteSequence.Stride => stride;
+		int stride;
+
+		[Desc("The amount of directions the unit faces. Use negative values to rotate counter-clockwise.")]
+		static readonly SpriteSequenceField<int> Facings = new SpriteSequenceField<int>(nameof(Facings), 1);
+		int ISpriteSequence.Facings => facings;
+		protected int facings;
+
+		[Desc("The amount of directions the unit faces. Use negative values to rotate counter-clockwise.")]
+		static readonly SpriteSequenceField<int> InterpolatedFacings = new SpriteSequenceField<int>(nameof(InterpolatedFacings), 1);
+		int ISpriteSequence.InterpolatedFacings => interpolatedFacings;
+		protected int interpolatedFacings;
+
+		[Desc("Time (in milliseconds at default game speed) to wait until playing the next frame in the animation.")]
+		static readonly SpriteSequenceField<int> Tick = new SpriteSequenceField<int>(nameof(Tick), 40);
+		int ISpriteSequence.Tick => tick;
+		readonly int tick;
+
+		[Desc("Value controlling the Z-order. A higher values means rendering on top of other sprites at the same position. " +
+			"Use power of 2 values to avoid glitches.")]
+		static readonly SpriteSequenceField<WDist> ZOffset = new SpriteSequenceField<WDist>(nameof(ZOffset), WDist.Zero);
+		int ISpriteSequence.ZOffset => zOffset;
+		readonly int zOffset;
+
+		[Desc("Additional sprite depth Z offset to apply as a function of sprite Y (0: vertical, 1: flat on terrain)")]
+		static readonly SpriteSequenceField<int> ZRamp = new SpriteSequenceField<int>(nameof(ZRamp), 0);
+
+		[Desc("If the shadow is not part of the sprite, but baked into the same sprite sheet at a fixed offset, " +
+			"set this to the frame index where it starts.")]
+		static readonly SpriteSequenceField<int> ShadowStart = new SpriteSequenceField<int>(nameof(ShadowStart), -1);
+		int ISpriteSequence.ShadowStart => shadowStart;
+		readonly int shadowStart;
+
+		[Desc("Set Z-Offset for the separate shadow. Used by the later Westwood 2.5D titles.")]
+		static readonly SpriteSequenceField<WDist> ShadowZOffset = new SpriteSequenceField<WDist>(nameof(ShadowZOffset), new WDist(-5));
+		int ISpriteSequence.ShadowZOffset => shadowZOffset;
+		readonly int shadowZOffset;
+
+		[Desc("The individual frames to play instead of going through them sequentially from the `Start`.")]
+		static readonly SpriteSequenceField<int[]> Frames = new SpriteSequenceField<int[]>(nameof(Frames), null);
+		int[] ISpriteSequence.Frames => frames;
+		int[] frames;
+
+		[Desc("Don't apply terrain lighting or colored overlays.")]
+		static readonly SpriteSequenceField<bool> IgnoreWorldTint = new SpriteSequenceField<bool>(nameof(IgnoreWorldTint), false);
+		bool ISpriteSequence.IgnoreWorldTint => ignoreWorldTint;
+		readonly bool ignoreWorldTint;
+
+		[Desc("Adjusts the rendered size of the sprite")]
+		static readonly SpriteSequenceField<float> Scale = new SpriteSequenceField<float>(nameof(Scale), 1);
+		float ISpriteSequence.Scale => scale;
+		readonly float scale;
+
+		[Desc("Play the sprite sequence back and forth.")]
+		static readonly SpriteSequenceField<bool> Reverses = new SpriteSequenceField<bool>(nameof(Reverses), false);
+
+		[Desc("Support a frame order where each animation step is split per each direction.")]
+		static readonly SpriteSequenceField<bool> Transpose = new SpriteSequenceField<bool>(nameof(Transpose), false);
+
+		[Desc("Mirror on the X axis.")]
+		static readonly SpriteSequenceField<bool> FlipX = new SpriteSequenceField<bool>(nameof(FlipX), false);
+
+		[Desc("Mirror on the Y axis.")]
+		static readonly SpriteSequenceField<bool> FlipY = new SpriteSequenceField<bool>(nameof(FlipY), false);
+
+		[Desc("Change the position in-game on X, Y, Z.")]
+		static readonly SpriteSequenceField<float3> Offset = new SpriteSequenceField<float3>(nameof(Offset), float3.Zero);
+
+		[Desc("Apply an OpenGL/Photoshop inspired blend mode.")]
+		static readonly SpriteSequenceField<BlendMode> BlendMode = new SpriteSequenceField<BlendMode>(nameof(BlendMode), OpenRA.BlendMode.Alpha);
+
+		[Desc("Allows to append multiple sequence definitions which are indented below this node " +
+			"like when offsets differ per frame or a sequence is spread across individual files.")]
+		static readonly SpriteSequenceField<MiniYaml> Combine = new SpriteSequenceField<MiniYaml>(nameof(Combine), null);
+
+		[Desc("Sets transparency - use one value to set for all frames or provide a value for each frame.")]
+		static readonly SpriteSequenceField<float[]> Alpha = new SpriteSequenceField<float[]>(nameof(Alpha), null);
+		readonly float[] alpha;
+
+		[Desc("Fade the animation from fully opaque on the first frame to fully transparent after the last frame.")]
+		static readonly SpriteSequenceField<bool> AlphaFade = new SpriteSequenceField<bool>(nameof(AlphaFade), false);
+
+		[Desc("Name of the file containing the depth data sprite.")]
+		static readonly SpriteSequenceField<string> DepthSprite = new SpriteSequenceField<string>(nameof(DepthSprite), null);
+
+		[Desc("Frame index containing the depth data.")]
+		static readonly SpriteSequenceField<int> DepthSpriteFrame = new SpriteSequenceField<int>(nameof(DepthSpriteFrame), 0);
+
+		[Desc("X, Y offset to apply to the depth sprite.")]
+		static readonly SpriteSequenceField<float2> DepthSpriteOffset = new SpriteSequenceField<float2>(nameof(DepthSpriteOffset), float2.Zero);
+
+		[Desc("Make a custom palette embedded in the sprite available to the PaletteFromEmbeddedSpritePalette trait.")]
+		static readonly SpriteSequenceField<bool> HasEmbeddedPalette = new SpriteSequenceField<bool>(nameof(HasEmbeddedPalette), false);
 
 		public readonly uint[] EmbeddedPalette;
 
@@ -161,6 +268,14 @@ namespace OpenRA.Mods.Common.Graphics
 				return FieldLoader.GetValue<T>(key, value.Value);
 
 			return fallback;
+		}
+
+		protected static T LoadField<T>(Dictionary<string, MiniYaml> d, SpriteSequenceField<T> field)
+		{
+			if (d.TryGetValue(field.Key, out var value))
+				return FieldLoader.GetValue<T>(field.Key, value.Value);
+
+			return field.DefaultValue;
 		}
 
 		protected static Rectangle FlipRectangle(Rectangle rect, bool flipX, bool flipY)
@@ -182,94 +297,95 @@ namespace OpenRA.Mods.Common.Graphics
 
 			try
 			{
-				Start = LoadField(d, "Start", 0);
-				ShadowStart = LoadField(d, "ShadowStart", -1);
-				ShadowZOffset = LoadField(d, "ShadowZOffset", DefaultShadowSpriteZOffset).Length;
-				ZOffset = LoadField(d, "ZOffset", WDist.Zero).Length;
-				ZRamp = LoadField(d, "ZRamp", 0);
-				Tick = LoadField(d, "Tick", 40);
-				transpose = LoadField(d, "Transpose", false);
-				Frames = LoadField<int[]>(d, "Frames", null);
-				IgnoreWorldTint = LoadField(d, "IgnoreWorldTint", false);
-				Scale = LoadField(d, "Scale", 1f);
+				start = LoadField(d, Start);
+				shadowStart = LoadField(d, ShadowStart);
+				shadowZOffset = LoadField(d, ShadowZOffset).Length;
+				zOffset = LoadField(d, ZOffset).Length;
+				tick = LoadField(d, Tick);
+				transpose = LoadField(d, Transpose);
+				frames = LoadField(d, Frames);
+				ignoreWorldTint = LoadField(d, IgnoreWorldTint);
+				scale = LoadField(d, Scale);
 
-				var flipX = LoadField(d, "FlipX", false);
-				var flipY = LoadField(d, "FlipY", false);
+				var flipX = LoadField(d, FlipX);
+				var flipY = LoadField(d, FlipY);
+				var zRamp = LoadField(d, ZRamp);
 
-				Facings = LoadField(d, "Facings", 1);
-				InterpolatedFacings = LoadField(d, "InterpolatedFacings", -1);
-				if (InterpolatedFacings != -1 && !(InterpolatedFacings > 1 && InterpolatedFacings > Facings && InterpolatedFacings <= 1024
-					&& Exts.IsPowerOf2(InterpolatedFacings)))
+				facings = LoadField(d, Facings);
+				interpolatedFacings = LoadField(d, nameof(InterpolatedFacings), -1);
+				if (interpolatedFacings != -1 && (interpolatedFacings <= 1 || interpolatedFacings <= Math.Abs(facings) || interpolatedFacings > 1024
+					|| !Exts.IsPowerOf2(interpolatedFacings)))
 					throw new YamlException($"InterpolatedFacings must be greater than Facings, within the range of 2 to 1024, and a power of 2.");
 
-				if (Facings < 0)
+				if (facings < 0)
 				{
 					reverseFacings = true;
-					Facings = -Facings;
+					facings = -facings;
 				}
 
-				var offset = LoadField(d, "Offset", float3.Zero);
-				var blendMode = LoadField(d, "BlendMode", BlendMode.Alpha);
+				var offset = LoadField(d, Offset);
+				var blendMode = LoadField(d, BlendMode);
 
 				Func<int, IEnumerable<int>> getUsedFrames = frameCount =>
 				{
-					if (d.TryGetValue("Length", out var length) && length.Value == "*")
-						Length = Frames != null ? Frames.Length : frameCount - Start;
+					if (d.TryGetValue(Length.Key, out var lengthYaml) && lengthYaml.Value == "*")
+						length = frames?.Length ?? frameCount - start;
 					else
-						Length = LoadField(d, "Length", 1);
+						length = LoadField(d, Length);
 
 					// Plays the animation forwards, and then in reverse
-					if (LoadField(d, "Reverses", false))
+					if (LoadField(d, Reverses))
 					{
-						var frames = Frames != null ? Frames.Skip(Start).Take(Length).ToArray() : Exts.MakeArray(Length, i => Start + i);
-						Frames = frames.Concat(frames.Skip(1).Take(Length - 2).Reverse()).ToArray();
-						Length = 2 * Length - 2;
-						Start = 0;
+						var frames = this.frames != null ? this.frames.Skip(start).Take(length).ToArray() : Exts.MakeArray(length, i => start + i);
+						this.frames = frames.Concat(frames.Skip(1).Take(length - 2).Reverse()).ToArray();
+						length = 2 * length - 2;
+						start = 0;
 					}
 
-					Stride = LoadField(d, "Stride", Length);
+					// Overrides Length with a custom stride
+					stride = LoadField(d, Stride.Key, length);
 
-					if (Length > Stride)
+					if (length > stride)
 						throw new YamlException($"Sequence {sequence}.{animation}: Length must be <= stride");
 
-					if (Frames != null && Length > Frames.Length)
+					if (frames != null && length > frames.Length)
 						throw new YamlException($"Sequence {sequence}.{animation}: Length must be <= Frames.Length");
 
-					var end = Start + (Facings - 1) * Stride + Length - 1;
-					if (Frames != null)
+					var end = start + (facings - 1) * stride + length - 1;
+					if (frames != null)
 					{
-						foreach (var f in Frames)
+						foreach (var f in frames)
 							if (f < 0 || f >= frameCount)
-								throw new YamlException($"Sequence {sequence}.{animation} defines a Frames override that references frame {f}, but only [{Start}..{end}] actually exist");
+								throw new YamlException($"Sequence {sequence}.{animation} defines a Frames override that references frame {f}, but only [{start}..{end}] actually exist");
 
-						if (Start < 0 || end >= Frames.Length)
-							throw new YamlException($"Sequence {sequence}.{animation} uses indices [{Start}..{end}] of the Frames list, but only {Frames.Length} frames are defined");
+						if (start < 0 || end >= frames.Length)
+							throw new YamlException($"Sequence {sequence}.{animation} uses indices [{start}..{end}] of the Frames list, but only {frames.Length} frames are defined");
 					}
-					else if (Start < 0 || end >= frameCount)
-						throw new YamlException($"Sequence {sequence}.{animation} uses frames [{Start}..{end}], but only [0..{frameCount - 1}] actually exist");
+					else if (start < 0 || end >= frameCount)
+						throw new YamlException($"Sequence {sequence}.{animation} uses frames [{start}..{end}], but only [0..{frameCount - 1}] actually exist");
 
-					if (ShadowStart >= 0 && ShadowStart + (Facings - 1) * Stride + Length > frameCount)
-						throw new YamlException($"Sequence {sequence}.{animation}'s shadow frames use frames [{ShadowStart}..{ShadowStart + (Facings - 1) * Stride + Length - 1}], but only [0..{frameCount - 1}] actually exist");
+					if (shadowStart >= 0 && shadowStart + (facings - 1) * stride + length > frameCount)
+						throw new YamlException($"Sequence {sequence}.{animation}'s shadow frames use frames [{shadowStart}..{shadowStart + (facings - 1) * stride + length - 1}], but only [0..{frameCount - 1}] actually exist");
 
 					var usedFrames = new List<int>();
-					for (var facing = 0; facing < Facings; facing++)
+					for (var facing = 0; facing < facings; facing++)
 					{
-						for (var frame = 0; frame < Length; frame++)
+						for (var frame = 0; frame < length; frame++)
 						{
-							var i = transpose ? (frame % Length) * Facings + facing :
-								(facing * Stride) + (frame % Length);
+							var i = transpose ? (frame % length) * facings + facing :
+								(facing * stride) + (frame % length);
 
-							usedFrames.Add(Frames != null ? Frames[i] : Start + i);
+							usedFrames.Add(frames != null ? frames[i] : start + i);
 						}
 					}
 
-					if (ShadowStart >= 0)
-						return usedFrames.Concat(usedFrames.Select(i => i + ShadowStart - Start));
+					if (shadowStart >= 0)
+						return usedFrames.Concat(usedFrames.Select(i => i + shadowStart - start));
 
 					return usedFrames;
 				};
 
-				if (d.TryGetValue("Combine", out var combine))
+				if (d.TryGetValue(Combine.Key, out var combine))
 				{
 					var combined = Enumerable.Empty<Sprite>();
 					foreach (var sub in combine.Nodes)
@@ -277,19 +393,20 @@ namespace OpenRA.Mods.Common.Graphics
 						var sd = sub.Value.ToDictionary();
 
 						// Allow per-sprite offset, flipping, start, and length
-						var subStart = LoadField(sd, "Start", 0);
-						var subOffset = LoadField(sd, "Offset", float3.Zero);
-						var subFlipX = LoadField(sd, "FlipX", false);
-						var subFlipY = LoadField(sd, "FlipY", false);
-						var subFrames = LoadField<int[]>(sd, "Frames", null);
+						// These shouldn't inherit Start/Offset/etc from the main definition
+						var subStart = LoadField(sd, Start);
+						var subOffset = LoadField(sd, Offset);
+						var subFlipX = LoadField(sd, FlipX);
+						var subFlipY = LoadField(sd, FlipY);
+						var subFrames = LoadField(sd, Frames);
 						var subLength = 0;
 
 						Func<int, IEnumerable<int>> subGetUsedFrames = subFrameCount =>
 						{
-							if (sd.TryGetValue("Length", out var subLengthYaml) && subLengthYaml.Value == "*")
+							if (sd.TryGetValue(Length.Key, out var subLengthYaml) && subLengthYaml.Value == "*")
 								subLength = subFrames != null ? subFrames.Length : subFrameCount - subStart;
 							else
-								subLength = LoadField(sd, "Length", 1);
+								subLength = LoadField(sd, Length);
 
 							return subFrames != null ? subFrames.Skip(subStart).Take(subLength) : Enumerable.Range(subStart, subLength);
 						};
@@ -303,9 +420,9 @@ namespace OpenRA.Mods.Common.Graphics
 							var bounds = FlipRectangle(s.Bounds, subFlipX, subFlipY);
 							var dx = subOffset.X + offset.X + (subFlipX ? -s.Offset.X : s.Offset.X);
 							var dy = subOffset.Y + offset.Y + (subFlipY ? -s.Offset.Y : s.Offset.Y);
-							var dz = subOffset.Z + offset.Z + s.Offset.Z + ZRamp * dy;
+							var dz = subOffset.Z + offset.Z + s.Offset.Z + zRamp * dy;
 
-							return new Sprite(s.Sheet, bounds, ZRamp, new float3(dx, dy, dz), s.Channel, blendMode);
+							return new Sprite(s.Sheet, bounds, zRamp, new float3(dx, dy, dz), s.Channel, blendMode);
 						}).ToList();
 
 						var frames = subFrames != null ? subFrames.Skip(subStart).Take(subLength).ToArray() : Exts.MakeArray(subLength, i => subStart + i);
@@ -328,36 +445,36 @@ namespace OpenRA.Mods.Common.Graphics
 						var bounds = FlipRectangle(s.Bounds, flipX, flipY);
 						var dx = offset.X + (flipX ? -s.Offset.X : s.Offset.X);
 						var dy = offset.Y + (flipY ? -s.Offset.Y : s.Offset.Y);
-						var dz = offset.Z + s.Offset.Z + ZRamp * dy;
+						var dz = offset.Z + s.Offset.Z + zRamp * dy;
 
-						return new Sprite(s.Sheet, bounds, ZRamp, new float3(dx, dy, dz), s.Channel, blendMode);
+						return new Sprite(s.Sheet, bounds, zRamp, new float3(dx, dy, dz), s.Channel, blendMode);
 					}).ToArray();
 				}
 
-				alpha = LoadField(d, "Alpha", (float[])null);
+				alpha = LoadField(d, Alpha);
 				if (alpha != null)
 				{
 					if (alpha.Length == 1)
-						alpha = Exts.MakeArray(Length, _ => alpha[0]);
-					else if (alpha.Length != Length)
-						throw new YamlException($"Sequence {sequence}.{animation} must define either 1 or {Length} Alpha values.");
+						alpha = Exts.MakeArray(length, _ => alpha[0]);
+					else if (alpha.Length != length)
+						throw new YamlException($"Sequence {sequence}.{animation} must define either 1 or {length} Alpha values.");
 				}
 
-				if (LoadField(d, "AlphaFade", false))
+				if (LoadField(d, AlphaFade))
 				{
 					if (alpha != null)
 						throw new YamlException($"Sequence {sequence}.{animation} cannot define both AlphaFade and Alpha.");
 
-					alpha = Exts.MakeArray(Length, i => float2.Lerp(1f, 0f, i / (Length - 1f)));
+					alpha = Exts.MakeArray(length, i => float2.Lerp(1f, 0f, i / (length - 1f)));
 				}
 
-				var depthSprite = LoadField<string>(d, "DepthSprite", null);
+				var depthSprite = LoadField(d, DepthSprite);
 				if (!string.IsNullOrEmpty(depthSprite))
 				{
-					var depthSpriteFrame = LoadField(d, "DepthSpriteFrame", 0);
-					var depthOffset = LoadField(d, "DepthSpriteOffset", float2.Zero);
-					Func<int, IEnumerable<int>> getDepthFrame = _ => new int[] { depthSpriteFrame };
-					var ds = cache[depthSprite, getDepthFrame][depthSpriteFrame];
+					var depthSpriteFrame = LoadField(d, DepthSpriteFrame);
+					var depthOffset = LoadField(d, DepthSpriteOffset);
+					IEnumerable<int> GetDepthFrame(int _) => new[] { depthSpriteFrame };
+					var ds = cache[depthSprite, GetDepthFrame][depthSpriteFrame];
 
 					sprites = sprites.Select(s =>
 					{
@@ -374,21 +491,20 @@ namespace OpenRA.Mods.Common.Graphics
 					}).ToArray();
 				}
 
-				var exportPalette = LoadField<string>(d, "EmbeddedPalette", null);
-				if (exportPalette != null)
+				if (LoadField(d, HasEmbeddedPalette))
 				{
 					var src = GetSpriteSrc(modData, tileSet, sequence, animation, info.Value, d);
 
 					var metadata = cache.FrameMetadata(src);
-					var i = Frames != null ? Frames[0] : Start;
-					var palettes = metadata != null ? metadata.GetOrDefault<EmbeddedSpritePalette>() : null;
+					var i = frames != null ? frames[0] : start;
+					var palettes = metadata?.GetOrDefault<EmbeddedSpritePalette>();
 					if (palettes == null || !palettes.TryGetPaletteForFrame(i, out EmbeddedPalette))
-						throw new YamlException($"Cannot export palettes from {src}: frame {i} does not define an embedded palette");
+						throw new YamlException($"Cannot export palette from {src}: frame {i} does not define an embedded palette");
 				}
 
-				var boundSprites = SpriteBounds(sprites, Frames, Start, Facings, Length, Stride, transpose);
-				if (ShadowStart > 0)
-					boundSprites = boundSprites.Concat(SpriteBounds(sprites, Frames, ShadowStart, Facings, Length, Stride, transpose));
+				var boundSprites = SpriteBounds(sprites, frames, start, facings, length, stride, transpose);
+				if (shadowStart > 0)
+					boundSprites = boundSprites.Concat(SpriteBounds(sprites, frames, shadowStart, facings, length, stride, transpose));
 
 				Bounds = boundSprites.Union();
 			}
@@ -419,35 +535,40 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public Sprite GetSprite(int frame)
 		{
-			return GetSprite(Start, frame, WAngle.Zero);
+			return GetSprite(start, frame, WAngle.Zero);
 		}
 
 		public Sprite GetSprite(int frame, WAngle facing, out WAngle rotation)
 		{
-			// Note: Error checking is not done here as it is done on load
-			if (InterpolatedFacings != -1)
-				rotation = Util.GetInterpolatedFacing(facing, Facings, InterpolatedFacings);
-			else
-				rotation = WAngle.Zero;
+			return GetSprite(start, frame, facing);
+		}
 
-			return GetSprite(Start, frame, facing);
+		public (Sprite, WAngle) GetSpriteWithRotation(int frame, WAngle facing)
+		{
+			var rotation = WAngle.Zero;
+
+			// Note: Error checking is not done here as it is done on load
+			if (interpolatedFacings != -1)
+				rotation = Util.GetInterpolatedFacing(facing, Math.Abs(facings), interpolatedFacings);
+
+			return (GetSprite(start, frame, facing), rotation);
 		}
 
 		public Sprite GetShadow(int frame, WAngle facing)
 		{
-			return ShadowStart >= 0 ? GetSprite(ShadowStart, frame, facing) : null;
+			return shadowStart >= 0 ? GetSprite(shadowStart, frame, facing) : null;
 		}
 
 		protected virtual Sprite GetSprite(int start, int frame, WAngle facing)
 		{
 			var f = GetFacingFrameOffset(facing);
 			if (reverseFacings)
-				f = (Facings - f) % Facings;
+				f = (facings - f) % facings;
 
-			var i = transpose ? (frame % Length) * Facings + f :
-				(f * Stride) + (frame % Length);
+			var i = transpose ? (frame % length) * facings + f :
+				(f * stride) + (frame % length);
 
-			var j = Frames != null ? Frames[i] : start + i;
+			var j = frames != null ? frames[i] : start + i;
 			if (sprites[j] == null)
 				throw new InvalidOperationException($"Attempted to query unloaded sprite from {Name}.{sequence} start={start} frame={frame} facing={facing}");
 
@@ -456,7 +577,7 @@ namespace OpenRA.Mods.Common.Graphics
 
 		protected virtual int GetFacingFrameOffset(WAngle facing)
 		{
-			return Util.IndexFacing(facing, Facings);
+			return Util.IndexFacing(facing, facings);
 		}
 
 		public virtual float GetAlpha(int frame)

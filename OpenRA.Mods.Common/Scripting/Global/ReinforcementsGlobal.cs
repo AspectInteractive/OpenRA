@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -25,12 +25,9 @@ namespace OpenRA.Mods.Common.Scripting
 	[ScriptGlobal("Reinforcements")]
 	public class ReinforcementsGlobal : ScriptGlobal
 	{
-		readonly DomainIndex domainIndex;
-
 		public ReinforcementsGlobal(ScriptContext context)
 			: base(context)
 		{
-			domainIndex = context.World.WorldActor.Trait<DomainIndex>();
 		}
 
 		Actor CreateActor(Player owner, string actorType, bool addToWorld, CPos? entryLocation = null, CPos? nextLocation = null)
@@ -38,9 +35,10 @@ namespace OpenRA.Mods.Common.Scripting
 			if (!Context.World.Map.Rules.Actors.TryGetValue(actorType, out var ai))
 				throw new LuaException($"Unknown actor type '{actorType}'");
 
-			var initDict = new TypeDictionary();
-
-			initDict.Add(new OwnerInit(owner));
+			var initDict = new TypeDictionary
+			{
+				new OwnerInit(owner)
+			};
 
 			if (entryLocation.HasValue)
 			{

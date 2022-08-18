@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -19,15 +19,15 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Required distance away from destination before requesting a pickup. Default is 6 cells.")]
 		public readonly WDist MinDistance = WDist.FromCells(6);
 
-		public override object Create(ActorInitializer init) { return new AutoCarryable(init.Self, this); }
+		public override object Create(ActorInitializer init) { return new AutoCarryable(this); }
 	}
 
 	public class AutoCarryable : Carryable, ICallForTransport
 	{
 		readonly AutoCarryableInfo info;
 
-		public AutoCarryable(Actor self, AutoCarryableInfo info)
-			: base(self, info)
+		public AutoCarryable(AutoCarryableInfo info)
+			: base(info)
 		{
 			this.info = info;
 		}
@@ -35,10 +35,10 @@ namespace OpenRA.Mods.Common.Traits
 		public WDist MinimumDistance => info.MinDistance;
 
 		// No longer want to be carried
-		void ICallForTransport.MovementCancelled(Actor self) { MovementCancelled(self); }
+		void ICallForTransport.MovementCancelled(Actor self) { MovementCancelled(); }
 		void ICallForTransport.RequestTransport(Actor self, CPos destination) { RequestTransport(self, destination); }
 
-		void MovementCancelled(Actor self)
+		void MovementCancelled()
 		{
 			if (state == State.Locked)
 				return;
@@ -93,7 +93,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (delta.HorizontalLengthSquared < info.MinDistance.LengthSquared)
 			{
 				// Cancel pickup
-				MovementCancelled(self);
+				MovementCancelled();
 				return false;
 			}
 
@@ -111,7 +111,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (delta.HorizontalLengthSquared < info.MinDistance.LengthSquared)
 			{
 				// Cancel pickup
-				MovementCancelled(self);
+				MovementCancelled();
 				return LockResponse.Failed;
 			}
 

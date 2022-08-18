@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,7 +11,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using OpenRA.FileSystem;
 using OpenRA.GameRules;
 using OpenRA.Server;
@@ -55,7 +54,7 @@ namespace OpenRA.Mods.Common.Lint
 					// Removals can never define children or values
 					if (field.Key.StartsWith("-", StringComparison.Ordinal))
 					{
-						if (field.Value.Nodes.Any())
+						if (field.Value.Nodes.Count > 0)
 							emitError($"{field.Location} {field.Key} defines child nodes, which is not valid for removals.");
 
 						if (!string.IsNullOrEmpty(field.Value.Value))
@@ -69,6 +68,12 @@ namespace OpenRA.Mods.Common.Lint
 					{
 						var projectileName = NormalizeName(field.Value.Value);
 						var projectileInfo = modData.ObjectCreator.FindType(projectileName + "Info");
+						if (projectileInfo == null)
+						{
+							emitError($"{field.Location} defines unknown projectile `{projectileName}`.");
+							continue;
+						}
+
 						foreach (var projectileField in field.Value.Nodes)
 						{
 							var projectileFieldName = NormalizeName(projectileField.Key);
@@ -86,6 +91,12 @@ namespace OpenRA.Mods.Common.Lint
 
 						var warheadName = NormalizeName(field.Value.Value);
 						var warheadInfo = modData.ObjectCreator.FindType(warheadName + "Warhead");
+						if (warheadInfo == null)
+						{
+							emitError($"{field.Location} defines unknown warhead `{warheadName}`.");
+							continue;
+						}
+
 						foreach (var warheadField in field.Value.Nodes)
 						{
 							var warheadFieldName = NormalizeName(warheadField.Key);
@@ -108,7 +119,7 @@ namespace OpenRA.Mods.Common.Lint
 			foreach (var f in mapFiles)
 				CheckWeapons(MiniYaml.FromStream(fileSystem.Open(f), f), emitError, emitWarning, modData);
 
-			if (weaponDefinitions.Nodes.Any())
+			if (weaponDefinitions.Nodes.Count > 0)
 				CheckWeapons(weaponDefinitions.Nodes, emitError, emitWarning, modData);
 		}
 	}

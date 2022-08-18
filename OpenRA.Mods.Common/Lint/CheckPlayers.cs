@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -43,6 +43,7 @@ namespace OpenRA.Mods.Common.Lint
 			if (players.Players.Count > 64)
 				emitError("Defining more than 64 players is not allowed.");
 
+			var playablePlayerFound = false;
 			var worldOwnerFound = false;
 			var playerNames = players.Players.Values.Select(p => p.Name).ToHashSet();
 			foreach (var player in players.Players.Values)
@@ -55,10 +56,13 @@ namespace OpenRA.Mods.Common.Lint
 					if (!playerNames.Contains(enemy))
 						emitError($"Enemies contains player {enemy} that is not in list.");
 
+				if (player.Playable)
+					playablePlayerFound = true;
+
 				if (player.OwnsWorld)
 				{
 					worldOwnerFound = true;
-					if (player.Enemies.Any() || player.Allies.Any())
+					if (player.Enemies.Length > 0 || player.Allies.Length > 0)
 						emitWarning($"The player {player.Name} owning the world should not have any allies or enemies.");
 
 					if (player.Playable)
@@ -70,6 +74,9 @@ namespace OpenRA.Mods.Common.Lint
 					emitError($"The player {player.Name} must specify LockFaction: True.");
 				}
 			}
+
+			if (!playablePlayerFound && visibility != MapVisibility.Shellmap)
+				emitError("Found no playable player.");
 
 			if (!worldOwnerFound)
 				emitError("Found no player owning the world.");

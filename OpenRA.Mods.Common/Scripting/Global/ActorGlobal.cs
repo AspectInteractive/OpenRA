@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -38,7 +38,7 @@ namespace OpenRA.Mods.Common.Scripting
 			// Construct the ActorInit.
 			var init = (ActorInit)FormatterServices.GetUninitializedObject(initType);
 			if (initInstance.Length > 1)
-				initType.GetField("InstanceName").SetValue(init, initInstance[1]);
+				initType.GetField(nameof(ActorInit.InstanceName)).SetValue(init, initInstance[1]);
 
 			if (value is LuaTable tableValue && init is CompositeActorInit compositeInit)
 			{
@@ -69,17 +69,6 @@ namespace OpenRA.Mods.Common.Scripting
 
 				compositeInit.Initialize(initValues);
 				return init;
-			}
-
-			// HACK: Backward compatibility for legacy int facings
-			if (init is FacingInit facingInit)
-			{
-				if (value.TryGetClrValue(out int facing))
-				{
-					facingInit.Initialize(WAngle.FromFacing(facing));
-					TextNotificationsManager.Debug("Initializing Facing with integers is deprecated. Use Angle instead.");
-					return facingInit;
-				}
 			}
 
 			var initializers = initType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,83 +11,113 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using Fluent.Net;
-using Fluent.Net.RuntimeAst;
+using Linguini.Bundle;
+using Linguini.Bundle.Builder;
+using Linguini.Shared.Types.Bundle;
+using Linguini.Syntax.Parser;
 using OpenRA.FileSystem;
 
 namespace OpenRA
 {
+	[AttributeUsage(AttributeTargets.Field)]
+	public sealed class TranslationReferenceAttribute : Attribute
+	{
+		public readonly string[] RequiredVariableNames;
+
+		public TranslationReferenceAttribute() { }
+
+		public TranslationReferenceAttribute(params string[] requiredVariableNames)
+		{
+			RequiredVariableNames = requiredVariableNames;
+		}
+	}
+
 	public class Translation
 	{
-		readonly IEnumerable<MessageContext> messageContexts;
+		readonly FluentBundle bundle;
 
 		public Translation(string language, string[] translations, IReadOnlyFileSystem fileSystem)
 		{
-			if (translations == null || !translations.Any())
+			if (translations == null || translations.Length == 0)
 				return;
 
-			messageContexts = GetMessageContext(language, translations, fileSystem).ToList();
+			bundle = LinguiniBuilder.Builder()
+				.CultureInfo(CultureInfo.InvariantCulture)
+				.SkipResources()
+				.SetUseIsolating(false)
+				.UseConcurrent()
+				.UncheckedBuild();
+
+			ParseTranslations(language, translations, fileSystem);
 		}
 
-		IEnumerable<MessageContext> GetMessageContext(string language, string[] translations, IReadOnlyFileSystem fileSystem)
+		void ParseTranslations(string language, string[] translations, IReadOnlyFileSystem fileSystem)
 		{
-			var backfall = translations.Where(t => t.EndsWith("en.ftl"));
-			var paths = translations.Where(t => t.EndsWith(language + ".ftl"));
-			foreach (var path in paths.Concat(backfall))
+			// Always load english strings to provide a fallback for missing translations.
+			// It is important to load the english files first so the chosen language's files can override them.
+			var paths = translations.Where(t => t.EndsWith("en.ftl")).ToHashSet();
+			foreach (var t in translations)
+				if (t.EndsWith($"{language}.ftl"))
+					paths.Add(t);
+
+			foreach (var path in paths)
 			{
 				var stream = fileSystem.Open(path);
 				using (var reader = new StreamReader(stream))
 				{
-					var options = new MessageContextOptions { UseIsolating = false };
-					var messageContext = new MessageContext(language, options);
-					var errors = messageContext.AddMessages(reader);
-					foreach (var error in errors)
+					var parser = new LinguiniParser(reader);
+					var resource = parser.Parse();
+					foreach (var error in resource.Errors)
 						Log.Write("debug", error.ToString());
 
-					yield return messageContext;
+					bundle.AddResourceOverriding(resource);
 				}
 			}
 		}
 
-		public string GetFormattedMessage(string key, IDictionary<string, object> args = null, string attribute = null)
+		public string GetString(string key, IDictionary<string, object> arguments = null)
 		{
-			if (key == null)
-				return "";
+			if (!TryGetString(key, out var message, arguments))
+				message = key;
 
-			foreach (var messageContext in messageContexts)
-			{
-				var message = messageContext.GetMessage(key);
-				if (message != null)
-				{
-					if (string.IsNullOrEmpty(attribute))
-						return messageContext.Format(message, args);
-					else
-						return messageContext.Format(message.Attributes[attribute], args);
-				}
-			}
-
-			return key;
+			return message;
 		}
 
-		public string GetAttribute(string key, string attribute)
+		public bool TryGetString(string key, out string value, IDictionary<string, object> arguments = null)
 		{
-			if (key == null)
-				return "";
-
-			foreach (var messageContext in messageContexts)
+			if (!HasMessage(key))
 			{
-				var message = messageContext.GetMessage(key);
-				if (message != null && message.Attributes != null && message.Attributes.ContainsKey(attribute))
-				{
-					var node = message.Attributes[attribute];
-					var stringLiteral = (StringLiteral)node;
-					return stringLiteral.Value;
-				}
+				value = null;
+				return false;
 			}
 
-			return "";
+			var fluentArguments = new Dictionary<string, IFluentType>();
+			if (arguments != null)
+				foreach (var (k, v) in arguments)
+					fluentArguments.Add(k, v.ToFluentType());
+
+			try
+			{
+				var result = bundle.TryGetAttrMsg(key, fluentArguments, out var errors, out value);
+				foreach (var error in errors)
+					Log.Write("debug", $"Translation of {key}: {error}");
+
+				return result;
+			}
+			catch (Exception e)
+			{
+				Log.Write("debug", $"Translation of {key}: {e}");
+				value = null;
+				return false;
+			}
+		}
+
+		public bool HasMessage(string key)
+		{
+			return bundle.HasMessage(key);
 		}
 
 		// Adapted from Fluent.Net.SimpleExample.TranslationService by Mark Weaver
@@ -103,14 +133,12 @@ namespace OpenRA
 			{
 				name = args[i] as string;
 				if (string.IsNullOrEmpty(name))
-				{
 					throw new ArgumentException($"Expected the argument at index {i} to be a non-empty string",
 						nameof(args));
-				}
 
 				value = args[i + 1];
 				if (value == null)
-					throw new ArgumentNullException("args", $"Expected the argument at index {i + 1} to be a non-null value");
+					throw new ArgumentNullException(nameof(args), $"Expected the argument at index {i + 1} to be a non-null value");
 
 				argumentDictionary.Add(name, value);
 			}

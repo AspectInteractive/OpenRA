@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -41,7 +41,7 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Smoke sprite image name")]
 		public readonly string SmokeImage = null;
 
-		[SequenceReference(nameof(SmokeImage))]
+		[SequenceReference(nameof(SmokeImage), allowNullImage: true)]
 		[Desc("Smoke sprite sequences randomly chosen from")]
 		public readonly string[] SmokeSequences = Array.Empty<string>();
 
@@ -104,7 +104,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			Info = info;
 			world = self.World;
-			hasSmoke = !string.IsNullOrEmpty(info.SmokeImage) && info.SmokeSequences.Any();
+			hasSmoke = !string.IsNullOrEmpty(info.SmokeImage) && info.SmokeSequences.Length > 0;
 
 			var sequenceProvider = world.Map.Rules.Sequences;
 			var types = sequenceProvider.Sequences(Info.Sequence);

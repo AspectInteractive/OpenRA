@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -61,14 +61,14 @@ namespace OpenRA.Graphics
 			foreach (var b in waypoints.Skip(1).Select(pos => wr.Viewport.WorldToViewPx(wr.Screen3DPosition(pos))))
 			{
 				Game.Renderer.RgbaColorRenderer.DrawLine(a, b, width, color);
-				DrawTargetMarker(wr, color, b, markerSize);
+				DrawTargetMarker(color, b, markerSize);
 				a = b;
 			}
 
-			DrawTargetMarker(wr, color, first);
+			DrawTargetMarker(color, first);
 		}
 
-		public static void DrawTargetMarker(WorldRenderer wr, Color color, int2 screenPos, int size = 1)
+		public static void DrawTargetMarker(Color color, int2 screenPos, int size = 1)
 		{
 			var offset = new int2(size, size);
 			var tl = screenPos - offset;

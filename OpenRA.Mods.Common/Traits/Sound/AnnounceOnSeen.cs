@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -23,7 +23,11 @@ namespace OpenRA.Mods.Common.Traits.Sound
 		public readonly bool PingRadar = false;
 
 		[NotificationReference("Speech")]
+		[Desc("Speech notification to play.")]
 		public readonly string Notification = null;
+
+		[Desc("Text notification to display.")]
+		public readonly string TextNotification = null;
 
 		public readonly bool AnnounceNeutrals = false;
 
@@ -55,6 +59,9 @@ namespace OpenRA.Mods.Common.Traits.Sound
 			// Audio notification
 			if (discoverer != null && !string.IsNullOrEmpty(Info.Notification))
 				Game.Sound.PlayNotification(self.World.Map.Rules, discoverer, "Speech", Info.Notification, discoverer.Faction.InternalName);
+
+			if (discoverer != null)
+				TextNotificationsManager.AddTransientLine(Info.TextNotification, discoverer);
 
 			// Radar notification
 			if (Info.PingRadar)

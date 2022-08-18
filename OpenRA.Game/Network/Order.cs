@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -73,7 +73,7 @@ namespace OpenRA
 		public bool SuppressVisualFeedback;
 		public ref readonly Target VisualFeedbackTarget => ref visualFeedbackTarget;
 
-		public Player Player => Subject != null ? Subject.Owner : null;
+		public Player Player => Subject?.Owner;
 
 		readonly Target target;
 		readonly Target visualFeedbackTarget;
@@ -117,29 +117,32 @@ namespace OpenRA
 							switch ((TargetType)r.ReadByte())
 							{
 								case TargetType.Actor:
-									{
-										if (world != null && TryGetActorFromUInt(world, r.ReadUInt32(), out var targetActor))
-											target = Target.FromActor(targetActor);
-										break;
-									}
+								{
+									var actorID = r.ReadUInt32();
+									var actorGeneration = r.ReadInt32();
+									if (world != null && TryGetActorFromUInt(world, actorID, out var targetActor))
+										target = Target.FromSerializedActor(targetActor, actorGeneration);
+
+									break;
+								}
 
 								case TargetType.FrozenActor:
-									{
-										var playerActorID = r.ReadUInt32();
-										var frozenActorID = r.ReadUInt32();
+								{
+									var playerActorID = r.ReadUInt32();
+									var frozenActorID = r.ReadUInt32();
 
-										if (world == null || !TryGetActorFromUInt(world, playerActorID, out var playerActor))
-											break;
-
-										if (playerActor.Owner.FrozenActorLayer == null)
-											break;
-
-										var frozen = playerActor.Owner.FrozenActorLayer.FromID(frozenActorID);
-										if (frozen != null)
-											target = Target.FromFrozenActor(frozen);
-
+									if (world == null || !TryGetActorFromUInt(world, playerActorID, out var playerActor))
 										break;
-									}
+
+									if (playerActor.Owner.FrozenActorLayer == null)
+										break;
+
+									var frozen = playerActor.Owner.FrozenActorLayer.FromID(frozenActorID);
+									if (frozen != null)
+										target = Target.FromFrozenActor(frozen);
+
+									break;
+								}
 
 								case TargetType.TerrainCell:
 									if (flags.HasField(OrderFields.TargetIncludesCell))
@@ -375,6 +378,7 @@ namespace OpenRA
 						{
 							case TargetType.Actor:
 								w.Write(UIntFromActor(Target.SerializableActor));
+								w.Write(Target.SerializableGeneration);
 								break;
 							case TargetType.FrozenActor:
 								w.Write(Target.FrozenActor.Viewer.PlayerActor.ActorID);

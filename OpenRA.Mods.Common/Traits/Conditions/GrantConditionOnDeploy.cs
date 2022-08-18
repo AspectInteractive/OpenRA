@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -261,7 +261,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (!IsValidTerrain(self.Location))
 				return;
 
-			if (Info.DeploySounds != null && Info.DeploySounds.Any())
+			if (Info.DeploySounds != null && Info.DeploySounds.Length > 0)
 				Game.Sound.Play(SoundType.World, Info.DeploySounds, self.World, self.CenterPosition);
 
 			// Revoke condition that is applied while undeployed.
@@ -270,7 +270,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			// If there is no animation to play just grant the condition that is used while deployed.
 			// Alternatively, play the deploy animation and then grant the condition.
-			if (!notify.Any())
+			if (notify.Length == 0)
 				OnDeployCompleted();
 			else
 				foreach (var n in notify)
@@ -285,7 +285,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (!init && deployState != DeployState.Deployed)
 				return;
 
-			if (Info.UndeploySounds != null && Info.UndeploySounds.Any())
+			if (Info.UndeploySounds != null && Info.UndeploySounds.Length > 0)
 				Game.Sound.Play(SoundType.World, Info.UndeploySounds, self.World, self.CenterPosition);
 
 			if (!init)
@@ -293,7 +293,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			// If there is no animation to play just grant the condition that is used while undeployed.
 			// Alternatively, play the undeploy animation and then grant the condition.
-			if (!notify.Any())
+			if (notify.Length == 0)
 				OnUndeployCompleted();
 			else
 				foreach (var n in notify)

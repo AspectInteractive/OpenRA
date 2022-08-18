@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -66,7 +66,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			// We want to update the trails' position even while the trait is disabled,
 			// otherwise we might get visual 'jumps' when the trait is re-enabled.
-			var local = info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation));
+			var local = info.Offset.Rotate(body.QuantizeOrientation(self.Orientation));
 			trail.Update(self.CenterPosition + body.LocalToWorld(local));
 		}
 

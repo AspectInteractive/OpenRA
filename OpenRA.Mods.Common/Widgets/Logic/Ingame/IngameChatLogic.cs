@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -21,9 +21,8 @@ using OpenRA.Widgets;
 namespace OpenRA.Mods.Common.Widgets.Logic
 {
 	[ChromeLogicArgsHotkeys("OpenTeamChat", "OpenGeneralChat")]
-	public class IngameChatLogic : ChromeLogic
+	public class IngameChatLogic : ChromeLogic, INotificationHandler<TextNotification>
 	{
-		readonly OrderManager orderManager;
 		readonly Ruleset modRules;
 		readonly World world;
 
@@ -44,10 +43,18 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 		readonly bool isMenuChat;
 
+		[TranslationReference]
+		static readonly string Team = "team";
+
+		[TranslationReference]
+		static readonly string All = "all";
+
+		[TranslationReference("seconds")]
+		static readonly string ChatAvailability = "chat-availability";
+
 		[ObjectCreator.UseCtor]
 		public IngameChatLogic(Widget widget, OrderManager orderManager, World world, ModData modData, bool isMenuChat, Dictionary<string, MiniYaml> logicArgs)
 		{
-			this.orderManager = orderManager;
 			modRules = modData.DefaultRules;
 			this.isMenuChat = isMenuChat;
 			this.world = world;
@@ -59,7 +66,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var disableTeamChat = alwaysDisabled || (world.LocalPlayer != null && !players.Any(p => p.IsAlliedWith(world.LocalPlayer)));
 			var teamChat = !disableTeamChat;
 
-			tabCompletion.Commands = chatTraits.OfType<ChatCommands>().SelectMany(x => x.Commands.Keys).ToList();
+			var teamMessage = modData.Translation.GetString(Team);
+			var allMessage = modData.Translation.GetString(All);
+
+			tabCompletion.Commands = chatTraits.OfType<ChatCommands>().ToArray().SelectMany(x => x.Commands.Keys);
 			tabCompletion.Names = orderManager.LobbyInfo.Clients.Select(c => c.Name).Distinct().ToList();
 
 			if (logicArgs.TryGetValue("Templates", out var templateIds))
@@ -83,7 +93,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			chatChrome.Visible = true;
 
 			var chatMode = chatChrome.Get<ButtonWidget>("CHAT_MODE");
-			chatMode.GetText = () => teamChat && !disableTeamChat ? "Team" : "All";
+			chatMode.GetText = () => teamChat && !disableTeamChat ? teamMessage : allMessage;
 			chatMode.OnClick = () => teamChat ^= true;
 
 			// Enable teamchat if we are a player and die,
@@ -173,7 +183,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				return true;
 			};
 
-			chatDisabledLabel = new CachedTransform<int, string>(x => x > 0 ? $"Chat available in {x} seconds..." : "Chat Disabled");
+			chatDisabledLabel = new CachedTransform<int, string>(x => modData.Translation.GetString(ChatAvailability, Translation.Arguments("seconds", x)));
 
 			if (!isMenuChat)
 			{
@@ -209,11 +219,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			chatScrollPanel.RemoveChildren();
 			chatScrollPanel.ScrollToBottom();
 
-			foreach (var notification in orderManager.NotificationsCache)
+			foreach (var notification in TextNotificationsManager.Notifications)
 				if (IsNotificationEligible(notification))
 					AddNotification(notification, true);
-
-			orderManager.AddTextNotification += AddNotificationWrapper;
 
 			chatText.IsDisabled = () => !chatEnabled || (world.IsReplay && !Game.Settings.Debug.EnableDebugCommandsInReplays);
 
@@ -260,12 +268,13 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			Ui.ResetTooltips();
 		}
 
-		public void AddNotificationWrapper(TextNotification notification)
+		void INotificationHandler<TextNotification>.Handle(TextNotification notification)
 		{
 			if (!IsNotificationEligible(notification))
 				return;
 
-			chatOverlayDisplay?.AddNotification(notification);
+			if (!IsNotificationMuted(notification))
+				chatOverlayDisplay?.AddNotification(notification);
 
 			// HACK: Force disable the chat notification sound for the in-menu chat dialog
 			// This works around our inability to disable the sounds for the in-game dialog when it is hidden
@@ -282,7 +291,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (scrolledToBottom)
 				chatScrollPanel.ScrollToBottom(smooth: true);
 
-			if (!suppressSound)
+			if (!suppressSound && !IsNotificationMuted(notification))
 				Game.Sound.PlayNotification(modRules, null, "Sounds", chatLineSound, null);
 		}
 
@@ -314,16 +323,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				notification.Pool == TextNotificationPool.Mission;
 		}
 
-		bool disposed = false;
-		protected override void Dispose(bool disposing)
+		bool IsNotificationMuted(TextNotification notification)
 		{
-			if (!disposed)
-			{
-				orderManager.AddTextNotification -= AddNotificationWrapper;
-				disposed = true;
-			}
-
-			base.Dispose(disposing);
+			return Game.Settings.Game.HideReplayChat && world.IsReplay && notification.ClientId != TextNotificationsManager.SystemClientId;
 		}
 	}
 }

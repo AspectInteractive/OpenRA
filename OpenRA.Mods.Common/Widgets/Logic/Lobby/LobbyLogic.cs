@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -20,7 +20,7 @@ using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets.Logic
 {
-	public class LobbyLogic : ChromeLogic
+	public class LobbyLogic : ChromeLogic, INotificationHandler<TextNotification>
 	{
 		static readonly Action DoNothing = () => { };
 
@@ -59,6 +59,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 		MapPreview map;
 		Session.MapStatus mapStatus;
+
+		string lastUpdatedMap = null;
 
 		bool chatEnabled;
 		bool addBotOnMapLoad;
@@ -122,7 +124,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			services = modData.Manifest.Get<WebServices>();
 
-			orderManager.AddTextNotification += AddChatLine;
 			Game.LobbyInfoChanged += UpdateCurrentMap;
 			Game.LobbyInfoChanged += UpdatePlayerList;
 			Game.LobbyInfoChanged += UpdateDiscordStatus;
@@ -182,8 +183,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{
 					var onSelect = new Action<string>(uid =>
 					{
-						// Don't select the same map again
-						if (uid == map.Uid)
+						// Don't select the same map again, and handle map becoming unavailable
+						if (uid == map.Uid || modData.MapCache[uid].Status != MapStatus.Available)
 							return;
 
 						orderManager.IssueOrder(Order.Command("map " + uid));
@@ -191,11 +192,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 						Game.Settings.Save();
 					});
 
+					// Check for updated maps, if the user has edited a map we'll preselect it for them
+					modData.MapCache.UpdateMaps();
+
 					Ui.OpenWindow("MAPCHOOSER_PANEL", new WidgetArgs()
 					{
-						{ "initialMap", map.Uid },
+						{ "initialMap", SelectRecentMap(map.Uid) },
 						{ "initialTab", MapClassification.System },
-						{ "onExit", DoNothing },
+						{ "onExit", Game.IsHost ? (Action)UpdateSelectedMap : modData.MapCache.UpdateMaps },
 						{ "onSelect", Game.IsHost ? onSelect : null },
 						{ "filter", MapVisibility.Lobby },
 					});
@@ -208,7 +212,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				slotsButton.IsVisible = () => panel != PanelType.Servers;
 				slotsButton.IsDisabled = () => configurationDisabled() || panel != PanelType.Players ||
 					(orderManager.LobbyInfo.Slots.Values.All(s => !s.AllowBots) &&
-					orderManager.LobbyInfo.Slots.Count(s => !s.Value.LockTeam && orderManager.LobbyInfo.ClientInSlot(s.Key) != null) == 0);
+					!orderManager.LobbyInfo.Slots.Any(s => !s.Value.LockTeam && orderManager.LobbyInfo.ClientInSlot(s.Key) != null));
 
 				slotsButton.OnMouseDown = _ =>
 				{
@@ -265,7 +269,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 						{
 							Title = $"{d} Teams",
 							IsSelected = () => false,
-							OnClick = () => orderManager.IssueOrder(Order.Command($"assignteams {d.ToString()}"))
+							OnClick = () => orderManager.IssueOrder(Order.Command($"assignteams {d}"))
 						}).ToList();
 
 						if (orderManager.LobbyInfo.Slots.Any(s => s.Value.AllowBots))
@@ -364,8 +368,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			// Force start panel
 			Action startGame = () =>
 			{
-				gameStarting = true;
-				orderManager.IssueOrder(Order.Command("startgame"));
+				// Refresh MapCache and check if the selected map is available before attempting to start the game
+				if (modData.MapCache[map.Uid].Status == MapStatus.Available)
+				{
+					gameStarting = true;
+					orderManager.IssueOrder(Order.Command("startgame"));
+				}
+				else
+					UpdateSelectedMap();
 			};
 
 			var startGameButton = lobby.GetOrNull<ButtonWidget>("START_GAME_BUTTON");
@@ -373,6 +383,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			{
 				startGameButton.IsDisabled = () => configurationDisabled() || map.Status != MapStatus.Available ||
 					orderManager.LobbyInfo.Slots.Any(sl => sl.Value.Required && orderManager.LobbyInfo.ClientInSlot(sl.Key) == null) ||
+					orderManager.LobbyInfo.Slots.All(sl => orderManager.LobbyInfo.ClientInSlot(sl.Key) == null) ||
 					(!orderManager.LobbyInfo.GlobalSettings.EnableSingleplayer && orderManager.LobbyInfo.NonBotPlayers.Count() < 2) ||
 					insufficientPlayerSpawns;
 
@@ -477,7 +488,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (disposing && !disposed)
 			{
 				disposed = true;
-				orderManager.AddTextNotification -= AddChatLine;
 				Game.LobbyInfoChanged -= UpdateCurrentMap;
 				Game.LobbyInfoChanged -= UpdatePlayerList;
 				Game.LobbyInfoChanged -= UpdateDiscordStatus;
@@ -518,7 +528,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 		}
 
-		void AddChatLine(TextNotification notification)
+		void INotificationHandler<TextNotification>.Handle(TextNotification notification)
 		{
 			var chatLine = chatTemplates[notification.Pool].Clone();
 			WidgetUtils.SetupTextNotification(chatLine, notification, lobbyChatPanel.Bounds.Width - lobbyChatPanel.ScrollbarWidth, true);
@@ -602,7 +612,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 						template = emptySlotTemplate.Clone();
 
 					if (isHost)
-						LobbyUtils.SetupEditableSlotWidget(template, slot, client, orderManager, worldRenderer, map);
+						LobbyUtils.SetupEditableSlotWidget(template, slot, client, orderManager, map);
 					else
 						LobbyUtils.SetupSlotWidget(template, slot, client);
 
@@ -621,16 +631,16 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					LobbyUtils.SetupLatencyWidget(template, client, orderManager);
 
 					if (client.Bot != null)
-						LobbyUtils.SetupEditableSlotWidget(template, slot, client, orderManager, worldRenderer, map);
+						LobbyUtils.SetupEditableSlotWidget(template, slot, client, orderManager, map);
 					else
-						LobbyUtils.SetupEditableNameWidget(template, slot, client, orderManager, worldRenderer);
+						LobbyUtils.SetupEditableNameWidget(template, client, orderManager, worldRenderer);
 
 					LobbyUtils.SetupEditableColorWidget(template, slot, client, orderManager, worldRenderer, colorManager);
 					LobbyUtils.SetupEditableFactionWidget(template, slot, client, orderManager, factions);
 					LobbyUtils.SetupEditableTeamWidget(template, slot, client, orderManager, map);
-					LobbyUtils.SetupEditableHandicapWidget(template, slot, client, orderManager, map);
+					LobbyUtils.SetupEditableHandicapWidget(template, slot, client, orderManager);
 					LobbyUtils.SetupEditableSpawnWidget(template, slot, client, orderManager, map);
-					LobbyUtils.SetupEditableReadyWidget(template, slot, client, orderManager, map, MapIsPlayable);
+					LobbyUtils.SetupEditableReadyWidget(template, client, orderManager, map, MapIsPlayable);
 				}
 				else
 				{
@@ -639,26 +649,26 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 						template = nonEditablePlayerTemplate.Clone();
 
 					LobbyUtils.SetupLatencyWidget(template, client, orderManager);
-					LobbyUtils.SetupColorWidget(template, slot, client);
-					LobbyUtils.SetupFactionWidget(template, slot, client, factions);
+					LobbyUtils.SetupColorWidget(template, client);
+					LobbyUtils.SetupFactionWidget(template, client, factions);
 
 					if (isHost)
 					{
 						LobbyUtils.SetupEditableTeamWidget(template, slot, client, orderManager, map);
-						LobbyUtils.SetupEditableHandicapWidget(template, slot, client, orderManager, map);
+						LobbyUtils.SetupEditableHandicapWidget(template, slot, client, orderManager);
 						LobbyUtils.SetupEditableSpawnWidget(template, slot, client, orderManager, map);
-						LobbyUtils.SetupPlayerActionWidget(template, slot, client, orderManager, worldRenderer,
+						LobbyUtils.SetupPlayerActionWidget(template, client, orderManager, worldRenderer,
 							lobby, () => panel = PanelType.Kick, () => panel = PanelType.Players);
 					}
 					else
 					{
-						LobbyUtils.SetupNameWidget(template, slot, client, orderManager, worldRenderer);
-						LobbyUtils.SetupTeamWidget(template, slot, client);
-						LobbyUtils.SetupHandicapWidget(template, slot, client);
-						LobbyUtils.SetupSpawnWidget(template, slot, client);
+						LobbyUtils.SetupNameWidget(template, client, orderManager, worldRenderer);
+						LobbyUtils.SetupTeamWidget(template, client);
+						LobbyUtils.SetupHandicapWidget(template, client);
+						LobbyUtils.SetupSpawnWidget(template, client);
 					}
 
-					LobbyUtils.SetupReadyWidget(template, slot, client);
+					LobbyUtils.SetupReadyWidget(template, client);
 				}
 
 				template.IsVisible = () => true;
@@ -687,10 +697,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					if (template == null || template.Id != editableSpectatorTemplate.Id)
 						template = editableSpectatorTemplate.Clone();
 
-					LobbyUtils.SetupEditableNameWidget(template, null, c, orderManager, worldRenderer);
+					LobbyUtils.SetupEditableNameWidget(template, c, orderManager, worldRenderer);
 
 					if (client.IsAdmin)
-						LobbyUtils.SetupEditableReadyWidget(template, null, client, orderManager, map, MapIsPlayable);
+						LobbyUtils.SetupEditableReadyWidget(template, client, orderManager, map, MapIsPlayable);
 					else
 						LobbyUtils.HideReadyWidgets(template);
 				}
@@ -701,13 +711,13 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 						template = nonEditableSpectatorTemplate.Clone();
 
 					if (isHost)
-						LobbyUtils.SetupPlayerActionWidget(template, null, client, orderManager, worldRenderer,
+						LobbyUtils.SetupPlayerActionWidget(template, client, orderManager, worldRenderer,
 							lobby, () => panel = PanelType.Kick, () => panel = PanelType.Players);
 					else
-						LobbyUtils.SetupNameWidget(template, null, client, orderManager, worldRenderer);
+						LobbyUtils.SetupNameWidget(template, client, orderManager, worldRenderer);
 
 					if (client.IsAdmin)
-						LobbyUtils.SetupReadyWidget(template, null, client);
+						LobbyUtils.SetupReadyWidget(template, client);
 					else
 						LobbyUtils.HideReadyWidgets(template);
 				}
@@ -821,6 +831,31 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			DiscordService.UpdateStatus(state, details);
 
 			onStart();
+		}
+
+		void UpdateSelectedMap()
+		{
+			if (modData.MapCache[map.Uid].Status == MapStatus.Available)
+				return;
+
+			var uid = modData.MapCache.GetUpdatedMap(map.Uid);
+			if (uid != null)
+			{
+				orderManager.IssueOrder(Order.Command("map " + uid));
+				Game.Settings.Server.Map = uid;
+				Game.Settings.Save();
+			}
+		}
+
+		string SelectRecentMap(string currentUid)
+		{
+			if (lastUpdatedMap != modData.MapCache.LastModifiedMap)
+			{
+				lastUpdatedMap = modData.MapCache.LastModifiedMap;
+				return lastUpdatedMap;
+			}
+
+			return currentUid;
 		}
 	}
 

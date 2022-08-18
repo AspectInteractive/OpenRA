@@ -27,7 +27,7 @@ World:
 	FlashPaletteEffect@LIGHTNINGSTRIKE:
 		Type: LightningStrike
 	LuaScript:
-		Scripts: fort-lonestar.lua, fort-lonestar-AI.lua, campaign.lua
+		Scripts: campaign.lua, fort-lonestar.lua, fort-lonestar-AI.lua
 	MapBuildRadius:
 		AllyBuildRadiusCheckboxVisible: False
 		BuildRadiusCheckboxVisible: False
@@ -164,6 +164,7 @@ MOBILETENT:
 		Facing: 384
 		TransformSounds: placbldg.aud, build5.aud
 		NoTransformNotification: BuildingCannotPlaceAudio
+		NoTransformTextNotification: Cannot deploy here.
 	RenderSprites:
 		Image: TRUK
 

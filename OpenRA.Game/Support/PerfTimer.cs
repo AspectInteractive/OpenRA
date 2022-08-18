@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -31,16 +31,16 @@ namespace OpenRA.Support
 		List<PerfTimer> children;
 		long ticks;
 
-		static readonly ThreadLocal<PerfTimer> parentThreadLocal = new ThreadLocal<PerfTimer>();
+		static readonly ThreadLocal<PerfTimer> ParentThreadLocal = new ThreadLocal<PerfTimer>();
 
 		public PerfTimer(string name, float thresholdMs = 0)
 		{
 			this.name = name;
 			this.thresholdMs = thresholdMs;
 
-			parent = parentThreadLocal.Value;
+			parent = ParentThreadLocal.Value;
 			depth = parent == null ? (byte)0 : (byte)(parent.depth + 1);
-			parentThreadLocal.Value = this;
+			ParentThreadLocal.Value = this;
 
 			ticks = Stopwatch.GetTimestamp();
 		}
@@ -49,7 +49,7 @@ namespace OpenRA.Support
 		{
 			ticks = Stopwatch.GetTimestamp() - ticks;
 
-			parentThreadLocal.Value = parent;
+			ParentThreadLocal.Value = parent;
 
 			if (parent == null)
 				Write();

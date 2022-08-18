@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -159,7 +159,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			if (BuildableInfo != null && rsi != null)
 			{
-				var image = rsi.GetImage(actorInfo, owner.World.Map.Rules.Sequences, owner.Faction.Name);
+				var image = rsi.GetImage(actorInfo, owner.Faction.InternalName);
 				Icon = new Animation(owner.World, image);
 				Icon.Play(BuildableInfo.Icon);
 				IconPalette = BuildableInfo.IconPalette;
@@ -176,14 +176,14 @@ namespace OpenRA.Mods.Common.Traits
 	public class UpdatesPlayerStatisticsInfo : TraitInfo
 	{
 		[Desc("Add to army value in statistics")]
-		public bool AddToArmyValue = false;
+		public readonly bool AddToArmyValue = false;
 
 		[Desc("Add to assets value in statistics")]
-		public bool AddToAssetsValue = true;
+		public readonly bool AddToAssetsValue = true;
 
 		[ActorReference]
 		[Desc("Count this actor as a different type in the spectator army display.")]
-		public string OverrideActor = null;
+		public readonly string OverrideActor = null;
 
 		public override object Create(ActorInitializer init) { return new UpdatesPlayerStatistics(this, init.Self); }
 	}

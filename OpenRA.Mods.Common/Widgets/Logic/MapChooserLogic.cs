@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -98,7 +98,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 
 			var deleteMapButton = widget.Get<ButtonWidget>("DELETE_MAP_BUTTON");
-			deleteMapButton.IsDisabled = () => modData.MapCache[selectedUid].Class != MapClassification.User;
+			deleteMapButton.IsDisabled = () => currentTab != MapClassification.User;
 			deleteMapButton.IsVisible = () => currentTab == MapClassification.User;
 			deleteMapButton.OnClick = () =>
 			{
@@ -106,7 +106,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{
 					RefreshMaps(currentTab, filter);
 					EnumerateMaps(currentTab, itemTemplate);
-					if (!tabMaps[currentTab].Any())
+					if (tabMaps[currentTab].Length == 0)
 						SwitchTab(modData.MapCache[newUid].Class, itemTemplate);
 				});
 			};
@@ -126,7 +126,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			SetupMapTab(MapClassification.User, filter, "USER_MAPS_TAB_BUTTON", "USER_MAPS_TAB", itemTemplate);
 			SetupMapTab(MapClassification.System, filter, "SYSTEM_MAPS_TAB_BUTTON", "SYSTEM_MAPS_TAB", itemTemplate);
 
-			if (initialMap == null && tabMaps.Keys.Contains(initialTab) && tabMaps[initialTab].Any())
+			if (initialMap == null && tabMaps.ContainsKey(initialTab) && tabMaps[initialTab].Length > 0)
 			{
 				selectedUid = Game.ModData.MapCache.ChooseInitialMap(tabMaps[initialTab].Select(mp => mp.Uid).First(),
 					Game.CosmeticRandom);
@@ -163,7 +163,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			var tabButton = widget.Get<ButtonWidget>(tabButtonName);
 			tabButton.IsHighlighted = () => currentTab == tab;
-			tabButton.IsVisible = () => tabMaps[tab].Any();
+			tabButton.IsVisible = () => tabMaps[tab].Length > 0;
 			tabButton.OnClick = () => SwitchTab(tab, itemTemplate);
 
 			RefreshMaps(tab, filter);
@@ -178,8 +178,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{
 					foreach (var category in map.Categories)
 					{
-						var count = 0;
-						categoryDict.TryGetValue(category, out count);
+						categoryDict.TryGetValue(category, out var count);
 						categoryDict[category] = count + 1;
 					}
 				}
@@ -191,7 +190,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					.ToList();
 
 				// 'all game types' extra item
-				categories.Insert(0, (null as string, tabMaps[tab].Count()));
+				categories.Insert(0, (null as string, tabMaps[tab].Length));
 
 				Func<(string Category, int Count), string> showItem = x => $"{x.Category ?? "All Maps"} ({x.Count})";
 

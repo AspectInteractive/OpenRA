@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -18,17 +18,19 @@ namespace OpenRA.Mods.Common.Activities
 	class RepairBridge : Enter
 	{
 		readonly EnterBehaviour enterBehaviour;
-		readonly string notification;
+		readonly string speechNotification;
+		readonly string textNotification;
 
 		Actor enterActor;
 		BridgeHut enterHut;
 		LegacyBridgeHut enterLegacyHut;
 
-		public RepairBridge(Actor self, in Target target, EnterBehaviour enterBehaviour, string notification, Color targetLineColor)
+		public RepairBridge(Actor self, in Target target, EnterBehaviour enterBehaviour, string speechNotification, string textNotification, Color targetLineColor)
 			: base(self, target, targetLineColor)
 		{
 			this.enterBehaviour = enterBehaviour;
-			this.notification = notification;
+			this.speechNotification = speechNotification;
+			this.textNotification = textNotification;
 		}
 
 		bool CanEnterHut()
@@ -75,7 +77,8 @@ namespace OpenRA.Mods.Common.Activities
 			else if (enterHut != null)
 				enterHut.Repair(self);
 
-			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", notification, self.Owner.Faction.InternalName);
+			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", speechNotification, self.Owner.Faction.InternalName);
+			TextNotificationsManager.AddTransientLine(textNotification, self.Owner);
 
 			if (enterBehaviour == EnterBehaviour.Dispose)
 				self.Dispose();

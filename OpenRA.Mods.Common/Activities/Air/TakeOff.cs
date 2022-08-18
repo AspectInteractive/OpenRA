@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -17,12 +17,10 @@ namespace OpenRA.Mods.Common.Activities
 	public class TakeOff : Activity
 	{
 		readonly Aircraft aircraft;
-		readonly IMove move;
 
 		public TakeOff(Actor self)
 		{
 			aircraft = self.Trait<Aircraft>();
-			move = self.Trait<IMove>();
 		}
 
 		protected override void OnFirstRun(Actor self)
@@ -38,6 +36,9 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (aircraft.Info.TakeoffSounds.Length > 0)
 				Game.Sound.Play(SoundType.World, aircraft.Info.TakeoffSounds, self.World, aircraft.CenterPosition);
+
+			foreach (var notify in self.TraitsImplementing<INotifyTakeOff>())
+				notify.TakeOff(self);
 		}
 
 		public override bool Tick(Actor self)

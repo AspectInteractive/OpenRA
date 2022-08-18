@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -22,7 +22,7 @@ namespace OpenRA.Network
 	class SyncReport
 	{
 		const int NumSyncReports = 5;
-		static readonly Cache<Type, TypeInfo> typeInfoCache = new Cache<Type, TypeInfo>(t => new TypeInfo(t));
+		static readonly Cache<Type, TypeInfo> TypeInfoCache = new Cache<Type, TypeInfo>(t => new TypeInfo(t));
 
 		readonly OrderManager orderManager;
 
@@ -33,8 +33,8 @@ namespace OpenRA.Network
 		{
 			var type = sync.GetType();
 			TypeInfo typeInfo;
-			lock (typeInfoCache)
-				typeInfo = typeInfoCache[type];
+			lock (TypeInfoCache)
+				typeInfo = TypeInfoCache[type];
 			var values = new Values(typeInfo.Names.Length);
 			var index = 0;
 
@@ -193,7 +193,7 @@ namespace OpenRA.Network
 				var properties = type.GetProperties(Flags).Where(pi => pi.HasAttribute<SyncAttribute>());
 
 				foreach (var prop in properties)
-					if (!prop.CanRead || prop.GetIndexParameters().Any())
+					if (!prop.CanRead || prop.GetIndexParameters().Length > 0)
 						throw new InvalidOperationException(
 							"Properties using the Sync attribute must be readable and must not use index parameters.\n" +
 							"Invalid Property: " + prop.DeclaringType.FullName + "." + prop.Name);
@@ -238,7 +238,7 @@ namespace OpenRA.Network
 			{
 				// The lambda generated is shown below.
 				// TSync is actual type of the ISync object. Foo is a field or property with the Sync attribute applied.
-				var toString = memberType.GetMethod("ToString", Type.EmptyTypes);
+				var toString = memberType.GetMethod(nameof(object.ToString), Type.EmptyTypes);
 				Expression getString;
 				if (memberType.IsValueType)
 				{

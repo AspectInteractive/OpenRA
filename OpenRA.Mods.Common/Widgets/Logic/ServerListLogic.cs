@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -291,7 +291,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var players = widget.GetOrNull<LabelWidget>("SELECTED_PLAYERS");
 			if (players != null)
 			{
-				players.IsVisible = () => currentServer != null && (clientContainer == null || !currentServer.Clients.Any());
+				players.IsVisible = () => currentServer != null && (clientContainer == null || currentServer.Clients.Length == 0);
 				players.GetText = () => PlayersLabel(currentServer);
 			}
 
@@ -299,7 +299,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (clientContainer != null)
 			{
 				clientList = Ui.LoadWidget("MULTIPLAYER_CLIENT_LIST", clientContainer, new WidgetArgs()) as ScrollPanelWidget;
-				clientList.IsVisible = () => currentServer != null && currentServer.Clients.Any();
+				clientList.IsVisible = () => currentServer != null && currentServer.Clients.Length > 0;
 				clientHeader = clientList.Get<ScrollItemWidget>("HEADER");
 				clientTemplate = clientList.Get<ScrollItemWidget>("TEMPLATE");
 				clientList.RemoveChildren();
@@ -320,7 +320,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			RefreshServerList();
 		}
 
-		string PlayersLabel(GameServer game)
+		static string PlayersLabel(GameServer game)
 		{
 			return $"{(game.Players > 0 ? game.Players.ToString() : "No")} Player{(game.Players != 1 ? "s" : "")}{(game.Bots > 0 ? $", {game.Bots} Bot{(game.Bots != 1 ? "s" : "")}" : "")}{(game.Spectators > 0 ? $", {game.Spectators} Spectator{(game.Spectators != 1 ? "s" : "")}" : "")}";
 		}
@@ -343,16 +343,17 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			Task.Run(async () =>
 			{
-				var games = new List<GameServer>();
-				var client = HttpClientFactory.Create();
-				var httpResponseMessage = await client.GetAsync(queryURL);
-				var result = await httpResponseMessage.Content.ReadAsStreamAsync();
-
+				List<GameServer> games = null;
 				activeQuery = true;
 
 				try
 				{
+					var client = HttpClientFactory.Create();
+					var httpResponseMessage = await client.GetAsync(queryURL);
+					var result = await httpResponseMessage.Content.ReadAsStreamAsync();
+
 					var yaml = MiniYaml.FromStream(result);
+					games = new List<GameServer>();
 					foreach (var node in yaml)
 					{
 						try
@@ -448,7 +449,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				mapPreview.DisabledSpawnPoints = () => server.DisabledSpawnPoints;
 			}
 
-			if (server == null || !server.Clients.Any())
+			if (server == null || server.Clients.Length == 0)
 			{
 				if (joinButton != null)
 					joinButton.Bounds.Y = joinButtonY;
@@ -545,7 +546,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					return;
 				}
 
-				if (!rows.Any())
+				if (rows.Count == 0)
 				{
 					searchStatus = SearchStatus.NoGames;
 					return;
@@ -648,7 +649,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 							players.GetText = () => label;
 							players.GetColor = () => color;
 
-							if (game.Clients.Any())
+							if (game.Clients.Length > 0)
 							{
 								var displayClients = game.Clients.Select(c => c.Name);
 								if (game.Clients.Length > 10)

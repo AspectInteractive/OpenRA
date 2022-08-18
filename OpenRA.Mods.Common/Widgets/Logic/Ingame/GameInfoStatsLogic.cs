@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -34,8 +34,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				var statusLabel = widget.Get<LabelWidget>("STATS_STATUS");
 
 				checkbox.IsChecked = () => player.WinState != WinState.Undefined;
-				checkbox.GetCheckType = () => player.WinState == WinState.Won ?
-					"checked" : "crossed";
+				checkbox.GetCheckmark = () => player.WinState == WinState.Won ? "tick" : "cross";
 
 				if (player.HasObjectives)
 				{
@@ -98,17 +97,17 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 					var flag = item.Get<ImageWidget>("FACTIONFLAG");
 					flag.GetImageCollection = () => "flags";
+
+					var factionName = pp.DisplayFaction.Name;
 					if (player == null || player.RelationshipWith(pp) == PlayerRelationship.Ally || player.WinState != WinState.Undefined)
 					{
 						flag.GetImageName = () => pp.Faction.InternalName;
-						var factionName = pp.Faction.Name != pp.DisplayFaction.Name ? $"{pp.DisplayFaction.Name} ({pp.Faction.Name})" : pp.Faction.Name;
-						item.Get<LabelWidget>("FACTION").GetText = () => factionName;
+						factionName = pp.Faction.Name != factionName ? $"{factionName} ({pp.Faction.Name})" : pp.Faction.Name;
 					}
 					else
-					{
 						flag.GetImageName = () => pp.DisplayFaction.InternalName;
-						item.Get<LabelWidget>("FACTION").GetText = () => pp.DisplayFaction.Name;
-					}
+
+					WidgetUtils.TruncateLabelToTooltip(item.Get<LabelWithTooltipWidget>("FACTION"), factionName);
 
 					var scoreCache = new CachedTransform<int, string>(s => s.ToString());
 					item.Get<LabelWidget>("SCORE").GetText = () => scoreCache.Update(p.PlayerStatistics?.Experience ?? 0);
@@ -118,7 +117,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 
 			var spectators = orderManager.LobbyInfo.Clients.Where(c => c.IsObserver).ToList();
-			if (spectators.Any())
+			if (spectators.Count > 0)
 			{
 				var spectatorHeader = ScrollItemWidget.Setup(teamTemplate, () => true, () => { });
 				spectatorHeader.Get<LabelWidget>("TEAM").GetText = () => "Spectators";

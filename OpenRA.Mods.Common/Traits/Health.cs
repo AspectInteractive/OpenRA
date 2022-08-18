@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -79,7 +79,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public int HP => hp;
-		public int MaxHP { get; private set; }
+		public int MaxHP { get; }
 
 		public bool IsDead => hp <= 0;
 		public bool RemoveOnDeath = true;
@@ -252,6 +252,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			get
 			{
+				var value = base.Value;
 				if (value < 0 || (value == 0 && !allowZero))
 					return 1;
 

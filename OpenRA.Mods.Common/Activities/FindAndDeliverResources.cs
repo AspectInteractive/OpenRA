@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -24,7 +24,6 @@ namespace OpenRA.Mods.Common.Activities
 		readonly HarvesterInfo harvInfo;
 		readonly Mobile mobile;
 		readonly ResourceClaimLayer claimLayer;
-		readonly DomainIndex domainIndex;
 
 		Actor deliverActor;
 		CPos? orderLocation;
@@ -41,7 +40,6 @@ namespace OpenRA.Mods.Common.Activities
 			harvInfo = self.Info.TraitInfo<HarvesterInfo>();
 			mobile = self.Trait<Mobile>();
 			claimLayer = self.World.WorldActor.Trait<ResourceClaimLayer>();
-			domainIndex = self.World.WorldActor.Trait<DomainIndex>();
 			this.deliverActor = deliverActor;
 		}
 
@@ -161,19 +159,19 @@ namespace OpenRA.Mods.Common.Activities
 			// Harvesters should respect an explicit harvest order instead of harvesting the current cell.
 			if (orderLocation == null)
 			{
-				if (harv.CanHarvestCell(self, self.Location) && claimLayer.CanClaimCell(self, self.Location))
+				if (harv.CanHarvestCell(self.Location) && claimLayer.CanClaimCell(self, self.Location))
 					return self.Location;
 			}
 			else
 			{
-				if (harv.CanHarvestCell(self, orderLocation.Value) && claimLayer.CanClaimCell(self, orderLocation.Value))
+				if (harv.CanHarvestCell(orderLocation.Value) && claimLayer.CanClaimCell(self, orderLocation.Value))
 					return orderLocation;
 
 				orderLocation = null;
 			}
 
 			// Determine where to search from and how far to search:
-			var procLoc = GetSearchFromProcLocation(self);
+			var procLoc = GetSearchFromProcLocation();
 			var searchFromLoc = lastHarvestedCell ?? procLoc ?? self.Location;
 			var searchRadius = lastHarvestedCell.HasValue ? harvInfo.SearchFromHarvesterRadius : harvInfo.SearchFromProcRadius;
 
@@ -184,17 +182,21 @@ namespace OpenRA.Mods.Common.Activities
 			var harvPos = self.CenterPosition;
 
 			// Find any harvestable resources:
-			List<CPos> path;
-			using (var search = PathSearch.Search(self.World, mobile.Locomotor, self, BlockedByActor.Stationary, loc =>
-					domainIndex.IsPassable(self.Location, loc, mobile.Locomotor) && harv.CanHarvestCell(self, loc) && claimLayer.CanClaimCell(self, loc))
-				.WithCustomCost(loc =>
+			var path = mobile.PathFinder.FindPathToTargetCellByPredicate(
+				self,
+				new[] { searchFromLoc, self.Location },
+				loc =>
+					harv.CanHarvestCell(loc) &&
+					claimLayer.CanClaimCell(self, loc),
+				BlockedByActor.Stationary,
+				loc =>
 				{
 					if ((loc - searchFromLoc).LengthSquared > searchRadiusSquared)
 						return PathGraph.PathCostForInvalidPath;
 
 					// Add a cost modifier to harvestable cells to prefer resources that are closer to the refinery.
 					// This reduces the tendency for harvesters to move in straight lines
-					if (procPos.HasValue && harvInfo.ResourceRefineryDirectionPenalty > 0 && harv.CanHarvestCell(self, loc))
+					if (procPos.HasValue && harvInfo.ResourceRefineryDirectionPenalty > 0 && harv.CanHarvestCell(loc))
 					{
 						var pos = map.CenterOfCell(loc);
 
@@ -216,10 +218,7 @@ namespace OpenRA.Mods.Common.Activities
 					}
 
 					return 0;
-				})
-				.FromPoint(searchFromLoc)
-				.FromPoint(self.Location))
-				path = mobile.Pathfinder.FindPath(search);
+				});
 
 			if (path.Count > 0)
 				return path[0];
@@ -244,7 +243,7 @@ namespace OpenRA.Mods.Common.Activities
 				yield return new TargetLineNode(Target.FromActor(deliverActor), harvInfo.DeliverLineColor);
 		}
 
-		CPos? GetSearchFromProcLocation(Actor self)
+		CPos? GetSearchFromProcLocation()
 		{
 			if (harv.LastLinkedProc != null && !harv.LastLinkedProc.IsDead && harv.LastLinkedProc.IsInWorld)
 				return harv.LastLinkedProc.Location + harv.LastLinkedProc.Trait<IAcceptResources>().DeliveryOffset;

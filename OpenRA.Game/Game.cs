@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -84,6 +84,9 @@ namespace OpenRA
 
 		static void JoinInner(OrderManager om)
 		{
+			// Refresh TextNotificationsManager before the game starts.
+			TextNotificationsManager.Clear();
+
 			// HACK: The shellmap World and OrderManager are owned by the main menu's WorldRenderer instead of Game.
 			// This allows us to switch Game.OrderManager from the shellmap to the new network connection when joining
 			// a lobby, while keeping the OrderManager that runs the shellmap intact.
@@ -120,8 +123,8 @@ namespace OpenRA
 		}
 
 		// More accurate replacement for Environment.TickCount
-		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
-		public static long RunTime => stopwatch.ElapsedMilliseconds;
+		static readonly Stopwatch Stopwatch = Stopwatch.StartNew();
+		public static long RunTime => Stopwatch.ElapsedMilliseconds;
 
 		public static int RenderFrame = 0;
 		public static int NetFrameNumber => OrderManager.NetFrameNumber;
@@ -233,6 +236,17 @@ namespace OpenRA
 			// Reseed the RNG so this isn't an exact repeat of the last game
 			lobbyInfo.GlobalSettings.RandomSeed = CosmeticRandom.Next();
 
+			// Note: the map may have been changed on disk outside the game, changing its UID.
+			// Use the updated UID if we have tracked the update instead of failing.
+			lobbyInfo.GlobalSettings.Map = ModData.MapCache.GetUpdatedMap(lobbyInfo.GlobalSettings.Map);
+			if (lobbyInfo.GlobalSettings.Map == null)
+			{
+				Disconnect();
+				Ui.ResetAll();
+				LoadShellMap();
+				return;
+			}
+
 			var orders = new[]
 			{
 					Order.Command($"sync_lobby {lobbyInfo.Serialize()}"),
@@ -305,7 +319,7 @@ namespace OpenRA
 			if (!string.IsNullOrEmpty(supportDirArg))
 				Platform.OverrideSupportDir(supportDirArg);
 
-			Console.WriteLine("Platform is {0}", Platform.CurrentPlatform);
+			Console.WriteLine($"Platform is {Platform.CurrentPlatform}");
 
 			// Load the engine version as early as possible so it can be written to exception logs
 			try
@@ -317,8 +331,8 @@ namespace OpenRA
 			if (string.IsNullOrEmpty(EngineVersion))
 				EngineVersion = "Unknown";
 
-			Console.WriteLine("Engine version is {0}", EngineVersion);
-			Console.WriteLine("Runtime: {0}", Platform.RuntimeVersion);
+			Console.WriteLine($"Engine version is {EngineVersion}");
+			Console.WriteLine($"Runtime: {Platform.RuntimeVersion}");
 
 			// Special case handling of Game.Mod argument: if it matches a real filesystem path
 			// then we use this to override the mod search path, and replace it with the mod id
@@ -352,7 +366,7 @@ namespace OpenRA
 				{
 					var rendererPath = Path.Combine(Platform.BinDir, "OpenRA.Platforms." + p + ".dll");
 
-#if !MONO
+#if NET5_0_OR_GREATER
 					var loader = new AssemblyLoader(rendererPath);
 					var platformType = loader.LoadDefaultAssembly().GetTypes().SingleOrDefault(t => typeof(IPlatform).IsAssignableFrom(t));
 
@@ -373,7 +387,7 @@ namespace OpenRA
 				}
 				catch (Exception e)
 				{
-					Log.Write("graphics", "{0}", e);
+					Log.Write("graphics", $"{e}");
 					Console.WriteLine("Renderer initialization failed. Check graphics.log for details.");
 
 					Renderer?.Dispose();
@@ -392,7 +406,7 @@ namespace OpenRA
 			Mods = new InstalledMods(modSearchPaths, explicitModPaths);
 			Console.WriteLine("Internal mods:");
 			foreach (var mod in Mods)
-				Console.WriteLine("\t{0}: {1} ({2})", mod.Key, mod.Value.Metadata.Title, mod.Value.Metadata.Version);
+				Console.WriteLine($"\t{mod.Key}: {mod.Value.Metadata.Title} ({mod.Value.Metadata.Version})");
 
 			modLaunchWrapper = args.GetValue("Engine.LaunchWrapper", null);
 
@@ -417,10 +431,9 @@ namespace OpenRA
 
 			Console.WriteLine("External mods:");
 			foreach (var mod in ExternalMods)
-				Console.WriteLine("\t{0}: {1} ({2})", mod.Key, mod.Value.Title, mod.Value.Version);
+				Console.WriteLine($"\t{mod.Key}: {mod.Value.Title} ({mod.Value.Version})");
 
 			InitializeMod(modID, args);
-			Ui.InitializeTranslation();
 		}
 
 		public static void InitializeMod(string mod, Arguments args)
@@ -453,7 +466,7 @@ namespace OpenRA
 			if (!Mods.ContainsKey(mod))
 				throw new InvalidOperationException($"Unknown or invalid mod '{mod}'.");
 
-			Console.WriteLine("Loading mod: {0}", mod);
+			Console.WriteLine($"Loading mod: {mod}");
 
 			Sound.StopVideo();
 

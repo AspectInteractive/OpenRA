@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -74,6 +74,14 @@ namespace OpenRA.Mods.Common.Traits
 		ITargetableCells targetableCells;
 		Turreted turret;
 
+		((CPos Cell, SubCell SubCell)[] targetableCells,
+			WPos? selfCenterPosition,
+			WRot? selfOrientation,
+			WRot? turretLocalOrientation,
+			WVec? turretOffset) cacheInput;
+
+		WPos[] cachedTargetablePositions;
+
 		public HitShape(Actor self, HitShapeInfo info)
 			: base(info)
 		{
@@ -88,14 +96,28 @@ namespace OpenRA.Mods.Common.Traits
 			base.Created(self);
 		}
 
-		bool ITargetablePositions.AlwaysEnabled => Info.RequiresCondition == null;
-
 		IEnumerable<WPos> ITargetablePositions.TargetablePositions(Actor self)
 		{
 			if (IsTraitDisabled)
 				return Enumerable.Empty<WPos>();
 
-			return TargetablePositions(self);
+			// Check for changes in inputs that affect the result of the TargetablePositions method.
+			// If the inputs have not changed we can cache and reuse the result for later calls.
+			// i.e. we are treating the method as a pure function.
+			var newCacheInput = (
+				Info.UseTargetableCellsOffsets ? targetableCells?.TargetableCells() : null,
+				Info.TargetableOffsets.Length > 0 ? self.CenterPosition : (WPos?)null,
+				Info.TargetableOffsets.Length > 0 ? self.Orientation : (WRot?)null,
+				Info.TargetableOffsets.Length > 0 ? turret?.LocalOrientation : null,
+				Info.TargetableOffsets.Length > 0 ? turret?.Offset : null);
+			if (cachedTargetablePositions == null ||
+				cacheInput != newCacheInput)
+			{
+				cachedTargetablePositions = TargetablePositions(self).ToArray();
+				cacheInput = newCacheInput;
+			}
+
+			return cachedTargetablePositions;
 		}
 
 		IEnumerable<WPos> TargetablePositions(Actor self)
@@ -114,7 +136,7 @@ namespace OpenRA.Mods.Common.Traits
 		WVec CalculateTargetableOffset(Actor self, in WVec offset)
 		{
 			var localOffset = offset;
-			var quantizedBodyOrientation = orientation.QuantizeOrientation(self, self.Orientation);
+			var quantizedBodyOrientation = orientation.QuantizeOrientation(self.Orientation);
 
 			if (turret != null)
 			{
@@ -132,7 +154,7 @@ namespace OpenRA.Mods.Common.Traits
 			return Info.Type.DistanceFromEdge(pos, origin, orientation);
 		}
 
-		public IEnumerable<IRenderable> RenderDebugAnnotations(Actor self, WorldRenderer wr)
+		public IEnumerable<IRenderable> RenderDebugAnnotations(Actor self)
 		{
 			var targetPosHLine = new WVec(0, 128, 0);
 			var targetPosVLine = new WVec(128, 0, 0);

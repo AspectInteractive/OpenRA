@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -54,11 +54,17 @@ namespace OpenRA.Mods.Common.Traits
 		[NotificationReference("Speech")]
 		public readonly string WinNotification = null;
 
+		public readonly string WinTextNotification = null;
+
 		[NotificationReference("Speech")]
 		public readonly string LoseNotification = null;
 
+		public readonly string LoseTextNotification = null;
+
 		[NotificationReference("Speech")]
 		public readonly string LeaveNotification = null;
+
+		public readonly string LeaveTextNotification = null;
 
 		public override object Create(ActorInitializer init) { return new MissionObjectives(init.Self.Owner, this); }
 	}
@@ -265,10 +271,10 @@ namespace OpenRA.Mods.Common.Traits
 		"Current options for PanelName are 'SKIRMISH_STATS' and 'MISSION_OBJECTIVES'.")]
 	public class ObjectivesPanelInfo : TraitInfo
 	{
-		public string PanelName = null;
+		public readonly string PanelName = null;
 
 		[Desc("in ms")]
-		public int ExitDelay = 1400;
+		public readonly int ExitDelay = 1400;
 
 		public override object Create(ActorInitializer init) { return new ObjectivesPanel(this); }
 	}

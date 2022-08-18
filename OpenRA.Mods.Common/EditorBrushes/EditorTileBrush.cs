@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -92,7 +92,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 			if (mi.Modifiers.HasModifier(Modifiers.Shift))
 			{
-				FloodFillWithBrush(cell, isMoving);
+				FloodFillWithBrush(cell);
 				painting = false;
 			}
 			else
@@ -110,7 +110,7 @@ namespace OpenRA.Mods.Common.Widgets
 			editorActionManager.Add(new PaintTileEditorAction(Template, world.Map, cell));
 		}
 
-		void FloodFillWithBrush(CPos cell, bool isMoving)
+		void FloodFillWithBrush(CPos cell)
 		{
 			var map = world.Map;
 			var mapTiles = map.Tiles;
@@ -153,7 +153,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 	class PaintTileEditorAction : IEditorAction
 	{
-		public string Text { get; private set; }
+		public string Text { get; }
 
 		readonly ushort template;
 		readonly Map map;
@@ -222,7 +222,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 	class FloodFillEditorAction : IEditorAction
 	{
-		public string Text { get; private set; }
+		public string Text { get; }
 
 		readonly ushort template;
 		readonly Map map;
@@ -357,9 +357,9 @@ namespace OpenRA.Mods.Common.Widgets
 
 	class UndoTile
 	{
-		public CPos Cell { get; private set; }
-		public TerrainTile MapTile { get; private set; }
-		public byte Height { get; private set; }
+		public CPos Cell { get; }
+		public TerrainTile MapTile { get; }
+		public byte Height { get; }
 
 		public UndoTile(CPos cell, TerrainTile mapTile, byte height)
 		{

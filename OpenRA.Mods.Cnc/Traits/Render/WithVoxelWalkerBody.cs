@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -20,7 +20,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Cnc.Traits.Render
 {
-	public class WithVoxelWalkerBodyInfo : TraitInfo, IRenderActorPreviewVoxelsInfo,  Requires<RenderVoxelsInfo>, Requires<IMoveInfo>, Requires<IFacingInfo>
+	public class WithVoxelWalkerBodyInfo : PausableConditionalTraitInfo, IRenderActorPreviewVoxelsInfo,  Requires<RenderVoxelsInfo>, Requires<IMoveInfo>, Requires<IFacingInfo>
 	{
 		public readonly string Sequence = "idle";
 
@@ -44,9 +44,8 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		}
 	}
 
-	public class WithVoxelWalkerBody : ITick, IActorPreviewInitModifier, IAutoMouseBounds
+	public class WithVoxelWalkerBody : PausableConditionalTrait<WithVoxelWalkerBodyInfo>, ITick, IActorPreviewInitModifier, IAutoMouseBounds
 	{
-		readonly WithVoxelWalkerBodyInfo info;
 		readonly IMove movement;
 		readonly ModelAnimation modelAnimation;
 		readonly RenderVoxels rv;
@@ -55,8 +54,8 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		readonly uint frames;
 
 		public WithVoxelWalkerBody(Actor self, WithVoxelWalkerBodyInfo info)
+			: base(info)
 		{
-			this.info = info;
 			movement = self.Trait<IMove>();
 
 			var body = self.Trait<BodyOrientation>();
@@ -65,19 +64,22 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 			var model = self.World.ModelCache.GetModelSequence(rv.Image, info.Sequence);
 			frames = model.Frames;
 			modelAnimation = new ModelAnimation(model, () => WVec.Zero,
-				() => body.QuantizeOrientation(self, self.Orientation),
-				() => false, () => frame, info.ShowShadow);
+				() => body.QuantizeOrientation(self.Orientation),
+				() => IsTraitDisabled, () => frame, info.ShowShadow);
 
 			rv.Add(modelAnimation);
 		}
 
 		void ITick.Tick(Actor self)
 		{
+			if (IsTraitDisabled || IsTraitPaused)
+				return;
+
 			if (movement.CurrentMovementTypes.HasMovementType(MovementType.Horizontal)
 				|| movement.CurrentMovementTypes.HasMovementType(MovementType.Turn))
 				tick++;
 
-			if (tick < info.TickRate)
+			if (tick < Info.TickRate)
 				return;
 
 			tick = 0;

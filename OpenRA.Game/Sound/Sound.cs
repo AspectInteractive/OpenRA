@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -44,9 +44,9 @@ namespace OpenRA
 		ISound music;
 		ISound video;
 		MusicInfo currentMusic;
-		Dictionary<uint, ISound> currentSounds = new Dictionary<uint, ISound>();
+		readonly Dictionary<uint, ISound> currentSounds = new Dictionary<uint, ISound>();
 		readonly Dictionary<string, ISound> currentNotifications = new Dictionary<string, ISound>();
-		public bool DummyEngine { get; private set; }
+		public bool DummyEngine { get; }
 
 		public Sound(IPlatform platform, SoundSettings soundSettings)
 		{
@@ -96,7 +96,8 @@ namespace OpenRA
 			Func<ISoundFormat, ISoundSource> loadIntoMemory = soundFormat => soundEngine.AddSoundSourceFromMemory(
 				soundFormat.GetPCMInputStream().ReadAllBytes(), soundFormat.Channels, soundFormat.SampleBits, soundFormat.SampleRate);
 			sounds = new Cache<string, ISoundSource>(filename => LoadSound(filename, loadIntoMemory));
-			currentSounds = new Dictionary<uint, ISound>();
+			currentSounds.Clear();
+			currentNotifications.Clear();
 			video = null;
 		}
 
@@ -400,9 +401,8 @@ namespace OpenRA
 
 			if (!string.IsNullOrEmpty(name) && (p == null || p == p.World.LocalPlayer))
 			{
-				if (currentNotifications.ContainsKey(name))
+				if (currentNotifications.TryGetValue(name, out var currentNotification))
 				{
-					var currentNotification = currentNotifications[name];
 					if (!currentNotification.Complete)
 					{
 						if (pool.AllowInterrupt)
@@ -411,9 +411,8 @@ namespace OpenRA
 							return false;
 					}
 				}
-				else if (currentSounds.ContainsKey(actorId))
+				else if (currentSounds.TryGetValue(actorId, out var currentSound))
 				{
-					var currentSound = currentSounds[actorId];
 					if (!currentSound.Complete)
 					{
 						if (pool.AllowInterrupt)

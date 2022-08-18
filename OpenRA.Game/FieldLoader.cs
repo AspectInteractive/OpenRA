@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -478,9 +478,15 @@ namespace OpenRA
 				return set;
 
 			var parts = value.Split(SplitComma, StringSplitOptions.RemoveEmptyEntries);
-			var addMethod = fieldType.GetMethod("Add", fieldType.GetGenericArguments());
+			var arguments = fieldType.GetGenericArguments();
+			var addMethod = fieldType.GetMethod(nameof(List<object>.Add), arguments);
+			var addArgs = new object[1];
 			for (var i = 0; i < parts.Length; i++)
-				addMethod.Invoke(set, new[] { GetValue(fieldName, fieldType.GetGenericArguments()[0], parts[i].Trim(), field) });
+			{
+				addArgs[0] = GetValue(fieldName, arguments[0], parts[i].Trim(), field);
+				addMethod.Invoke(set, addArgs);
+			}
+
 			return set;
 		}
 
@@ -488,13 +494,13 @@ namespace OpenRA
 		{
 			var dict = Activator.CreateInstance(fieldType);
 			var arguments = fieldType.GetGenericArguments();
-			var addMethod = fieldType.GetMethod("Add", arguments);
-
+			var addMethod = fieldType.GetMethod(nameof(Dictionary<object, object>.Add), arguments);
+			var addArgs = new object[2];
 			foreach (var node in yaml.Nodes)
 			{
-				var key = GetValue(fieldName, arguments[0], node.Key, field);
-				var val = GetValue(fieldName, arguments[1], node.Value, field);
-				addMethod.Invoke(dict, new[] { key, val });
+				addArgs[0] = GetValue(fieldName, arguments[0], node.Key, field);
+				addArgs[1] = GetValue(fieldName, arguments[1], node.Value, field);
+				addMethod.Invoke(dict, addArgs);
 			}
 
 			return dict;
@@ -558,7 +564,7 @@ namespace OpenRA
 				fli.Field.SetValue(self, val);
 			}
 
-			if (missing.Any())
+			if (missing.Count > 0)
 				throw new MissingFieldsException(missing.ToArray());
 		}
 

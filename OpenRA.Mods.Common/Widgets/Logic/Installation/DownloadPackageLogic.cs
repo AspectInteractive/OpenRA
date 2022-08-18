@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -235,12 +235,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 				Task.Run(async () =>
 				{
-					var client = HttpClientFactory.Create();
-					var httpResponseMessage = await client.GetAsync(download.MirrorList);
-					var result = await httpResponseMessage.Content.ReadAsStringAsync();
-
 					try
 					{
+						var client = HttpClientFactory.Create();
+						var httpResponseMessage = await client.GetAsync(download.MirrorList);
+						var result = await httpResponseMessage.Content.ReadAsStringAsync();
+
 						var mirrorList = result.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
 						downloadUrl(mirrorList.Random(new MersenneTwister()));
 					}

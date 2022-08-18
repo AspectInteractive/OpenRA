@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -20,6 +20,8 @@ namespace OpenRA
 		public readonly Hotkey Default = Hotkey.Invalid;
 		public readonly string Description = "";
 		public readonly HashSet<string> Types = new HashSet<string>();
+		public readonly HashSet<string> Contexts = new HashSet<string>();
+		public readonly bool Readonly = false;
 		public bool HasDuplicates { get; internal set; }
 
 		public HotkeyDefinition(string name, MiniYaml node)
@@ -36,6 +38,22 @@ namespace OpenRA
 			var typesNode = node.Nodes.FirstOrDefault(n => n.Key == "Types");
 			if (typesNode != null)
 				Types = FieldLoader.GetValue<HashSet<string>>("Types", typesNode.Value.Value);
+
+			var contextsNode = node.Nodes.FirstOrDefault(n => n.Key == "Contexts");
+			if (contextsNode != null)
+				Contexts = FieldLoader.GetValue<HashSet<string>>("Contexts", contextsNode.Value.Value);
+
+			var platformNode = node.Nodes.FirstOrDefault(n => n.Key == "Platform");
+			if (platformNode != null)
+			{
+				var platformOverride = platformNode.Value.Nodes.FirstOrDefault(n => n.Key == Platform.CurrentPlatform.ToString());
+				if (platformOverride != null)
+					Default = FieldLoader.GetValue<Hotkey>("value", platformOverride.Value.Value);
+			}
+
+			var readonlyNode = node.Nodes.FirstOrDefault(n => n.Key == "Readonly");
+			if (readonlyNode != null)
+				Readonly = FieldLoader.GetValue<bool>("Readonly", readonlyNode.Value.Value);
 		}
 	}
 }

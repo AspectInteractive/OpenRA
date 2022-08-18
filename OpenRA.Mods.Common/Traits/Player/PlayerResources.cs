@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -44,6 +44,9 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Speech notification to play when the player does not have any funds.")]
 		public readonly string InsufficientFundsNotification = null;
 
+		[Desc("Text notification to display when the player does not have any funds.")]
+		public readonly string InsufficientFundsTextNotification = null;
+
 		[Desc("Delay (in ticks) during which warnings will be muted.")]
 		public readonly int InsufficientFundsNotificationInterval = 30000;
 
@@ -60,7 +63,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var startingCash = SelectableCash.ToDictionary(c => c.ToString(), c => "$" + c.ToString());
 
-			if (startingCash.Any())
+			if (startingCash.Count > 0)
 				yield return new LobbyOption("startingcash", DefaultCashDropdownLabel, DefaultCashDropdownDescription, DefaultCashDropdownVisible, DefaultCashDropdownDisplayOrder,
 					startingCash, DefaultCash.ToString(), DefaultCashDropdownLocked);
 		}
@@ -179,11 +182,11 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (Cash + Resources < num)
 			{
-				if (notifyLowFunds && !string.IsNullOrEmpty(Info.InsufficientFundsNotification) &&
-					Game.RunTime > lastNotificationTime + Info.InsufficientFundsNotificationInterval)
+				if (notifyLowFunds && Game.RunTime > lastNotificationTime + Info.InsufficientFundsNotificationInterval)
 				{
 					lastNotificationTime = Game.RunTime;
 					Game.Sound.PlayNotification(owner.World.Map.Rules, owner, "Speech", Info.InsufficientFundsNotification, owner.Faction.InternalName);
+					TextNotificationsManager.AddTransientLine(Info.InsufficientFundsTextNotification, owner);
 				}
 
 				return false;

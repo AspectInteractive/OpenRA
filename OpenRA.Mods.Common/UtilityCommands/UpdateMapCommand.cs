@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -70,7 +70,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				Console.WriteLine("   Individual Rules:");
 				foreach (var kv in ruleGroups)
 				{
-					if (!kv.Value.Any())
+					if (kv.Value.Count == 0)
 						continue;
 
 					Console.WriteLine("      " + kv.Key + ":");
@@ -130,7 +130,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				mapFiles.Save();
 				Console.WriteLine("COMPLETE");
 
-				if (manualSteps.Any())
+				if (manualSteps.Count > 0)
 				{
 					Console.WriteLine("   Manual changes are required to complete this update:");
 					foreach (var manualStep in manualSteps)
@@ -140,7 +140,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				Console.WriteLine();
 			}
 
-			if (externalFilenames.Any())
+			if (externalFilenames.Count > 0)
 			{
 				Console.WriteLine("The following shared yaml files referenced by the map have been ignored:");
 				Console.WriteLine(UpdateUtils.FormatMessageList(externalFilenames));

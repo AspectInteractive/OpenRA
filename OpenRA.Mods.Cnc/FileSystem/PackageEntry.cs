@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -50,7 +50,7 @@ namespace OpenRA.Mods.Cnc.FileSystem
 
 		public override string ToString()
 		{
-			if (names.TryGetValue(Hash, out var filename))
+			if (Names.TryGetValue(Hash, out var filename))
 				return $"{filename} - offset 0x{Offset:x8} - length 0x{Length:x8}";
 			else
 				return $"0x{Hash:x8} - offset 0x{Offset:x8} - length 0x{Length:x8}";
@@ -105,14 +105,14 @@ namespace OpenRA.Mods.Cnc.FileSystem
 			}
 		}
 
-		static readonly Dictionary<uint, string> names = new Dictionary<uint, string>();
+		static readonly Dictionary<uint, string> Names = new Dictionary<uint, string>();
 
 		public static void AddStandardName(string s)
 		{
 			var hash = HashFilename(s, PackageHashType.Classic); // RA1 and TD
-			names.Add(hash, s);
+			Names.Add(hash, s);
 			var crcHash = HashFilename(s, PackageHashType.CRC32); // TS
-			names.Add(crcHash, s);
+			Names.Add(crcHash, s);
 		}
 	}
 }

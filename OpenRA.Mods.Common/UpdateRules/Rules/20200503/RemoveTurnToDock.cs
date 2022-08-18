@@ -1,6 +1,6 @@
 ﻿#region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.UpdateRules.Rules
 					" you will need to define a 'Facing' parameter on the 'Exit' trait of the host building. This change" +
 					" does not affect the behaviour for landing on terrain which is governed by TurnToLand.";
 
-			if (turningAircraft.Any())
+			if (turningAircraft.Count > 0)
 				yield return message;
 
 			turningAircraft.Clear();
@@ -45,7 +45,7 @@ namespace OpenRA.Mods.Common.UpdateRules.Rules
 			if (aircraft != null)
 			{
 				var turnToDock = aircraft.LastChildMatching("TurnToDock");
-				if (turnToDock != null || turnToDock.NodeValue<bool>())
+				if (turnToDock == null || !turnToDock.NodeValue<bool>())
 					yield break;
 
 				turningAircraft.Add(Tuple.Create(actorNode.Key, actorNode.Location.Filename));

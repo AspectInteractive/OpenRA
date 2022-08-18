@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -146,6 +146,11 @@ namespace OpenRA.Mods.Common.Traits
 		void StartingResupply(Actor self, Actor host);
 		void StoppingResupply(Actor self, Actor host);
 	}
+
+	[RequireExplicitImplementation]
+	public interface INotifyTakeOff { void TakeOff(Actor self); }
+	[RequireExplicitImplementation]
+	public interface INotifyLanding { void Landing(Actor self); }
 
 	[RequireExplicitImplementation]
 	public interface INotifyPowerLevelChanged { void PowerLevelChanged(Actor self); }
@@ -309,9 +314,9 @@ namespace OpenRA.Mods.Common.Traits
 	}
 
 	[RequireExplicitImplementation]
-	public interface IDisableAutoTarget
+	public interface IOverrideAutoTarget
 	{
-		bool DisableAutoTarget(Actor self);
+		bool TryGetAutoTargetOverride(Actor self, out Target target);
 	}
 
 	[RequireExplicitImplementation]
@@ -410,6 +415,8 @@ namespace OpenRA.Mods.Common.Traits
 		byte GetTerrainIndex(CPos cell);
 		WPos CenterOfCell(CPos cell);
 	}
+
+	public interface ICustomMovementLayerInfo : ITraitInfoInterface { }
 
 	// For traits that want to be exposed to the "Deploy" UI button / hotkey
 	[RequireExplicitImplementation]
@@ -714,5 +721,111 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		event Action<CPos> CellEntryChanged;
 		bool TryGetTerrainColorPair(MPos uv, out (Color Left, Color Right) value);
+	}
+
+	/// <summary>
+	/// When performing locomotion or pathfinding related checks,
+	/// determines whether the blocking rules will be applied when encountering other actors.
+	/// </summary>
+	public enum BlockedByActor
+	{
+		/// <summary>
+		/// Actors on the map are ignored, as if they were not present.
+		/// An actor can only be blocked by impassable terrain.
+		/// An actor can never be blocked by other actors. The blocking rules will never be evaluated.
+		/// </summary>
+		None,
+
+		/// <summary>
+		/// Actors on the map that are moving, or moveable &amp; allied are ignored.
+		/// An actor is Immovable is any of the following applies:
+		/// <list type="bullet">
+		/// <item>Lacks the <see cref="Mobile"/> trait.</item>
+		/// <item>The <see cref="Mobile"/> trait has <see cref="ConditionalTrait{MobileInfo}.IsTraitDisabled"/> or
+		/// <see cref="PausableConditionalTrait{MobileInfo}.IsTraitPaused"/> as true.</item>
+		/// <item>The <see cref="Mobile"/> trait has <see cref="Mobile.IsImmovable"/> as true.</item>
+		/// </list>
+		/// Note the above definition means an actor can be Movable, but may not be Moving, i.e. it is Stationary.
+		/// Actors are allied if their owners have the <see cref="PlayerRelationship.Ally"/> relationship.
+		/// An actor can be blocked by impassable terrain.
+		/// An actor can be blocked by immovable actors *if* they are deemed as blocking by the blocking rules.
+		/// An actor can be blocked by an actor capable of moving, if it is not an ally and *if* they are deemed as
+		/// blocking by the blocking rules.
+		/// An actor can never be blocked by an allied actor capable of moving, even if the other actor is stationary.
+		/// An actor can never be blocked by a moving actor.
+		/// </summary>
+		Immovable,
+
+		/// <summary>
+		/// Actors on the map that are moving are ignored.
+		/// An actor is moving if both of the following apply:
+		/// <list type="bullet">
+		/// <item>It is a Moveable actor (see <see cref="Immovable"/>).</item>
+		/// <item><see cref="Mobile.CurrentMovementTypes"/> contains the flag <see cref="MovementType.Horizontal"/>.</item>
+		/// </list>
+		/// Otherwise the actor is deemed to be Stationary.
+		/// An actor can be blocked by impassable terrain.
+		/// An actor can be blocked by immovable actors and stationary actors *if* they are deemed as blocking by the
+		/// blocking rules.
+		/// An actor can never be blocked by a moving actor.
+		/// </summary>
+		Stationary,
+
+		/// <summary>
+		/// Actors on the map are not ignored.
+		/// An actor can be blocked by impassable terrain.
+		/// An actor can be blocked by immovable actors, stationary actors and moving actors *if* they are deemed as
+		/// blocking by the blocking rules.
+		/// </summary>
+		All
+	}
+
+	public interface IPositionableInfo : IOccupySpaceInfo
+	{
+		bool CanEnterCell(World world, Actor self, CPos cell, SubCell subCell = SubCell.FullCell, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All);
+	}
+
+	public interface IPositionable : IOccupySpace
+	{
+		bool CanExistInCell(CPos location);
+		bool IsLeavingCell(CPos location, SubCell subCell = SubCell.Any);
+		bool CanEnterCell(CPos location, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All);
+		SubCell GetValidSubCell(SubCell preferred = SubCell.Any);
+		SubCell GetAvailableSubCell(CPos location, SubCell preferredSubCell = SubCell.Any, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All);
+		void SetPosition(Actor self, CPos cell, SubCell subCell = SubCell.Any);
+		void SetPosition(Actor self, WPos pos);
+		void SetCenterPosition(Actor self, WPos pos);
+	}
+
+	public interface IPathFinder
+	{
+		/// <summary>
+		/// Calculates a path for the actor from multiple possible sources to target.
+		/// Returned path is *reversed* and given target to source.
+		/// The shortest path between a source and the target is returned.
+		/// </summary>
+		List<CPos> FindPathToTargetCell(
+			Actor self, IEnumerable<CPos> sources, CPos target, BlockedByActor check,
+			Func<CPos, int> customCost = null,
+			Actor ignoreActor = null,
+			bool laneBias = true);
+
+		/// <summary>
+		/// Calculates a path for the actor from multiple possible sources, whilst searching for an acceptable target.
+		/// Returned path is *reversed* and given target to source.
+		/// The shortest path between a source and a discovered target is returned.
+		/// </summary>
+		List<CPos> FindPathToTargetCellByPredicate(
+			Actor self, IEnumerable<CPos> sources, Func<CPos, bool> targetPredicate, BlockedByActor check,
+			Func<CPos, int> customCost = null,
+			Actor ignoreActor = null,
+			bool laneBias = true);
+
+		/// <summary>
+		/// Determines if a path exists between source and target.
+		/// Only terrain is taken into account, i.e. as if <see cref="BlockedByActor.None"/> was given.
+		/// This would apply for any actor using the given <see cref="Locomotor"/>.
+		/// </summary>
+		bool PathExistsForLocomotor(Locomotor locomotor, CPos source, CPos target);
 	}
 }

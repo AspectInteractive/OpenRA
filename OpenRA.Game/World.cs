@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,6 +11,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using OpenRA.Effects;
 using OpenRA.FileFormats;
@@ -33,6 +34,7 @@ namespace OpenRA
 		readonly List<IEffect> unpartitionedEffects = new List<IEffect>();
 		readonly List<ISync> syncedEffects = new List<ISync>();
 		readonly GameSettings gameSettings;
+		readonly ModData modData;
 
 		readonly Queue<Action<World>> frameEndActions = new Queue<Action<World>>();
 
@@ -143,6 +145,8 @@ namespace OpenRA
 		// Hide the OrderManager from mod code
 		public void IssueOrder(Order o) { OrderManager.IssueOrder(o); }
 
+		readonly Type defaultOrderGeneratorType;
+
 		IOrderGenerator orderGenerator;
 		public IOrderGenerator OrderGenerator
 		{
@@ -158,8 +162,9 @@ namespace OpenRA
 		}
 
 		public readonly ISelection Selection;
+		public readonly IControlGroups ControlGroups;
 
-		public void CancelInputMode() { OrderGenerator = new UnitOrderGenerator(); }
+		public void CancelInputMode() { OrderGenerator = (IOrderGenerator)modData.ObjectCreator.CreateBasic(defaultOrderGeneratorType); }
 
 		public bool ToggleInputMode<T>() where T : IOrderGenerator, new()
 		{
@@ -175,16 +180,25 @@ namespace OpenRA
 			}
 		}
 
-		public bool RulesContainTemporaryBlocker { get; private set; }
+		public bool RulesContainTemporaryBlocker { get; }
 
 		bool wasLoadingGameSave;
 
 		internal World(ModData modData, Map map, OrderManager orderManager, WorldType type)
 		{
+			this.modData = modData;
 			Type = type;
 			OrderManager = orderManager;
-			orderGenerator = new UnitOrderGenerator();
 			Map = map;
+
+			if (string.IsNullOrEmpty(modData.Manifest.DefaultOrderGenerator))
+				throw new InvalidDataException("mod.yaml must define a DefaultOrderGenerator");
+
+			defaultOrderGeneratorType = modData.ObjectCreator.FindType(modData.Manifest.DefaultOrderGenerator);
+			if (defaultOrderGeneratorType == null)
+				throw new InvalidDataException($"{modData.Manifest.DefaultOrderGenerator} is not a valid DefaultOrderGenerator");
+
+			orderGenerator = (IOrderGenerator)modData.ObjectCreator.CreateBasic(defaultOrderGeneratorType);
 
 			var gameSpeeds = modData.Manifest.Get<GameSpeeds>();
 			var gameSpeedName = orderManager.LobbyInfo.GlobalSettings.OptionOrDefault("gamespeed", gameSpeeds.DefaultSpeed);
@@ -201,6 +215,7 @@ namespace OpenRA
 			ActorMap = WorldActor.Trait<IActorMap>();
 			ScreenMap = WorldActor.Trait<ScreenMap>();
 			Selection = WorldActor.Trait<ISelection>();
+			ControlGroups = WorldActor.Trait<IControlGroups>();
 			OrderValidators = WorldActor.TraitsImplementing<IValidateOrder>().ToArray();
 			notifyDisconnected = WorldActor.TraitsImplementing<INotifyPlayerDisconnected>().ToArray();
 
@@ -425,7 +440,7 @@ namespace OpenRA
 					foreach (var a in actors.Values)
 						a.Tick();
 
-				ApplyToActorsWithTraitTimed<ITick>((Actor actor, ITick trait) => trait.Tick(actor), "Trait");
+				ApplyToActorsWithTraitTimed<ITick>((actor, trait) => trait.Tick(actor), "Trait");
 
 				effects.DoTimed(e => e.Tick(this), "Effect");
 			}
@@ -437,7 +452,7 @@ namespace OpenRA
 		// For things that want to update their render state once per tick, ignoring pause state
 		public void TickRender(WorldRenderer wr)
 		{
-			ApplyToActorsWithTraitTimed<ITickRender>((Actor actor, ITickRender trait) => trait.TickRender(wr, actor), "Render");
+			ApplyToActorsWithTraitTimed<ITickRender>((actor, trait) => trait.TickRender(wr, actor), "Render");
 			ScreenMap.TickRender();
 		}
 
@@ -499,6 +514,11 @@ namespace OpenRA
 		public void ApplyToActorsWithTraitTimed<T>(Action<Actor, T> action, string text)
 		{
 			TraitDict.ApplyToActorsWithTraitTimed<T>(action, text);
+		}
+
+		public void ApplyToActorsWithTrait<T>(Action<Actor, T> action)
+		{
+			TraitDict.ApplyToActorsWithTrait<T>(action);
 		}
 
 		public IEnumerable<Actor> ActorsHavingTrait<T>()
@@ -590,6 +610,13 @@ namespace OpenRA
 				OrderManager.Dispose();
 
 			Game.FinishBenchmark();
+		}
+
+		public void OutOfSync()
+		{
+			EndGame();
+			SetPauseState(true);
+			PauseStateLocked = true;
 		}
 	}
 

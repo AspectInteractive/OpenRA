@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -17,7 +17,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[TraitLocation(SystemActors.World)]
-	public class ElevatedBridgeLayerInfo : TraitInfo, Requires<DomainIndexInfo>, ILobbyCustomRulesIgnore
+	public class ElevatedBridgeLayerInfo : TraitInfo, ILobbyCustomRulesIgnore, ICustomMovementLayerInfo
 	{
 		[Desc("Terrain type used by cells outside any elevated bridge footprint.")]
 		public readonly string ImpassableTerrainType = "Impassable";
@@ -44,7 +44,6 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void WorldLoaded(World world, WorldRenderer wr)
 		{
-			var domainIndex = world.WorldActor.Trait<DomainIndex>();
 			var cellHeight = world.Map.CellHeightStep.Length;
 			foreach (var tti in world.WorldActor.Info.TraitInfos<ElevatedBridgePlaceholderInfo>())
 			{
@@ -61,7 +60,6 @@ namespace OpenRA.Mods.Common.Traits
 				}
 
 				var end = tti.EndCells();
-				domainIndex.AddFixedConnection(end);
 				foreach (var c in end)
 				{
 					// Need to explicitly set both default and tunnel layers, otherwise the .Contains check will fail

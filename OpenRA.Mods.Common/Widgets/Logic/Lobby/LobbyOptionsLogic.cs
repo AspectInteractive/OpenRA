@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -83,14 +83,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			foreach (var option in allOptions.Where(o => o is LobbyBooleanOption))
 			{
-				if (!checkboxColumns.Any())
+				if (checkboxColumns.Count == 0)
 				{
 					row = checkboxRowTemplate.Clone();
 					row.Bounds.Y = optionsContainer.Bounds.Height;
 					optionsContainer.Bounds.Height += row.Bounds.Height;
 					foreach (var child in row.Children)
-						if (child is CheckboxWidget)
-							checkboxColumns.Enqueue((CheckboxWidget)child);
+						if (child is CheckboxWidget childCheckbox)
+							checkboxColumns.Enqueue(childCheckbox);
 
 					optionsContainer.AddChild(row);
 				}
@@ -112,14 +112,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			foreach (var option in allOptions.Where(o => !(o is LobbyBooleanOption)))
 			{
-				if (!dropdownColumns.Any())
+				if (dropdownColumns.Count == 0)
 				{
 					row = dropdownRowTemplate.Clone() as Widget;
 					row.Bounds.Y = optionsContainer.Bounds.Height;
 					optionsContainer.Bounds.Height += row.Bounds.Height;
 					foreach (var child in row.Children)
-						if (child is DropDownButtonWidget)
-							dropdownColumns.Enqueue((DropDownButtonWidget)child);
+						if (child is DropDownButtonWidget dropDown)
+							dropdownColumns.Enqueue(dropDown);
 
 					optionsContainer.AddChild(row);
 				}
@@ -155,7 +155,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 						return item;
 					};
 
-					dropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE", option.Values.Count() * 30, option.Values, setupItem);
+					dropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE", option.Values.Count * 30, option.Values, setupItem);
 				};
 
 				var label = row.GetOrNull<LabelWidget>(dropdown.Id + "_DESC");

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -104,19 +104,19 @@ namespace OpenRA.Mods.Common.UtilityCommands
 
 			if (violationCount > 0)
 			{
-				Console.WriteLine("Explicit interface violations: {0}", violationCount);
+				Console.WriteLine($"Explicit interface violations: {violationCount}");
 				Environment.Exit(1);
 			}
 		}
 
 		static bool IsExplicitInterfaceProperty(PropertyInfo pi)
 		{
-			return pi.Name.Contains(".");
+			return pi.Name.Contains('.');
 		}
 
 		void OnViolation(Type implementor, Type interfaceType, MemberInfo violator)
 		{
-			Console.WriteLine("{0} must explicitly implement the interface member {1}.{2}", implementor.Name, interfaceType.Name, violator.Name);
+			Console.WriteLine($"{implementor.Name} must explicitly implement the interface member {interfaceType.Name}.{violator.Name}");
 			violationCount++;
 		}
 	}

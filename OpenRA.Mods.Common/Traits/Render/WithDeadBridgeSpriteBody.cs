@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -92,11 +92,11 @@ namespace OpenRA.Mods.Common.Traits.Render
 				var bRamp = bridgeInfo.BOffset != CVec.Zero && RampExists(self, bridgeInfo.BOffset);
 
 				var sequence = DefaultAnimation.CurrentSequence.Name;
-				if (aRamp && bRamp && bridgeInfo.ABRampSequences.Any())
+				if (aRamp && bRamp && bridgeInfo.ABRampSequences.Length > 0)
 					sequence = bridgeInfo.ABRampSequences.Random(Game.CosmeticRandom);
-				else if (aRamp && bridgeInfo.ARampSequences.Any())
+				else if (aRamp && bridgeInfo.ARampSequences.Length > 0)
 					sequence = bridgeInfo.ARampSequences.Random(Game.CosmeticRandom);
-				else if (bRamp && bridgeInfo.BRampSequences.Any())
+				else if (bRamp && bridgeInfo.BRampSequences.Length > 0)
 					sequence = bridgeInfo.BRampSequences.Random(Game.CosmeticRandom);
 
 				DefaultAnimation.PlayRepeating(NormalizeSequence(self, sequence));

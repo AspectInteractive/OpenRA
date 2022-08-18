@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -120,10 +120,10 @@ namespace OpenRA.Mods.Common.Traits
 		Actor GetRandomSpawnPoint(World world, Support.MersenneTwister random)
 		{
 			var spawnPointActors = world.ActorsWithTrait<ActorSpawner>()
-				.Where(x => !x.Trait.IsTraitDisabled && (info.Types.Overlaps(x.Trait.Types) || !x.Trait.Types.Any()))
+				.Where(x => !x.Trait.IsTraitDisabled && (info.Types.Overlaps(x.Trait.Types) || x.Trait.Types.Count == 0))
 				.ToArray();
 
-			return spawnPointActors.Any() ? spawnPointActors.Random(random).Actor : null;
+			return spawnPointActors.Length > 0 ? spawnPointActors.Random(random).Actor : null;
 		}
 
 		public void DecreaseActorCount()

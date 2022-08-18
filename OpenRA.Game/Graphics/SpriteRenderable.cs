@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -127,13 +127,16 @@ namespace OpenRA.Graphics
 			var pos = ScreenPosition(wr) + sprite.Offset;
 			var tl = wr.Viewport.WorldToViewPx(pos);
 			var br = wr.Viewport.WorldToViewPx(pos + sprite.Size);
-			Game.Renderer.RgbaColorRenderer.DrawRect(tl, br, 1, Color.Red);
+			if (rotation == WAngle.Zero)
+				Game.Renderer.RgbaColorRenderer.DrawRect(tl, br, 1, Color.Red);
+			else
+				Game.Renderer.RgbaColorRenderer.DrawPolygon(Util.RotateQuad(tl, br - tl, rotation.RendererRadians()), 1, Color.Red);
 		}
 
 		public Rectangle ScreenBounds(WorldRenderer wr)
 		{
 			var screenOffset = ScreenPosition(wr) + sprite.Offset;
-			return new Rectangle((int)screenOffset.X, (int)screenOffset.Y, (int)sprite.Size.X, (int)sprite.Size.Y);
+			return Util.BoundingRectangle(screenOffset, sprite.Size, rotation.RendererRadians());
 		}
 	}
 }

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -54,7 +54,7 @@ namespace OpenRA.Mods.Common.Traits
 		readonly PaletteReference palette;
 
 		public SequencePlaceBuildingPreviewPreview(WorldRenderer wr, ActorInfo ai, SequencePlaceBuildingPreviewInfo info, TypeDictionary init)
-			: base(wr, ai, info, init)
+			: base(wr, ai, info)
 		{
 			this.info = info;
 			var ownerName = init.Get<OwnerInit>().InternalName;
@@ -62,7 +62,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			var rsi = ai.TraitInfo<RenderSpritesInfo>();
 			palette = wr.Palette(rsi.Palette ?? rsi.PlayerPalette + ownerName);
-			preview = new Animation(wr.World, rsi.GetImage(ai, wr.World.Map.Rules.Sequences, faction));
+			preview = new Animation(wr.World, rsi.GetImage(ai, faction));
 			preview.PlayRepeating(info.Sequence);
 		}
 
@@ -77,7 +77,7 @@ namespace OpenRA.Mods.Common.Traits
 				foreach (var r in RenderFootprint(wr, topLeft, footprint, info.FootprintUnderPreview))
 					yield return r;
 
-			var centerPosition = wr.World.Map.CenterOfCell(topLeft) + centerOffset;
+			var centerPosition = wr.World.Map.CenterOfCell(topLeft) + CenterOffset;
 			foreach (var r in preview.Render(centerPosition, WVec.Zero, 0, palette))
 			{
 				if (info.SequenceAlpha < 1f && r is IModifyableRenderable mr)

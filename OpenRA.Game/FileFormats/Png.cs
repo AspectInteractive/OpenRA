@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -26,11 +26,11 @@ namespace OpenRA.FileFormats
 	{
 		static readonly byte[] Signature = { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
 
-		public int Width { get; private set; }
-		public int Height { get; private set; }
-		public Color[] Palette { get; private set; }
-		public byte[] Data { get; private set; }
-		public SpriteFrameType Type { get; private set; }
+		public int Width { get; }
+		public int Height { get; }
+		public Color[] Palette { get; }
+		public byte[] Data { get; }
+		public SpriteFrameType Type { get; }
 		public Dictionary<string, string> EmbeddedData = new Dictionary<string, string>();
 
 		public int PixelStride => Type == SpriteFrameType.Indexed8 ? 1 : Type == SpriteFrameType.Rgb24 ? 3 : 4;

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -65,7 +65,7 @@ namespace OpenRA.Mods.Common.Activities
 			unitCost = valued != null ? valued.Cost : 0;
 
 			var cannotRepairAtHost = health == null || health.DamageState == DamageState.Undamaged
-				|| !allRepairsUnits.Any()
+				|| allRepairsUnits.Length == 0
 				|| ((repairable == null || !repairable.Info.RepairActors.Contains(host.Info.Name))
 					&& (repairableNear == null || !repairableNear.Info.RepairActors.Contains(host.Info.Name)));
 
@@ -262,6 +262,7 @@ namespace OpenRA.Mods.Common.Activities
 					host.Actor.Owner.PlayerActor.TraitOrDefault<PlayerExperience>()?.GiveExperience(repairsUnits.Info.PlayerExperience);
 
 				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", repairsUnits.Info.FinishRepairingNotification, self.Owner.Faction.InternalName);
+				TextNotificationsManager.AddTransientLine(repairsUnits.Info.FinishRepairingTextNotification, self.Owner);
 
 				activeResupplyTypes &= ~ResupplyType.Repair;
 				return;
@@ -279,6 +280,7 @@ namespace OpenRA.Mods.Common.Activities
 				{
 					played = true;
 					Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", repairsUnits.Info.StartRepairingNotification, self.Owner.Faction.InternalName);
+					TextNotificationsManager.AddTransientLine(repairsUnits.Info.StartRepairingTextNotification, self.Owner);
 				}
 
 				if (!playerResources.TakeCash(cost, true))

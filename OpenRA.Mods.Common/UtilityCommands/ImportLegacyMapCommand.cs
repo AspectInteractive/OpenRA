@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -27,7 +27,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 	{
 		public readonly int MapSize;
 
-		public ImportLegacyMapCommand(int mapSize)
+		protected ImportLegacyMapCommand(int mapSize)
 		{
 			MapSize = mapSize;
 		}
@@ -73,9 +73,8 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				{
 					Title = basic.GetValue("Name", Path.GetFileNameWithoutExtension(filename)),
 					Author = "Westwood Studios",
+					RequiresMod = ModData.Manifest.Id
 				};
-
-				Map.RequiresMod = ModData.Manifest.Id;
 
 				SetBounds(Map, mapSection);
 
@@ -183,26 +182,26 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				{
 					switch (s.Key)
 					{
-					case "Intro":
-						videos.Add(new MiniYamlNode("BackgroundVideo", s.Value.ToLowerInvariant() + ".vqa"));
-						break;
-					case "Brief":
-						videos.Add(new MiniYamlNode("BriefingVideo", s.Value.ToLowerInvariant() + ".vqa"));
-						break;
-					case "Action":
-						videos.Add(new MiniYamlNode("StartVideo", s.Value.ToLowerInvariant() + ".vqa"));
-						break;
-					case "Win":
-						videos.Add(new MiniYamlNode("WinVideo", s.Value.ToLowerInvariant() + ".vqa"));
-						break;
-					case "Lose":
-						videos.Add(new MiniYamlNode("LossVideo", s.Value.ToLowerInvariant() + ".vqa"));
-						break;
+						case "Intro":
+							videos.Add(new MiniYamlNode("BackgroundVideo", s.Value.ToLowerInvariant() + ".vqa"));
+							break;
+						case "Brief":
+							videos.Add(new MiniYamlNode("BriefingVideo", s.Value.ToLowerInvariant() + ".vqa"));
+							break;
+						case "Action":
+							videos.Add(new MiniYamlNode("StartVideo", s.Value.ToLowerInvariant() + ".vqa"));
+							break;
+						case "Win":
+							videos.Add(new MiniYamlNode("WinVideo", s.Value.ToLowerInvariant() + ".vqa"));
+							break;
+						case "Lose":
+							videos.Add(new MiniYamlNode("LossVideo", s.Value.ToLowerInvariant() + ".vqa"));
+							break;
 					}
 				}
 			}
 
-			if (videos.Any())
+			if (videos.Count > 0)
 			{
 				var worldNode = Map.RuleDefinitions.Nodes.FirstOrDefault(n => n.Key == "World");
 				if (worldNode == null)
@@ -224,9 +223,9 @@ namespace OpenRA.Mods.Common.UtilityCommands
 
 		public virtual void ReadActors(IniFile file)
 		{
-			LoadActors(file, "STRUCTURES", Players, MapSize, Map);
-			LoadActors(file, "UNITS", Players, MapSize, Map);
-			LoadActors(file, "INFANTRY", Players, MapSize, Map);
+			LoadActors(file, "STRUCTURES", Players, Map);
+			LoadActors(file, "UNITS", Players, Map);
+			LoadActors(file, "INFANTRY", Players, Map);
 		}
 
 		public abstract void LoadPlayer(IniFile file, string section);
@@ -312,26 +311,26 @@ namespace OpenRA.Mods.Common.UtilityCommands
 			if (worldNode == null)
 				worldNode = new MiniYamlNode("World", new MiniYaml("", new List<MiniYamlNode>()));
 
-			if (scorches.Any())
+			if (scorches.Count > 0)
 			{
 				var initialScorches = new MiniYamlNode("InitialSmudges", new MiniYaml("", scorches));
 				var smudgeLayer = new MiniYamlNode("SmudgeLayer@SCORCH", new MiniYaml("", new List<MiniYamlNode>() { initialScorches }));
 				worldNode.Value.Nodes.Add(smudgeLayer);
 			}
 
-			if (craters.Any())
+			if (craters.Count > 0)
 			{
 				var initialCraters = new MiniYamlNode("InitialSmudges", new MiniYaml("", craters));
 				var smudgeLayer = new MiniYamlNode("SmudgeLayer@CRATER", new MiniYaml("", new List<MiniYamlNode>() { initialCraters }));
 				worldNode.Value.Nodes.Add(smudgeLayer);
 			}
 
-			if (worldNode.Value.Nodes.Any() && !Map.RuleDefinitions.Nodes.Contains(worldNode))
+			if (worldNode.Value.Nodes.Count > 0 && !Map.RuleDefinitions.Nodes.Contains(worldNode))
 				Map.RuleDefinitions.Nodes.Add(worldNode);
 		}
 
 		// TODO: fix this -- will have bitrotted pretty badly.
-		static readonly Dictionary<string, Color> namedColorMapping = new Dictionary<string, Color>()
+		static readonly Dictionary<string, Color> NamedColorMapping = new Dictionary<string, Color>()
 		{
 			{ "gold", Color.FromArgb(246, 214, 121) },
 			{ "blue", Color.FromArgb(226, 230, 246) },
@@ -353,7 +352,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				OwnsWorld = section == "Neutral",
 				NonCombatant = section == "Neutral",
 				Faction = faction,
-				Color = namedColorMapping[color]
+				Color = NamedColorMapping[color]
 			};
 
 			var neutral = new[] { "Neutral" };
@@ -361,21 +360,18 @@ namespace OpenRA.Mods.Common.UtilityCommands
 			{
 				switch (s.Key)
 				{
-				case "Allies":
-					pr.Allies = s.Value.Split(',').Intersect(players).Except(neutral).ToArray();
-					pr.Enemies = s.Value.Split(',').SymmetricDifference(players).Except(neutral).ToArray();
-					break;
-				default:
-					Console.WriteLine("Ignoring unknown {0}={1} for player {2}", s.Key, s.Value, pr.Name);
-					break;
+					case "Allies":
+						pr.Allies = s.Value.Split(',').Intersect(players).Except(neutral).ToArray();
+						pr.Enemies = s.Value.Split(',').SymmetricDifference(players).Except(neutral).ToArray();
+						break;
+					default:
+						Console.WriteLine("Ignoring unknown {0}={1} for player {2}", s.Key, s.Value, pr.Name);
+						break;
 				}
 			}
 
 			// Overwrite default player definitions if needed
-			if (!mapPlayers.Players.ContainsKey(section))
-				mapPlayers.Players.Add(section, pr);
-			else
-				mapPlayers.Players[section] = pr;
+			mapPlayers.Players[section] = pr;
 		}
 
 		public virtual CPos ParseActorLocation(string input, int loc)
@@ -383,7 +379,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 			return new CPos(loc % MapSize, loc / MapSize);
 		}
 
-		public void LoadActors(IniFile file, string section, List<string> players, int mapSize, Map map)
+		public void LoadActors(IniFile file, string section, List<string> players, Map map)
 		{
 			foreach (var s in file.GetSection(section, true))
 			{
@@ -393,7 +389,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				try
 				{
 					var parts = s.Value.Split(',');
-					if (parts[0] == "")
+					if (string.IsNullOrEmpty(parts[0]))
 						parts[0] = "Neutral";
 
 					if (!players.Contains(parts[0]))

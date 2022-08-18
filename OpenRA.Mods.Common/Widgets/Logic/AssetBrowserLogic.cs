@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -97,7 +97,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var spriteWidget = panel.GetOrNull<SpriteWidget>("SPRITE");
 			if (spriteWidget != null)
 			{
-				spriteWidget.GetSprite = () => currentSprites != null ? currentSprites[currentFrame] : null;
+				spriteWidget.GetSprite = () => currentSprites?[currentFrame];
 				currentPalette = spriteWidget.Palette;
 				spriteScale = spriteWidget.Scale;
 				spriteWidget.GetPalette = () => currentPalette;
@@ -129,7 +129,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var paletteDropDown = panel.GetOrNull<DropDownButtonWidget>("PALETTE_SELECTOR");
 			if (paletteDropDown != null)
 			{
-				paletteDropDown.OnMouseDown = _ => ShowPaletteDropdown(paletteDropDown, world);
+				paletteDropDown.OnMouseDown = _ => ShowPaletteDropdown(paletteDropDown);
 				paletteDropDown.GetText = () => currentPalette;
 				paletteDropDown.IsVisible = () => currentSprites != null || currentVoxel != null;
 				panel.GetOrNull<LabelWidget>("PALETTE_DESC").IsVisible = () => currentSprites != null || currentVoxel != null;
@@ -394,7 +394,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (string.IsNullOrWhiteSpace(filter))
 				return true;
 
-			if (filename.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
+			if (filename.Contains(filter, StringComparison.OrdinalIgnoreCase))
 				return true;
 
 			return false;
@@ -524,11 +524,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				else
 					return false;
 			}
-			catch (Exception ex)
+			catch (Exception exception)
 			{
 				isLoadError = true;
 				Log.AddChannel("assetbrowser", "assetbrowser.log");
-				Log.Write("assetbrowser", "Error reading {0}:{3} {1}{3}{2}", filename, ex.Message, ex.StackTrace, Environment.NewLine);
+				Log.Write("assetbrowser", $"Error reading {filename}");
+				Log.Write("assetbrowser", exception);
 
 				return false;
 			}
@@ -587,7 +588,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 		}
 
-		bool ShowPaletteDropdown(DropDownButtonWidget dropdown, World world)
+		bool ShowPaletteDropdown(DropDownButtonWidget dropdown)
 		{
 			Func<string, ScrollItemWidget, ScrollItemWidget> setupItem = (name, itemTemplate) =>
 			{

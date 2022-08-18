@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -77,7 +77,7 @@ namespace OpenRA
 		// Players in mission maps must not leave the player view
 		public bool Spectating => !inMissionMap && (spectating || WinState != WinState.Undefined);
 
-		public World World { get; private set; }
+		public World World { get; }
 
 		readonly bool inMissionMap;
 		readonly bool spectating;
@@ -113,7 +113,7 @@ namespace OpenRA
 				?? selectableFactions.Random(playerRandom);
 
 			// Don't loop infinite
-			for (var i = 0; i <= 10 && selected.RandomFactionMembers.Any(); i++)
+			for (var i = 0; i <= 10 && selected.RandomFactionMembers.Count > 0; i++)
 			{
 				var faction = selected.RandomFactionMembers.Random(playerRandom);
 				selected = selectableFactions.FirstOrDefault(f => f.InternalName == faction);

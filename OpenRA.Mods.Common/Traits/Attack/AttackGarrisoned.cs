@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -139,7 +139,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		WVec PortOffset(Actor self, FirePort p)
 		{
-			var bodyOrientation = coords.Value.QuantizeOrientation(self, self.Orientation);
+			var bodyOrientation = coords.Value.QuantizeOrientation(self.Orientation);
 			return coords.Value.LocalToWorld(p.Offset.Rotate(bodyOrientation));
 		}
 
@@ -193,7 +193,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Display muzzle flashes
 			foreach (var m in muzzles)
-				foreach (var r in m.Render(self, wr, pal))
+				foreach (var r in m.Render(self, pal))
 					yield return r;
 		}
 

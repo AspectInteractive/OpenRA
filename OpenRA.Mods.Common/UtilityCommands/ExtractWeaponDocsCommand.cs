@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -40,7 +40,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				"This documentation is aimed at modders. It displays a template for weapon definitions " +
 				"as well as its contained types (warheads and projectiles) with default values and developer commentary. " +
 				"Please do not edit it directly, but add new `[Desc(\"String\")]` tags to the source code. This file has been " +
-				"automatically generated for version {0} of OpenRA.", version);
+				$"automatically generated for version {version} of OpenRA.");
 			Console.WriteLine();
 
 			var doc = new StringBuilder();
@@ -52,7 +52,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 			var warheads = objectCreator.GetTypesImplementing<IWarhead>().OrderBy(t => t.Namespace);
 			var projectiles = objectCreator.GetTypesImplementing<IProjectileInfo>().OrderBy(t => t.Namespace);
 
-			var weaponTypes = Enumerable.Concat(weaponInfo, Enumerable.Concat(projectiles, warheads));
+			var weaponTypes = weaponInfo.Concat(projectiles.Concat(warheads));
 			foreach (var t in weaponTypes)
 			{
 				// skip helpers like TraitInfo<T>

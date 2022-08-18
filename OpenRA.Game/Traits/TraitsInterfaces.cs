@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -34,16 +34,6 @@ namespace OpenRA.Traits
 		Heavy = 8,
 		Critical = 16,
 		Dead = 32
-	}
-
-	// NOTE: Each subsequent category is a superset of the previous categories
-	// and categories are mutually exclusive.
-	public enum BlockedByActor
-	{
-		None,
-		Immovable,
-		Stationary,
-		All
 	}
 
 	/// <summary>
@@ -148,7 +138,7 @@ namespace OpenRA.Traits
 	{
 		string OrderID { get; }
 		int OrderPriority { get; }
-		bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor);
+		bool CanTarget(Actor self, in Target target, ref TargetModifiers modifiers, ref string cursor);
 		bool IsQueued { get; }
 		bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers);
 	}
@@ -227,6 +217,7 @@ namespace OpenRA.Traits
 		void AddInfluence(Actor self, IOccupySpace ios);
 		void RemoveInfluence(Actor self, IOccupySpace ios);
 		int AddCellTrigger(CPos[] cells, Action<Actor> onEntry, Action<Actor> onExit);
+		IEnumerable<CPos> TriggerPositions();
 		void RemoveCellTrigger(int id);
 		int AddProximityTrigger(WPos pos, WDist range, WDist vRange, Action<Actor> onEntry, Action<Actor> onExit);
 		void RemoveProximityTrigger(int id);
@@ -293,23 +284,6 @@ namespace OpenRA.Traits
 
 	public enum SubCell : byte { Invalid = byte.MaxValue, Any = byte.MaxValue - 1, FullCell = 0, First = 1 }
 
-	public interface IPositionableInfo : IOccupySpaceInfo
-	{
-		bool CanEnterCell(World world, Actor self, CPos cell, SubCell subCell = SubCell.FullCell, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All);
-	}
-
-	public interface IPositionable : IOccupySpace
-	{
-		bool CanExistInCell(CPos location);
-		bool IsLeavingCell(CPos location, SubCell subCell = SubCell.Any);
-		bool CanEnterCell(CPos location, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All);
-		SubCell GetValidSubCell(SubCell preferred = SubCell.Any);
-		SubCell GetAvailableSubCell(CPos location, SubCell preferredSubCell = SubCell.Any, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All);
-		void SetPosition(Actor self, CPos cell, SubCell subCell = SubCell.Any);
-		void SetPosition(Actor self, WPos pos);
-		void SetCenterPosition(Actor self, WPos pos);
-	}
-
 	public interface ITemporaryBlockerInfo : ITraitInfoInterface { }
 
 	[RequireExplicitImplementation]
@@ -346,8 +320,11 @@ namespace OpenRA.Traits
 
 	public interface ILobbyCustomRulesIgnore { }
 
-	[SuppressMessage("StyleCop.CSharp.NamingRules", "SA1302:InterfaceNamesMustBeginWithI", Justification = "Not a real interface, but more like a tag.")]
+	[SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Not a real interface, but more like a tag.")]
 	public interface Requires<T> where T : class, ITraitInfoInterface { }
+
+	[SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Not a real interface, but more like a tag.")]
+	public interface NotBefore<T> where T : class, ITraitInfoInterface { }
 
 	public interface IActivityInterface { }
 
@@ -478,10 +455,25 @@ namespace OpenRA.Traits
 		void Clear();
 		bool RolloverContains(Actor a);
 		void SetRollover(IEnumerable<Actor> actors);
-		void DoControlGroup(World world, WorldRenderer worldRenderer, int group, Modifiers mods, int multiTapCount);
+	}
+
+	public interface IControlGroupsInfo : ITraitInfoInterface
+	{
+		string[] Groups { get; }
+	}
+
+	public interface IControlGroups
+	{
+		string[] Groups { get; }
+
+		void SelectControlGroup(int group);
+		void CreateControlGroup(int group);
+		void AddSelectionToControlGroup(int group);
+		void CombineSelectionWithControlGroup(int group);
 		void AddToControlGroup(Actor a, int group);
 		void RemoveFromControlGroup(Actor a);
 		int? GetControlGroupForActor(Actor a);
+		IEnumerable<Actor> GetActorsInControlGroup(int group);
 	}
 
 	/// <summary>
@@ -506,7 +498,6 @@ namespace OpenRA.Traits
 	public interface ITargetablePositions
 	{
 		IEnumerable<WPos> TargetablePositions(Actor self);
-		bool AlwaysEnabled { get; }
 	}
 
 	public interface IMoveInfo : ITraitInfoInterface
@@ -558,9 +549,9 @@ namespace OpenRA.Traits
 			IsLocked = locked;
 		}
 
-		public virtual string ValueChangedMessage(string playerName, string newValue)
+		public virtual string Label(string value)
 		{
-			return playerName + " changed " + Name + " to " + Values[newValue] + ".";
+			return Values[value];
 		}
 	}
 
@@ -575,9 +566,9 @@ namespace OpenRA.Traits
 		public LobbyBooleanOption(string id, string name, string description, bool visible, int displayorder, bool defaultValue, bool locked)
 			: base(id, name, description, visible, displayorder, new ReadOnlyDictionary<string, string>(BoolValues), defaultValue.ToString(), locked) { }
 
-		public override string ValueChangedMessage(string playerName, string newValue)
+		public override string Label(string newValue)
 		{
-			return playerName + " " + BoolValues[newValue].ToLowerInvariant() + " " + Name + ".";
+			return BoolValues[newValue].ToLowerInvariant();
 		}
 	}
 

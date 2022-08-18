@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -26,14 +26,21 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly int NewOptionsNotificationDelay = 10;
 
 		[NotificationReference("Speech")]
-		[Desc("Notification to play after building placement if new construction options are available.")]
+		[Desc("Speech notification to play after building placement if new construction options are available.")]
 		public readonly string NewOptionsNotification = null;
 
+		[Desc("Text notification to display after building placement if new construction options are available.")]
+		public readonly string NewOptionsTextNotification = null;
+
 		[NotificationReference("Speech")]
+		[Desc("Speech notification to play if building placement is not possible.")]
 		public readonly string CannotPlaceNotification = null;
 
+		[Desc("Text notification to display if building placement is not possible.")]
+		public readonly string CannotPlaceTextNotification = null;
+
 		[Desc("Hotkey to toggle between PlaceBuildingVariants when placing a structure.")]
-		public HotkeyReference ToggleVariantKey = new HotkeyReference();
+		public readonly HotkeyReference ToggleVariantKey = new HotkeyReference();
 
 		public override object Create(ActorInitializer init) { return new PlaceBuilding(this); }
 	}
@@ -99,6 +106,16 @@ namespace OpenRA.Mods.Common.Traits
 				if (buildableInfo != null && buildableInfo.ForceFaction != null)
 					faction = buildableInfo.ForceFaction;
 
+				var replaceableTypes = actorInfo.TraitInfos<ReplacementInfo>()
+					.SelectMany(r => r.ReplaceableTypes)
+					.ToHashSet();
+
+				if (replaceableTypes.Count > 0)
+					foreach (var t in buildingInfo.Tiles(targetLocation))
+						foreach (var a in self.World.ActorMap.GetActorsAt(t))
+							if (a.TraitsImplementing<Replaceable>().Any(r => !r.IsTraitDisabled && r.Info.Types.Overlaps(replaceableTypes)))
+								self.World.Remove(a);
+
 				if (os == "LineBuild")
 				{
 					// Build the parent actor first
@@ -123,7 +140,17 @@ namespace OpenRA.Mods.Common.Traits
 						if (t.Cell == targetLocation)
 							continue;
 
-						w.CreateActor(t.Cell == targetLocation ? actorInfo.Name : segmentType, new TypeDictionary
+						var segment = self.World.Map.Rules.Actors[segmentType];
+						var replaceableSegments = segment.TraitInfos<ReplacementInfo>()
+							.SelectMany(r => r.ReplaceableTypes)
+							.ToHashSet();
+
+						if (replaceableSegments.Count > 0)
+							foreach (var a in self.World.ActorMap.GetActorsAt(t.Cell))
+								if (a.TraitsImplementing<Replaceable>().Any(r => !r.IsTraitDisabled && r.Info.Types.Overlaps(replaceableSegments)))
+									self.World.Remove(a);
+
+						w.CreateActor(segmentType, new TypeDictionary
 						{
 							new LocationInit(t.Cell),
 							new OwnerInit(order.Player),
@@ -143,7 +170,7 @@ namespace OpenRA.Mods.Common.Traits
 					foreach (var a in self.World.ActorMap.GetActorsAt(targetLocation))
 					{
 						var pluggables = a.TraitsImplementing<Pluggable>()
-							.Where(p => p.AcceptsPlug(a, plugInfo.Type))
+							.Where(p => p.AcceptsPlug(plugInfo.Type))
 							.ToList();
 
 						var pluggable = pluggables.FirstOrDefault(p => a.Location + p.Info.Offset == targetLocation)
@@ -162,16 +189,6 @@ namespace OpenRA.Mods.Common.Traits
 					if (!self.World.CanPlaceBuilding(targetLocation, actorInfo, buildingInfo, null)
 						|| !buildingInfo.IsCloseEnoughToBase(self.World, order.Player, actorInfo, targetLocation))
 						return;
-
-					var replaceableTypes = actorInfo.TraitInfos<ReplacementInfo>()
-						.SelectMany(r => r.ReplaceableTypes)
-						.ToHashSet();
-
-					if (replaceableTypes.Any())
-						foreach (var t in buildingInfo.Tiles(targetLocation))
-							foreach (var a in self.World.ActorMap.GetActorsAt(t))
-								if (a.TraitsImplementing<Replaceable>().Any(r => !r.IsTraitDisabled && r.Info.Types.Overlaps(replaceableTypes)))
-									self.World.Remove(a);
 
 					var building = w.CreateActor(actorInfo.Name, new TypeDictionary
 					{
@@ -213,6 +230,8 @@ namespace OpenRA.Mods.Common.Traits
 		void PlayNotification(Actor self)
 		{
 			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.NewOptionsNotification, self.Owner.Faction.InternalName);
+			TextNotificationsManager.AddTransientLine(info.NewOptionsTextNotification, self.Owner);
+
 			triggerNotification = false;
 			tick = 0;
 		}

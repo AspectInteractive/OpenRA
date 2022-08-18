@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -28,8 +28,11 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly int RadarPingDuration = 250;
 
 		[NotificationReference("Speech")]
-		[Desc("The audio notification type to play.")]
-		public string Notification = "HarvesterAttack";
+		[Desc("Speech notification type to play.")]
+		public readonly string Notification = "HarvesterAttack";
+
+		[Desc("Text notification to display.")]
+		public string TextNotification = null;
 
 		public override object Create(ActorInitializer init) { return new HarvesterAttackNotifier(init.Self, this); }
 	}
@@ -61,6 +64,8 @@ namespace OpenRA.Mods.Common.Traits
 			if (Game.RunTime > lastAttackTime + info.NotifyInterval)
 			{
 				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.Notification, self.Owner.Faction.InternalName);
+				TextNotificationsManager.AddTransientLine(info.TextNotification, self.Owner);
+
 				radarPings?.Add(() => self.Owner.IsAlliedWith(self.World.RenderPlayer), self.CenterPosition, info.RadarPingColor, info.RadarPingDuration);
 
 				lastAttackTime = Game.RunTime;

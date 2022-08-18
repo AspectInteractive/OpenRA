@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -26,6 +26,7 @@ namespace OpenRA.Mods.Common.Activities
 		public WAngle Facing = new WAngle(384);
 		public string[] Sounds = Array.Empty<string>();
 		public string Notification = null;
+		public string TextNotification = null;
 		public int ForceHealthPercentage = 0;
 		public bool SkipMakeAnims = false;
 		public string Faction = null;
@@ -88,13 +89,14 @@ namespace OpenRA.Mods.Common.Activities
 					nt.OnTransform(self);
 
 				var selected = w.Selection.Contains(self);
-				var controlgroup = w.Selection.GetControlGroupForActor(self);
+				var controlgroup = w.ControlGroups.GetControlGroupForActor(self);
 
 				self.Dispose();
 				foreach (var s in Sounds)
 					Game.Sound.PlayToPlayer(SoundType.World, self.Owner, s, self.CenterPosition);
 
 				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", Notification, self.Owner.Faction.InternalName);
+				TextNotificationsManager.AddTransientLine(TextNotification, self.Owner);
 
 				var init = new TypeDictionary
 				{
@@ -141,7 +143,7 @@ namespace OpenRA.Mods.Common.Activities
 					w.Selection.Add(a);
 
 				if (controlgroup.HasValue)
-					w.Selection.AddToControlGroup(a, controlgroup.Value);
+					w.ControlGroups.AddToControlGroup(a, controlgroup.Value);
 			});
 		}
 	}

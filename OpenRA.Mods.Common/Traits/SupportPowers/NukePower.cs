@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,7 +11,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using OpenRA.GameRules;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Effects;
@@ -25,18 +24,20 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		[WeaponReference]
 		[FieldLoader.Require]
-		[Desc("Weapon to use for the impact.",
-			"Also image to use for the missile.")]
+		[Desc("Weapon to use for the impact.")]
 		public readonly string MissileWeapon = "";
 
 		[Desc("Delay (in ticks) after launch until the missile is spawned.")]
 		public readonly int MissileDelay = 0;
 
-		[SequenceReference(nameof(MissileWeapon))]
+		[Desc("Image to use for the missile.")]
+		public readonly string MissileImage = null;
+
+		[SequenceReference(nameof(MissileImage))]
 		[Desc("Sprite sequence for the ascending missile.")]
 		public readonly string MissileUp = "up";
 
-		[SequenceReference(nameof(MissileWeapon))]
+		[SequenceReference(nameof(MissileImage))]
 		[Desc("Sprite sequence for the descending missile.")]
 		public readonly string MissileDown = "down";
 
@@ -124,7 +125,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new NukePower(init.Self, this); }
 		public override void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
-			if (!string.IsNullOrEmpty(TrailImage) && !TrailSequences.Any())
+			if (!string.IsNullOrEmpty(TrailImage) && TrailSequences.Length == 0)
 				throw new YamlException("At least one entry in TrailSequences must be defined when TrailImage is defined.");
 
 			var weaponToLower = (MissileWeapon ?? string.Empty).ToLowerInvariant();
@@ -168,7 +169,7 @@ namespace OpenRA.Mods.Common.Traits
 			var skipAscent = info.SkipAscent || body == null;
 			var launchPos = skipAscent ? WPos.Zero : self.CenterPosition + body.LocalToWorld(info.SpawnOffset);
 
-			var missile = new NukeLaunch(self.Owner, info.MissileWeapon, info.WeaponInfo, palette, info.MissileUp, info.MissileDown,
+			var missile = new NukeLaunch(self.Owner, info.MissileImage, info.WeaponInfo, palette, info.MissileUp, info.MissileDown,
 				launchPos,
 				targetPosition, info.DetonationAltitude, info.RemoveMissileOnDetonation,
 				info.FlightVelocity, info.MissileDelay, info.FlightDelay, skipAscent,

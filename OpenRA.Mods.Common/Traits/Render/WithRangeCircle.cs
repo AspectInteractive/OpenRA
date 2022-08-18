@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -65,7 +65,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 				foreach (var a in w.ActorsWithTrait<WithRangeCircle>())
 					if (a.Trait.Info.Type == Type)
-						foreach (var r in a.Trait.RenderRangeCircle(a.Actor, wr, RangeCircleVisibility.WhenSelected))
+						foreach (var r in a.Trait.RenderRangeCircle(a.Actor, RangeCircleVisibility.WhenSelected))
 							yield return r;
 			}
 		}
@@ -95,7 +95,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			}
 		}
 
-		public IEnumerable<IRenderable> RenderRangeCircle(Actor self, WorldRenderer wr, RangeCircleVisibility visibility)
+		public IEnumerable<IRenderable> RenderRangeCircle(Actor self, RangeCircleVisibility visibility)
 		{
 			if (Info.Visible == visibility && Visible)
 				yield return new RangeCircleAnnotationRenderable(
@@ -110,14 +110,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		IEnumerable<IRenderable> IRenderAnnotationsWhenSelected.RenderAnnotations(Actor self, WorldRenderer wr)
 		{
-			return RenderRangeCircle(self, wr, RangeCircleVisibility.WhenSelected);
+			return RenderRangeCircle(self, RangeCircleVisibility.WhenSelected);
 		}
 
 		bool IRenderAnnotationsWhenSelected.SpatiallyPartitionable => false;
 
 		IEnumerable<IRenderable> IRenderAnnotations.RenderAnnotations(Actor self, WorldRenderer wr)
 		{
-			return RenderRangeCircle(self, wr, RangeCircleVisibility.Always);
+			return RenderRangeCircle(self, RangeCircleVisibility.Always);
 		}
 
 		bool IRenderAnnotations.SpatiallyPartitionable => false;

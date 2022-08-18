@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -15,7 +15,6 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
-using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Traits;
 
@@ -157,7 +156,7 @@ namespace OpenRA.Mods.Common.Traits
 			base.Created(self);
 		}
 
-		public void LinkProc(Actor self, Actor proc)
+		public void LinkProc(Actor proc)
 		{
 			LinkedProc = proc;
 		}
@@ -171,7 +170,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void ChooseNewProc(Actor self, Actor ignore)
 		{
 			LastLinkedProc = null;
-			LinkProc(self, ClosestProc(self, ignore));
+			LinkProc(ClosestProc(self, ignore));
 		}
 
 		bool IsAcceptableProcType(Actor proc)
@@ -183,6 +182,7 @@ namespace OpenRA.Mods.Common.Traits
 		public Actor ClosestProc(Actor self, Actor ignore)
 		{
 			// Find all refineries and their occupancy count:
+			// Exclude refineries with too many harvesters clogging the delivery location.
 			var refineries = self.World.ActorsWithTrait<IAcceptResources>()
 				.Where(r => r.Actor != ignore && r.Actor.Owner == self.Owner && IsAcceptableProcType(r.Actor))
 				.Select(r => new
@@ -190,30 +190,28 @@ namespace OpenRA.Mods.Common.Traits
 					Location = r.Actor.Location + r.Trait.DeliveryOffset,
 					Actor = r.Actor,
 					Occupancy = self.World.ActorsHavingTrait<Harvester>(h => h.LinkedProc == r.Actor).Count()
-				}).ToLookup(r => r.Location);
+				})
+				.Where(r => r.Occupancy < Info.MaxUnloadQueue)
+				.ToDictionary(r => r.Location);
+
+			if (refineries.Count == 0)
+				return null;
 
 			// Start a search from each refinery's delivery location:
-			List<CPos> path;
-
-			using (var search = PathSearch.FromPoints(self.World, mobile.Locomotor, self, refineries.Select(r => r.Key), self.Location, BlockedByActor.None)
-				.WithCustomCost(location =>
+			var path = mobile.PathFinder.FindPathToTargetCell(
+				self, refineries.Select(r => r.Key), self.Location, BlockedByActor.None,
+				location =>
 				{
-					if (!refineries.Contains(location))
+					if (!refineries.ContainsKey(location))
 						return 0;
 
-					var occupancy = refineries[location].First().Occupancy;
-
-					// Too many harvesters clogs up the refinery's delivery location:
-					if (occupancy >= Info.MaxUnloadQueue)
-						return PathGraph.PathCostForInvalidPath;
-
 					// Prefer refineries with less occupancy (multiplier is to offset distance cost):
+					var occupancy = refineries[location].Occupancy;
 					return occupancy * Info.UnloadQueueCostModifier;
-				}))
-				path = mobile.Pathfinder.FindPath(search);
+				});
 
-			if (path.Count != 0)
-				return refineries[path.Last()].First().Actor;
+			if (path.Count > 0)
+				return refineries[path.Last()].Actor;
 
 			return null;
 		}
@@ -276,7 +274,7 @@ namespace OpenRA.Mods.Common.Traits
 			return contents.Count == 0;
 		}
 
-		public bool CanHarvestCell(Actor self, CPos cell)
+		public bool CanHarvestCell(CPos cell)
 		{
 			// Resources only exist in the ground layer
 			if (cell.Layer != 0)
@@ -332,7 +330,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (order.OrderString == "Harvest")
 			{
 				// NOTE: An explicit harvest order allows the harvester to decide which refinery to deliver to.
-				LinkProc(self, null);
+				LinkProc(null);
 
 				CPos loc;
 				if (order.Target.Type != TargetType.Invalid)
@@ -390,7 +388,7 @@ namespace OpenRA.Mods.Common.Traits
 			public bool IsQueued { get; protected set; }
 			public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers) { return true; }
 
-			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+			public bool CanTarget(Actor self, in Target target, ref TargetModifiers modifiers, ref string cursor)
 			{
 				if (target.SelfIsTerrainType())
 					return false;

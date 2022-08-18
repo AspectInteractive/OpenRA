@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -36,7 +36,8 @@ namespace OpenRA
 		public readonly IModelSequenceLoader ModelSequenceLoader;
 		public readonly IVideoLoader[] VideoLoaders;
 		public readonly HotkeyManager Hotkeys;
-		public ILoadScreen LoadScreen { get; private set; }
+		public readonly Translation Translation;
+		public ILoadScreen LoadScreen { get; }
 		public CursorProvider CursorProvider { get; private set; }
 		public FS ModFiles;
 		public IReadOnlyFileSystem DefaultFileSystem => ModFiles;
@@ -87,7 +88,7 @@ namespace OpenRA
 
 			var sequenceFormat = Manifest.Get<SpriteSequenceFormat>();
 			var sequenceLoader = ObjectCreator.FindType(sequenceFormat.Type + "Loader");
-			var sequenceCtor = sequenceLoader != null ? sequenceLoader.GetConstructor(new[] { typeof(ModData) }) : null;
+			var sequenceCtor = sequenceLoader?.GetConstructor(new[] { typeof(ModData) });
 			if (sequenceLoader == null || !sequenceLoader.GetInterfaces().Contains(typeof(ISpriteSequenceLoader)) || sequenceCtor == null)
 				throw new InvalidOperationException($"Unable to find a sequence loader for type '{sequenceFormat.Type}'.");
 
@@ -95,7 +96,7 @@ namespace OpenRA
 
 			var modelFormat = Manifest.Get<ModelSequenceFormat>();
 			var modelLoader = ObjectCreator.FindType(modelFormat.Type + "Loader");
-			var modelCtor = modelLoader != null ? modelLoader.GetConstructor(new[] { typeof(ModData) }) : null;
+			var modelCtor = modelLoader?.GetConstructor(new[] { typeof(ModData) });
 			if (modelLoader == null || !modelLoader.GetInterfaces().Contains(typeof(IModelSequenceLoader)) || modelCtor == null)
 				throw new InvalidOperationException($"Unable to find a model loader for type '{modelFormat.Type}'.");
 
@@ -103,6 +104,8 @@ namespace OpenRA
 			ModelSequenceLoader.OnMissingModelError = s => Log.Write("debug", s);
 
 			Hotkeys = new HotkeyManager(ModFiles, Game.Settings.Keys, Manifest);
+
+			Translation = new Translation(Game.Settings.Player.Language, Manifest.Translations, DefaultFileSystem);
 
 			defaultRules = Exts.Lazy(() => Ruleset.LoadDefaults(this));
 			defaultTerrainInfo = Exts.Lazy(() =>
@@ -149,7 +152,7 @@ namespace OpenRA
 			CursorProvider = new CursorProvider(this);
 		}
 
-		public IEnumerable<string> Languages { get; private set; }
+		public IEnumerable<string> Languages { get; }
 
 		public Map PrepareMap(string uid)
 		{

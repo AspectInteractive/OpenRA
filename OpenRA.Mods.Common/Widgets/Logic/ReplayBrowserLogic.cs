@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -445,7 +445,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			};
 
 			var deleteAllButton = panel.Get<ButtonWidget>("MNG_DELALL_BUTTON");
-			deleteAllButton.IsDisabled = () => replayState.Count(kvp => kvp.Value.Visible) == 0;
+			deleteAllButton.IsDisabled = () => !replayState.Any(kvp => kvp.Value.Visible);
 			deleteAllButton.OnClick = () =>
 			{
 				var list = replayState.Where(kvp => kvp.Value.Visible).Select(kvp => kvp.Key).ToList();
@@ -511,7 +511,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			replayState.Remove(replay);
 		}
 
-		bool EvaluateReplayVisibility(ReplayMetadata replay)
+		static bool EvaluateReplayVisibility(ReplayMetadata replay)
 		{
 			// Game type
 			if ((filter.Type == GameType.Multiplayer && replay.GameInfo.IsSinglePlayer) || (filter.Type == GameType.Singleplayer && !replay.GameInfo.IsSinglePlayer))
@@ -675,7 +675,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 			catch (Exception e)
 			{
-				Log.Write("debug", "Exception while parsing replay: {0}", e);
+				Log.Write("debug", $"Exception while parsing replay: {replay}");
+				Log.Write("debug", e);
 				SelectReplay(null);
 			}
 		}

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -42,7 +42,7 @@ namespace OpenRA.Mods.Cnc.UtilityCommands
 		}
 
 		// Mapping from RA95 overlay index to type string
-		static readonly string[] redAlertOverlayNames =
+		static readonly string[] RedAlertOverlayNames =
 		{
 			"sbag", "cycl", "brik", "fenc", "wood",
 			"gold01", "gold02", "gold03", "gold04",
@@ -51,7 +51,7 @@ namespace OpenRA.Mods.Cnc.UtilityCommands
 			"fpls", "wcrate", "scrate", "barb", "sbag",
 		};
 
-		static readonly Dictionary<string, (byte Type, byte Index)> overlayResourceMapping = new Dictionary<string, (byte, byte)>()
+		static readonly Dictionary<string, (byte Type, byte Index)> OverlayResourceMapping = new Dictionary<string, (byte, byte)>()
 		{
 			// RA ore & crystals
 			{ "gold01", (1, 0) },
@@ -81,7 +81,7 @@ namespace OpenRA.Mods.Cnc.UtilityCommands
 					Map.Tiles[new CPos(i, j)] = new TerrainTile(types[i, j], ms.ReadUInt8());
 		}
 
-		static readonly string[] overlayActors = new string[]
+		static readonly string[] OverlayActors = new string[]
 		{
 			// Fences
 			"sbag", "cycl", "brik", "fenc", "wood",
@@ -102,15 +102,15 @@ namespace OpenRA.Mods.Cnc.UtilityCommands
 					var o = ms.ReadUInt8();
 					var res = (Type: (byte)0, Index: (byte)0);
 
-					if (o != 255 && overlayResourceMapping.ContainsKey(redAlertOverlayNames[o]))
-						res = overlayResourceMapping[redAlertOverlayNames[o]];
+					if (o != 255 && OverlayResourceMapping.ContainsKey(RedAlertOverlayNames[o]))
+						res = OverlayResourceMapping[RedAlertOverlayNames[o]];
 
 					var cell = new CPos(i, j);
 					Map.Resources[cell] = new ResourceTile(res.Type, res.Index);
 
-					if (o != 255 && overlayActors.Contains(redAlertOverlayNames[o]))
+					if (o != 255 && OverlayActors.Contains(RedAlertOverlayNames[o]))
 					{
-						var ar = new ActorReference(redAlertOverlayNames[o])
+						var ar = new ActorReference(RedAlertOverlayNames[o])
 						{
 							new LocationInit(cell),
 							new OwnerInit("Neutral")
@@ -239,7 +239,7 @@ namespace OpenRA.Mods.Cnc.UtilityCommands
 		public override void ReadActors(IniFile file)
 		{
 			base.ReadActors(file);
-			LoadActors(file, "SHIPS", Players, MapSize, Map);
+			LoadActors(file, "SHIPS", Players, Map);
 		}
 
 		public override void SaveWaypoint(int waypointNumber, ActorReference waypointReference)

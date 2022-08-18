@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Eluant;
+using OpenRA.Traits;
 
 namespace OpenRA.Scripting
 {
@@ -86,8 +87,7 @@ namespace OpenRA.Scripting
 				{
 					foreach (var arg in clrArgs)
 					{
-						var table = arg as LuaValue[];
-						if (table == null)
+						if (!(arg is LuaValue[] table))
 							continue;
 
 						foreach (var value in table)
@@ -108,7 +108,7 @@ namespace OpenRA.Scripting
 			throw new LuaException($"The property '{Member.Name}' is write-only");
 		}
 
-		public void Set(LuaRuntime runtime, LuaValue value)
+		public void Set(LuaValue value)
 		{
 			if (IsSetProperty)
 			{
@@ -140,6 +140,19 @@ namespace OpenRA.Scripting
 				// Fields aren't allowed
 				return false;
 			});
+		}
+
+		public static string[] RequiredTraitNames(Type t)
+		{
+			// Returns the inner types of all the Requires<T> interfaces on this type
+			var types = t.GetInterfaces()
+				.Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(Requires<>));
+
+			// Remove the namespace and the trailing "Info"
+			return types.SelectMany(i => i.GetGenericArguments())
+				.Select(g => g.Name.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault())
+				.Select(s => s.EndsWith("Info") ? s.Remove(s.Length - 4, 4) : s)
+				.ToArray();
 		}
 	}
 }

@@ -26,6 +26,7 @@ E1:
 		RequiresCondition: rank-elite
 	AttackFrontal:
 		Voice: Attack
+		FacingTolerance: 0
 	WithSplitAttackPaletteInfantryBody:
 		DefaultAttackSequence: attack
 	ProducibleWithLevel:
@@ -72,6 +73,7 @@ ENGINEER:
 	EngineerRepair:
 	RepairsBridges:
 		RepairNotification: BridgeRepaired
+		RepairTextNotification: Bridge repaired.
 	CaptureManager:
 	Captures:
 		CaptureTypes: building

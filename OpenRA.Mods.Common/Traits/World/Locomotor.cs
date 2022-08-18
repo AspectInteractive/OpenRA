@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -57,7 +57,7 @@ namespace OpenRA.Mods.Common.Traits
 
 	[TraitLocation(SystemActors.World | SystemActors.EditorWorld)]
 	[Desc("Used by Mobile. Attach these to the world actor. You can have multiple variants by adding @suffixes.")]
-	public class LocomotorInfo : TraitInfo
+	public class LocomotorInfo : TraitInfo, NotBefore<ICustomMovementLayerInfo>
 	{
 		[Desc("Locomotor ID.")]
 		public readonly string Name = "default";
@@ -145,6 +145,11 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly LocomotorInfo Info;
 		public readonly uint MovementClass;
 
+		/// <summary>
+		/// Raised when the movement cost for a cell changes, providing the old and new costs.
+		/// </summary>
+		public event Action<CPos, short, short> CellCostChanged;
+
 		readonly LocomotorInfo.TerrainInfo[] terrainInfos;
 		readonly World world;
 		readonly HashSet<CPos> dirtyCells = new HashSet<CPos>();
@@ -225,7 +230,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public bool CanMoveFreelyInto(Actor actor, CPos cell, SubCell subCell, BlockedByActor check, Actor ignoreActor)
 		{
-			// If the check allows: We are not blocked by transient actors.
+			// If the check allows: We are not blocked by other actors.
 			if (check == BlockedByActor.None)
 				return true;
 
@@ -372,45 +377,44 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var map = w.Map;
 			actorMap = w.ActorMap;
+			map.CustomTerrain.CellEntryChanged += UpdateCellCost;
+			map.Tiles.CellEntryChanged += UpdateCellCost;
 			actorMap.CellUpdated += CellUpdated;
 
 			cellsCost = new[] { new CellLayer<short>(map) };
 			blockingCache = new[] { new CellLayer<CellCache>(map) };
 
 			foreach (var cell in map.AllCells)
-				UpdateCellCost(cell);
-
-			map.CustomTerrain.CellEntryChanged += UpdateCellCost;
-			map.Tiles.CellEntryChanged += UpdateCellCost;
-
-			// This section needs to run after WorldLoaded() because we need to be sure that all types of ICustomMovementLayer have been initialized.
-			w.AddFrameEndTask(_ =>
 			{
-				var cmls = world.GetCustomMovementLayers();
-				Array.Resize(ref cellsCost, cmls.Length);
-				Array.Resize(ref blockingCache, cmls.Length);
-				foreach (var cml in cmls)
+				UpdateCellCost(cell);
+				UpdateCellBlocking(cell);
+			}
+
+			// NotBefore<> ensures all custom movement layers have been initialized.
+			var customMovementLayers = world.GetCustomMovementLayers();
+			Array.Resize(ref cellsCost, customMovementLayers.Length);
+			Array.Resize(ref blockingCache, customMovementLayers.Length);
+			foreach (var cml in customMovementLayers)
+			{
+				if (cml == null)
+					continue;
+
+				var cellLayer = new CellLayer<short>(map);
+				cellsCost[cml.Index] = cellLayer;
+				blockingCache[cml.Index] = new CellLayer<CellCache>(map);
+
+				foreach (var cell in map.AllCells)
 				{
-					if (cml == null)
-						continue;
+					var index = cml.GetTerrainIndex(cell);
 
-					var cellLayer = new CellLayer<short>(map);
-					cellsCost[cml.Index] = cellLayer;
-					blockingCache[cml.Index] = new CellLayer<CellCache>(map);
+					var cost = PathGraph.MovementCostForUnreachableCell;
 
-					foreach (var cell in map.AllCells)
-					{
-						var index = cml.GetTerrainIndex(cell);
+					if (index != byte.MaxValue)
+						cost = terrainInfos[index].Cost;
 
-						var cost = PathGraph.MovementCostForUnreachableCell;
-
-						if (index != byte.MaxValue)
-							cost = terrainInfos[index].Cost;
-
-						cellLayer[cell] = cost;
-					}
+					cellLayer[cell] = cost;
 				}
-			});
+			}
 		}
 
 		CellCache GetCache(CPos cell)
@@ -440,8 +444,15 @@ namespace OpenRA.Mods.Common.Traits
 				cost = terrainInfos[index].Cost;
 
 			var cache = cellsCost[cell.Layer];
-
-			cache[cell] = cost;
+			if (CellCostChanged == null)
+				cache[cell] = cost;
+			else
+			{
+				var uv = cell.ToMPos(world.Map);
+				var oldCost = cache[uv];
+				cache[uv] = cost;
+				CellCostChanged(cell, oldCost, cost);
+			}
 		}
 
 		void UpdateCellBlocking(CPos cell)

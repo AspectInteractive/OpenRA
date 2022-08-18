@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -261,7 +261,7 @@ namespace OpenRA.Graphics
 			return new Vertex(xyz, cr, cg, cb, ca, 0, 0);
 		}
 
-		public void FillEllipse(in float3 tl, in float3 br, Color color, int vertices = 32, BlendMode blendMode = BlendMode.Alpha)
+		public void FillEllipse(in float3 tl, in float3 br, Color color, BlendMode blendMode = BlendMode.Alpha)
 		{
 			// TODO: Create an ellipse polygon instead
 			var a = (br.X - tl.X) / 2;

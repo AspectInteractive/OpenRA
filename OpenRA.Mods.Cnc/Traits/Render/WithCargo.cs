@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -61,7 +61,7 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 			// HACK: We don't have an efficient way to know when the preview
 			// bounds change, so assume that we need to update the screen map
 			// (only) when the facing changes
-			if (facing.Facing != cachedFacing && previews.Any())
+			if (facing.Facing != cachedFacing && previews.Count > 0)
 			{
 				self.World.ScreenMap.AddOrUpdate(self);
 				cachedFacing = facing.Facing;
@@ -70,7 +70,7 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 
 		IEnumerable<IRenderable> IRender.Render(Actor self, WorldRenderer wr)
 		{
-			var bodyOrientation = body.QuantizeOrientation(self, self.Orientation);
+			var bodyOrientation = body.QuantizeOrientation(self.Orientation);
 			var pos = self.CenterPosition;
 			var i = 0;
 

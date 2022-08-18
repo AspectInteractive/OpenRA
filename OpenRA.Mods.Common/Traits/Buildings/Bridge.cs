@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -167,7 +167,7 @@ namespace OpenRA.Mods.Common.Traits
 			return terrainInfo.GetTerrainInfo(new TerrainTile(template, (byte)index));
 		}
 
-		public void LinkNeighbouringBridges(World world, LegacyBridgeLayer bridges)
+		public void LinkNeighbouringBridges(LegacyBridgeLayer bridges)
 		{
 			for (var d = 0; d <= 1; d++)
 			{
@@ -322,11 +322,6 @@ namespace OpenRA.Mods.Common.Traits
 				self.World.Map.CustomTerrain[c] = tileInfo.TerrainType;
 				radarSignature[i++] = (c, tileInfo.GetColor(self.World.LocalRandom));
 			}
-
-			// If this bridge repair operation connects two pathfinding domains,
-			// update the domain index.
-			var domainIndex = self.World.WorldActor.TraitOrDefault<DomainIndex>();
-			domainIndex?.UpdateCells(self.World, footprint.Keys);
 
 			if (LongBridgeSegmentIsDead() && !killedUnits)
 			{

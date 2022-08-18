@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -26,7 +26,7 @@ namespace OpenRA
 			var total = response.Content.Headers.ContentLength ?? -1;
 			var canReportProgress = total > 0;
 
-#if !MONO
+#if NET5_0_OR_GREATER
 			using (var contentStream = await response.Content.ReadAsStreamAsync(token))
 #else
 			using (var contentStream = await response.Content.ReadAsStreamAsync())

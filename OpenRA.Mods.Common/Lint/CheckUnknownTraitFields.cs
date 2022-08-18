@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,7 +11,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using OpenRA.FileSystem;
 using OpenRA.Server;
 
@@ -53,7 +52,7 @@ namespace OpenRA.Mods.Common.Lint
 					// Removals can never define children or values
 					if (t.Key.StartsWith("-", StringComparison.Ordinal))
 					{
-						if (t.Value.Nodes.Any())
+						if (t.Value.Nodes.Count > 0)
 							emitError($"{t.Location} {t.Key} defines child nodes, which are not valid for removals.");
 
 						if (!string.IsNullOrEmpty(t.Value.Value))
@@ -65,13 +64,21 @@ namespace OpenRA.Mods.Common.Lint
 					var traitName = NormalizeName(t.Key);
 
 					// Inherits can never define children
-					if (traitName == "Inherits" && t.Value.Nodes.Any())
+					if (traitName == "Inherits")
 					{
-						emitError($"{t.Location} defines child nodes, which are not valid for Inherits.");
+						if (t.Value.Nodes.Count > 0)
+							emitError($"{t.Location} defines child nodes, which are not valid for Inherits.");
+
 						continue;
 					}
 
 					var traitInfo = modData.ObjectCreator.FindType(traitName + "Info");
+					if (traitInfo == null)
+					{
+						emitError($"{t.Location} defines unknown trait `{traitName}`.");
+						continue;
+					}
+
 					foreach (var field in t.Value.Nodes)
 					{
 						var fieldName = NormalizeName(field.Key);
@@ -91,7 +98,7 @@ namespace OpenRA.Mods.Common.Lint
 			foreach (var f in mapFiles)
 				CheckActors(MiniYaml.FromStream(fileSystem.Open(f), f), emitError, modData);
 
-			if (ruleDefinitions.Nodes.Any())
+			if (ruleDefinitions.Nodes.Count > 0)
 				CheckActors(ruleDefinitions.Nodes, emitError, modData);
 		}
 	}

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -363,7 +363,8 @@ namespace OpenRA.Platforms.Default
 
 		void Dispose(bool disposing)
 		{
-			StopAllSounds();
+			if (disposing)
+				StopAllSounds();
 
 			if (context != IntPtr.Zero)
 			{
@@ -386,7 +387,7 @@ namespace OpenRA.Platforms.Default
 		bool disposed;
 
 		public uint Buffer => buffer;
-		public int SampleRate { get; private set; }
+		public int SampleRate { get; }
 
 		public OpenAlSoundSource(byte[] data, int byteCount, int channels, int sampleBits, int sampleRate)
 		{

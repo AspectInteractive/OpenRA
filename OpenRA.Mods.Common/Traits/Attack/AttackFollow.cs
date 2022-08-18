@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new AttackFollow(init.Self, this); }
 	}
 
-	public class AttackFollow : AttackBase, INotifyOwnerChanged, IDisableAutoTarget, INotifyStanceChanged
+	public class AttackFollow : AttackBase, INotifyOwnerChanged, IOverrideAutoTarget, INotifyStanceChanged
 	{
 		public new readonly AttackFollowInfo Info;
 		public Target RequestedTarget { get; private set; }
@@ -46,11 +46,11 @@ namespace OpenRA.Mods.Common.Traits
 		bool opportunityForceAttack;
 		bool opportunityTargetIsPersistentTarget;
 
-		public void SetRequestedTarget(Actor self, in Target target, bool isForceAttack = false)
+		public void SetRequestedTarget(in Target target, bool isForceAttack = false, Activity requestedTargetPreset = null)
 		{
 			RequestedTarget = target;
 			requestedForceAttack = isForceAttack;
-			requestedTargetPresetForActivity = null;
+			requestedTargetPresetForActivity = requestedTargetPreset;
 		}
 
 		public void ClearRequestedTarget()
@@ -156,6 +156,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		public override Activity GetAttackActivity(Actor self, AttackSource source, in Target newTarget, bool allowMove, bool forceAttack, Color? targetLineColor = null)
 		{
+			// HACK: Manually set force attacking if we persisted an opportunity target that required force attacking
+			if (opportunityTargetIsPersistentTarget && opportunityForceAttack && newTarget == OpportunityTarget)
+				forceAttack = true;
+
 			return new AttackActivity(self, newTarget, allowMove, forceAttack, targetLineColor);
 		}
 
@@ -164,11 +168,7 @@ namespace OpenRA.Mods.Common.Traits
 			// We can improve responsiveness for turreted actors by preempting
 			// the last order (usually a move) and setting the target immediately
 			if (!queued)
-			{
-				RequestedTarget = target;
-				requestedForceAttack = forceAttack;
-				requestedTargetPresetForActivity = activity;
-			}
+				SetRequestedTarget(target, forceAttack, activity);
 		}
 
 		public override void OnStopOrder(Actor self)
@@ -184,10 +184,22 @@ namespace OpenRA.Mods.Common.Traits
 			opportunityTargetIsPersistentTarget = false;
 		}
 
-		bool IDisableAutoTarget.DisableAutoTarget(Actor self)
+		bool IOverrideAutoTarget.TryGetAutoTargetOverride(Actor self, out Target target)
 		{
-			return RequestedTarget.Type != TargetType.Invalid ||
-				(opportunityTargetIsPersistentTarget && OpportunityTarget.Type != TargetType.Invalid);
+			if (RequestedTarget.Type != TargetType.Invalid)
+			{
+				target = RequestedTarget;
+				return true;
+			}
+
+			if (opportunityTargetIsPersistentTarget && OpportunityTarget.Type != TargetType.Invalid)
+			{
+				target = OpportunityTarget;
+				return true;
+			}
+
+			target = Target.Invalid;
+			return false;
 		}
 
 		void INotifyStanceChanged.StanceChanged(Actor self, AutoTarget autoTarget, UnitStance oldStance, UnitStance newStance)
@@ -274,7 +286,7 @@ namespace OpenRA.Mods.Common.Traits
 					return false;
 
 				target = target.Recalculate(self.Owner, out var targetIsHiddenActor);
-				attack.SetRequestedTarget(self, target, forceAttack);
+				attack.SetRequestedTarget(target, forceAttack);
 				hasTicked = true;
 
 				if (!targetIsHiddenActor && target.Type == TargetType.Actor)

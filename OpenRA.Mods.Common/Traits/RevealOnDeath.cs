@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -34,14 +34,14 @@ namespace OpenRA.Mods.Common.Traits
 			"Use an empty list (the default) to allow all DeathTypes.")]
 		public readonly BitSet<DamageType> DeathTypes = default(BitSet<DamageType>);
 
-		public override object Create(ActorInitializer init) { return new RevealOnDeath(init.Self, this); }
+		public override object Create(ActorInitializer init) { return new RevealOnDeath(this); }
 	}
 
 	public class RevealOnDeath : ConditionalTrait<RevealOnDeathInfo>, INotifyKilled
 	{
 		readonly RevealOnDeathInfo info;
 
-		public RevealOnDeath(Actor self, RevealOnDeathInfo info)
+		public RevealOnDeath(RevealOnDeathInfo info)
 			: base(info)
 		{
 			this.info = info;

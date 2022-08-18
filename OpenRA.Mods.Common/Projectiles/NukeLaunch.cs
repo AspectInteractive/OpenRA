@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -47,7 +47,7 @@ namespace OpenRA.Mods.Common.Effects
 		bool isLaunched;
 		bool detonated;
 
-		public NukeLaunch(Player firedBy, string name, WeaponInfo weapon, string weaponPalette, string upSequence, string downSequence,
+		public NukeLaunch(Player firedBy, string image, WeaponInfo weapon, string weaponPalette, string upSequence, string downSequence,
 			WPos launchPos, WPos targetPos, WDist detonationAltitude, bool removeOnDetonation, WDist velocity, int launchDelay, int impactDelay,
 			bool skipAscent,
 			string trailImage, string[] trailSequences, string trailPalette, bool trailUsePlayerPalette, int trailDelay, int trailInterval)
@@ -78,7 +78,8 @@ namespace OpenRA.Mods.Common.Effects
 			this.detonationAltitude = detonationAltitude;
 			this.removeOnDetonation = removeOnDetonation;
 
-			anim = new Animation(firedBy.World, name);
+			if (!string.IsNullOrEmpty(image))
+				anim = new Animation(firedBy.World, image);
 
 			pos = skipAscent ? descendSource : ascendSource;
 		}
@@ -90,18 +91,25 @@ namespace OpenRA.Mods.Common.Effects
 
 			if (!isLaunched)
 			{
-				anim.PlayRepeating(upSequence);
-				if (weapon.Report != null && weapon.Report.Any())
+				if (weapon.Report != null && weapon.Report.Length > 0)
 					Game.Sound.Play(SoundType.World, weapon.Report, world, pos);
 
-				world.ScreenMap.Add(this, pos, anim.Image);
+				if (anim != null)
+				{
+					anim.PlayRepeating(upSequence);
+					world.ScreenMap.Add(this, pos, anim.Image);
+				}
+
 				isLaunched = true;
 			}
 
-			anim.Tick();
+			if (anim != null)
+			{
+				anim.Tick();
 
-			if (ticks == turn)
-				anim.PlayRepeating(downSequence);
+				if (ticks == turn)
+					anim.PlayRepeating(downSequence);
+			}
 
 			var isDescending = ticks >= turn;
 			if (!isDescending)
@@ -124,7 +132,8 @@ namespace OpenRA.Mods.Common.Effects
 			if (ticks == impactDelay || (isDescending && dat <= detonationAltitude))
 				Explode(world, ticks == impactDelay || removeOnDetonation);
 
-			world.ScreenMap.Update(this, pos, anim.Image);
+			if (anim != null)
+				world.ScreenMap.Update(this, pos, anim.Image);
 
 			ticks++;
 		}
@@ -153,7 +162,7 @@ namespace OpenRA.Mods.Common.Effects
 
 		public IEnumerable<IRenderable> Render(WorldRenderer wr)
 		{
-			if (!isLaunched)
+			if (!isLaunched || anim == null)
 				return Enumerable.Empty<IRenderable>();
 
 			return anim.Render(pos, wr.Palette(weaponPalette));

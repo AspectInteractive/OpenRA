@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -40,7 +40,7 @@ namespace OpenRA.Network
 		public TickTime LastTickTime;
 
 		public bool GameStarted => NetFrameNumber != 0;
-		public IConnection Connection { get; private set; }
+		public IConnection Connection { get; }
 
 		internal int GameSaveLastFrame = -1;
 		internal int GameSaveLastSyncFrame = -1;
@@ -51,14 +51,11 @@ namespace OpenRA.Network
 		readonly List<ClientOrder> processClientOrders = new List<ClientOrder>();
 		readonly List<int> processClientsToRemove = new List<int>();
 
-		readonly List<TextNotification> notificationsCache = new List<TextNotification>();
-
-		public IReadOnlyList<TextNotification> NotificationsCache => notificationsCache;
-
 		bool disposed;
 		bool generateSyncReport = false;
 		int sentOrdersFrame = 0;
 		float tickScale = 1f;
+		bool outOfSync = false;
 
 		public struct ClientOrder
 		{
@@ -73,8 +70,14 @@ namespace OpenRA.Network
 
 		void OutOfSync(int frame)
 		{
+			if (outOfSync)
+				return;
+
 			syncReport.DumpSyncReport(frame);
-			throw new InvalidOperationException($"Out of sync in frame {frame}.\n Compare syncreport.log with other players.");
+			World.OutOfSync();
+			outOfSync = true;
+
+			TextNotificationsManager.AddSystemLine($"Out of sync in frame {frame}.\nCompare syncreport.log with other players.");
 		}
 
 		public void StartGame()
@@ -101,7 +104,6 @@ namespace OpenRA.Network
 		{
 			Connection = conn;
 			syncReport = new SyncReport(this);
-			AddTextNotification += CacheTextNotification;
 
 			LastTickTime = new TickTime(() => SuggestedTimestep, Game.RunTime);
 		}
@@ -118,12 +120,6 @@ namespace OpenRA.Network
 				localImmediateOrders.Add(order);
 			else
 				localOrders.Add(order);
-		}
-
-		public Action<TextNotification> AddTextNotification = (notification) => { };
-		void CacheTextNotification(TextNotification notification)
-		{
-			notificationsCache.Add(notification);
 		}
 
 		void SendImmediateOrders()

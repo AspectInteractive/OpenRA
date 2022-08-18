@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -26,7 +26,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new FrozenUnderFog(init, this); }
 	}
 
-	public class FrozenUnderFog : ICreatesFrozenActors, IRenderModifier, IDefaultVisibility, ITick, ITickRender, ISync, INotifyCreated, INotifyOwnerChanged, INotifyActorDisposing
+	public class FrozenUnderFog : ICreatesFrozenActors, IRenderModifier, IDefaultVisibility, ITickRender, ISync, INotifyCreated, INotifyOwnerChanged, INotifyActorDisposing
 	{
 		[Sync]
 		public int VisibilityHash;
@@ -70,11 +70,31 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var frozenActor = new FrozenActor(self, this, footprint, player, startsRevealed);
 				player.PlayerActor.Trait<FrozenActorLayer>().Add(frozenActor);
-				return new FrozenState(frozenActor) { IsVisible = startsRevealed };
+				return new FrozenState(frozenActor) { IsVisible = !frozenActor.Visible };
 			});
+
+			// Set the initial visibility state
+			// This relies on actor.GetTargetablePositions(), which is also setup up in Created.
+			// Since we can't be sure whether our method will run after theirs, defer by a frame.
+			self.World.AddFrameEndTask(_ =>
+			{
+				for (var playerIndex = 0; playerIndex < frozenStates.Count; playerIndex++)
+				{
+					var state = frozenStates[playerIndex];
+					if (startsRevealed || state.IsVisible)
+					{
+						UpdateFrozenActor(state.FrozenActor, playerIndex);
+
+						// Needed so tooltips appear.
+						state.FrozenActor.Hidden = false;
+					}
+				}
+			});
+
+			created = true;
 		}
 
-		void UpdateFrozenActor(Actor self, FrozenActor frozenActor, int playerIndex)
+		void UpdateFrozenActor(FrozenActor frozenActor, int playerIndex)
 		{
 			VisibilityHash |= 1 << (playerIndex % 32);
 			frozenActor.RefreshState();
@@ -86,12 +106,16 @@ namespace OpenRA.Mods.Common.Traits
 			if (!created)
 				return;
 
-			// Update state visibility to match the frozen actor to ensure consistency within the tick
-			// The rest of the state will be updated by ITick.Tick below
-			frozenStates[frozen.Viewer].IsVisible = !frozen.Visible;
+			// Update state visibility to match the frozen actor to ensure consistency
+			var state = frozenStates[frozen.Viewer];
+			var isVisible = !frozen.Visible;
+			state.IsVisible = isVisible;
+
+			if (isVisible)
+				UpdateFrozenActor(frozen, frozen.Viewer.World.Players.IndexOf(frozen.Viewer));
 		}
 
-		bool IsVisibleInner(Actor self, Player byPlayer)
+		bool IsVisibleInner(Player byPlayer)
 		{
 			// If fog is disabled visibility is determined by shroud
 			if (!byPlayer.Shroud.FogEnabled)
@@ -106,38 +130,7 @@ namespace OpenRA.Mods.Common.Traits
 				return true;
 
 			var relationship = self.Owner.RelationshipWith(byPlayer);
-			return info.AlwaysVisibleRelationships.HasRelationship(relationship) || IsVisibleInner(self, byPlayer);
-		}
-
-		void ITick.Tick(Actor self)
-		{
-			if (self.Disposed)
-				return;
-
-			// Set the initial visibility state
-			// This relies on actor.GetTargetablePositions(), which is not safe to use from Created
-			// so we defer until the first real tick.
-			if (!created && startsRevealed)
-			{
-				for (var playerIndex = 0; playerIndex < frozenStates.Count; playerIndex++)
-					UpdateFrozenActor(self, frozenStates[playerIndex].FrozenActor, playerIndex);
-
-				created = true;
-				return;
-			}
-
-			VisibilityHash = 0;
-
-			for (var playerIndex = 0; playerIndex < frozenStates.Count; playerIndex++)
-			{
-				var state = frozenStates[playerIndex];
-				var frozenActor = state.FrozenActor;
-				var isVisible = !frozenActor.Visible;
-				state.IsVisible = isVisible;
-
-				if (isVisible)
-					UpdateFrozenActor(self, frozenActor, playerIndex);
-			}
+			return info.AlwaysVisibleRelationships.HasRelationship(relationship) || IsVisibleInner(byPlayer);
 		}
 
 		void ITickRender.TickRender(WorldRenderer wr, Actor self)
@@ -183,7 +176,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			// Force a state update for the old owner so the tooltip etc doesn't show them as the owner
 			var oldOwnerIndex = self.World.Players.IndexOf(oldOwner);
-			UpdateFrozenActor(self, frozenStates[oldOwnerIndex].FrozenActor, oldOwnerIndex);
+			UpdateFrozenActor(frozenStates[oldOwnerIndex].FrozenActor, oldOwnerIndex);
 		}
 
 		void INotifyActorDisposing.Disposing(Actor self)

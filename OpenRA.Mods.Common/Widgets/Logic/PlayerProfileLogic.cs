@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -102,7 +102,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 				if (localProfile.State == LocalPlayerProfile.LinkState.Linked)
 				{
-					if (localProfile.ProfileData.Badges.Any())
+					if (localProfile.ProfileData.Badges.Count > 0)
 					{
 						Func<int, int> negotiateWidth = _ => widget.Get("PROFILE_HEADER").Bounds.Width;
 
@@ -207,13 +207,13 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 								return profileWidth;
 							};
 
-							if (profile.Badges.Any())
+							if (profile.Badges.Count > 0)
 							{
 								var badges = Ui.LoadWidget("PLAYER_PROFILE_BADGES_INSERT", badgeContainer, new WidgetArgs()
 								{
-									{ "worldRenderer", worldRenderer },
-									{ "profile", profile },
-									{ "negotiateWidth", negotiateWidth }
+									{ nameof(worldRenderer), worldRenderer },
+									{ nameof(profile), profile },
+									{ nameof(negotiateWidth), negotiateWidth }
 								});
 
 								if (badges.Bounds.Height > 0)
@@ -236,7 +236,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				}
 				catch (Exception e)
 				{
-					Log.Write("debug", "Failed to parse player data result with exception: {0}", e);
+					Log.Write("debug", "Failed to parse player data result with exception");
+					Log.Write("debug", e);
 				}
 				finally
 				{
@@ -262,7 +263,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		[ObjectCreator.UseCtor]
 		public PlayerProfileBadgesLogic(Widget widget, PlayerProfile profile, Func<int, int> negotiateWidth)
 		{
-			var showBadges = profile.Badges.Any();
+			var showBadges = profile.Badges.Count > 0;
 			widget.IsVisible = () => showBadges;
 
 			var badgeTemplate = widget.Get("BADGE_TEMPLATE");
@@ -279,7 +280,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			widget.Bounds.Width = negotiateWidth(2 * templateLabel.Bounds.Left - templateIcon.Bounds.Right + maxLabelWidth);
 
 			var badgeOffset = badgeTemplate.Bounds.Y;
-			if (profile.Badges.Any())
+			if (profile.Badges.Count > 0)
 				badgeOffset += 3;
 
 			foreach (var badge in profile.Badges)
@@ -310,7 +311,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 	public class AnonymousProfileTooltipLogic : ChromeLogic
 	{
 		[ObjectCreator.UseCtor]
-		public AnonymousProfileTooltipLogic(Widget widget, OrderManager orderManager, Session.Client client)
+		public AnonymousProfileTooltipLogic(Widget widget, Session.Client client)
 		{
 			var nameLabel = widget.Get<LabelWidget>("NAME");
 			var nameFont = Game.Renderer.Fonts[nameLabel.Font];

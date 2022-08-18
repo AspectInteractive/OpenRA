@@ -15,6 +15,7 @@ Container@DISPLAY_PANEL:
 					Width: PARENT_RIGHT - 24 - 10
 					Height: 13
 					Background: separator
+					ClickThrough: True
 					Children:
 						Label@LABEL:
 							Width: PARENT_RIGHT
@@ -30,10 +31,11 @@ Container@DISPLAY_PANEL:
 							X: 10
 							Width: PARENT_RIGHT / 2 - 20
 							Children:
-								Label@PLAYER:
+								LabelForInput@PLAYER:
 									Width: PARENT_RIGHT
 									Height: 20
 									Text: Player Name:
+									For: PLAYERNAME
 								TextField@PLAYERNAME:
 									Y: 25
 									Width: PARENT_RIGHT
@@ -44,10 +46,11 @@ Container@DISPLAY_PANEL:
 							X: PARENT_RIGHT / 2 + 10
 							Width: PARENT_RIGHT / 2 - 20
 							Children:
-								Label@COLOR:
+								LabelForInput@COLOR:
 									Width: PARENT_RIGHT
 									Height: 20
 									Text: Preferred Color:
+									For: PLAYERCOLOR
 								DropDownButton@PLAYERCOLOR:
 									Y: 25
 									Width: 75
@@ -66,6 +69,7 @@ Container@DISPLAY_PANEL:
 					Width: PARENT_RIGHT - 24 - 10
 					Height: 13
 					Background: separator
+					ClickThrough: True
 					Children:
 						Label@LABEL:
 							Width: PARENT_RIGHT
@@ -111,10 +115,11 @@ Container@DISPLAY_PANEL:
 							X: 10
 							Width: PARENT_RIGHT / 2 - 20
 							Children:
-								Label@UI_SCALE:
+								LabelForInput@UI_SCALE:
 									Width: PARENT_RIGHT
 									Height: 20
 									Text: UI Scale:
+									For: UI_SCALE_DROPDOWN
 								DropDownButton@UI_SCALE_DROPDOWN:
 									Y: 25
 									Width: PARENT_RIGHT
@@ -159,6 +164,28 @@ Container@DISPLAY_PANEL:
 					Width: PARENT_RIGHT - 24
 					Height: 20
 					Children:
+						Container@UI_FEEDBACK_CHECKBOX_CONTAINER:
+							X: 10
+							Width: PARENT_RIGHT / 2 - 10
+							Children:
+								Checkbox@UI_FEEDBACK_CHECKBOX:
+									Width: PARENT_RIGHT
+									Height: 20
+									Font: Regular
+									Text: Show UI Feedback Notifications
+						Container@TRANSIENTS_CHECKBOX_CONTAINER:
+							X: PARENT_RIGHT / 2 + 10
+							Width: PARENT_RIGHT / 2 - 20
+							Children:
+								Checkbox@TRANSIENTS_CHECKBOX:
+									Width: PARENT_RIGHT
+									Height: 20
+									Font: Regular
+									Text: Show Game Event Notifications
+				Container@ROW:
+					Width: PARENT_RIGHT - 24
+					Height: 20
+					Children:
 						Container@PAUSE_SHELLMAP_CHECKBOX_CONTAINER:
 							X: 10
 							Width: PARENT_RIGHT / 2 - 10
@@ -168,21 +195,22 @@ Container@DISPLAY_PANEL:
 									Height: 20
 									Font: Regular
 									Text: Pause Menu Background
-						Container@UI_FEEDBACK_CHECKBOX_CONTAINER:
+						Container@HIDE_REPLAY_CHAT_CHECKBOX_CONTAINER:
 							X: PARENT_RIGHT / 2 + 10
-							Width: PARENT_RIGHT / 2 - 20
+							Width: PARENT_RIGHT / 2 - 10
 							Children:
-								Checkbox@UI_FEEDBACK_CHECKBOX:
+								Checkbox@HIDE_REPLAY_CHAT_CHECKBOX:
 									Width: PARENT_RIGHT
 									Height: 20
 									Font: Regular
-									Text: UI Feedback in Transients Panel
+									Text: Hide Chat in Replays
 				Container@SPACER:
 				Background@SECTION_HEADER:
 					X: 5
 					Width: PARENT_RIGHT - 24 - 10
 					Height: 13
 					Background: separator
+					ClickThrough: True
 					Children:
 						Label@LABEL:
 							Width: PARENT_RIGHT

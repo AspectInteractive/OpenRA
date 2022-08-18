@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -21,7 +21,11 @@ namespace OpenRA.Mods.Common.Traits
 	public class ProductionAirdropInfo : ProductionInfo
 	{
 		[NotificationReference("Speech")]
+		[Desc("Speech notification to play when a unit is delivered.")]
 		public readonly string ReadyAudio = "Reinforce";
+
+		[Desc("Text notification to display when a unit is delivered.")]
+		public readonly string ReadyTextNotification = null;
 
 		[FieldLoader.Require]
 		[ActorReference(typeof(AircraftInfo))]
@@ -112,6 +116,7 @@ namespace OpenRA.Mods.Common.Traits
 
 					self.World.AddFrameEndTask(ww => DoProduction(self, producee, exit, productionType, inits));
 					Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.ReadyAudio, self.Owner.Faction.InternalName);
+					TextNotificationsManager.AddTransientLine(info.ReadyTextNotification, self.Owner);
 				}));
 
 				actor.QueueActivity(new FlyOffMap(actor, Target.FromCell(w, endPos)));

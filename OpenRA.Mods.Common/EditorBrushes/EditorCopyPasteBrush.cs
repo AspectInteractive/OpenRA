@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -176,7 +176,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 	class CopyPasteEditorAction : IEditorAction
 	{
-		public string Text { get; private set; }
+		public string Text { get; }
 
 		readonly MapCopyFilters copyFilters;
 		readonly Dictionary<CPos, (TerrainTile Tile, ResourceTile Resource, byte Height)> tiles;
@@ -270,10 +270,10 @@ namespace OpenRA.Mods.Common.Widgets
 
 	class UndoCopyPaste
 	{
-		public CPos Cell { get; private set; }
-		public TerrainTile MapTile { get; private set; }
-		public ResourceTile ResourceTile { get; private set; }
-		public byte Height { get; private set; }
+		public CPos Cell { get; }
+		public TerrainTile MapTile { get; }
+		public ResourceTile ResourceTile { get; }
+		public byte Height { get; }
 
 		public UndoCopyPaste(CPos cell, TerrainTile mapTile, ResourceTile resourceTile, byte height)
 		{

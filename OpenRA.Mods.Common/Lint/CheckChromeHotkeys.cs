@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -59,12 +59,12 @@ namespace OpenRA.Mods.Common.Lint
 			foreach (var filename in modData.Manifest.ChromeLayout)
 			{
 				var yaml = MiniYaml.FromStream(modData.DefaultFileSystem.Open(filename), filename);
-				CheckInner(modData, namedKeys, checkWidgetFields, customLintMethods, yaml, filename, null, emitError, emitWarning);
+				CheckInner(modData, namedKeys, checkWidgetFields, customLintMethods, yaml, filename, null, emitError);
 			}
 		}
 
 		void CheckInner(ModData modData, string[] namedKeys, (string Widget, string Field)[] checkWidgetFields, Dictionary<string, List<string>> customLintMethods,
-			List<MiniYamlNode> nodes, string filename, MiniYamlNode parent, Action<string> emitError, Action<string> emitWarning)
+			List<MiniYamlNode> nodes, string filename, MiniYamlNode parent, Action<string> emitError)
 		{
 			foreach (var node in nodes)
 			{
@@ -86,7 +86,7 @@ namespace OpenRA.Mods.Common.Lint
 				if (customLintMethods.TryGetValue(widgetType, out var checkMethods))
 				{
 					var type = modData.ObjectCreator.FindType(widgetType + "Widget");
-					var keyNames = checkMethods.SelectMany(m => (IEnumerable<string>)type.GetMethod(m).Invoke(null, new object[] { node, emitError, emitWarning }));
+					var keyNames = checkMethods.SelectMany(m => (IEnumerable<string>)type.GetMethod(m).Invoke(null, new object[] { node, emitError }));
 
 					foreach (var name in keyNames)
 						if (!namedKeys.Contains(name) && !Hotkey.TryParse(name, out var unused))
@@ -94,7 +94,7 @@ namespace OpenRA.Mods.Common.Lint
 				}
 
 				// Logic classes can declare the data key names that specify hotkeys
-				if (node.Key == "Logic" && node.Value.Nodes.Any())
+				if (node.Key == "Logic" && node.Value.Nodes.Count > 0)
 				{
 					var typeNames = FieldLoader.GetValue<string[]>(node.Key, node.Value.Value);
 					var checkArgKeys = new List<string>();
@@ -114,7 +114,7 @@ namespace OpenRA.Mods.Common.Lint
 				}
 
 				if (node.Value.Nodes != null)
-					CheckInner(modData, namedKeys, checkWidgetFields, customLintMethods, node.Value.Nodes, filename, node, emitError, emitWarning);
+					CheckInner(modData, namedKeys, checkWidgetFields, customLintMethods, node.Value.Nodes, filename, node, emitError);
 			}
 		}
 	}

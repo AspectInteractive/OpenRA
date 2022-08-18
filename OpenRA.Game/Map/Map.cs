@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -21,7 +21,6 @@ using OpenRA.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
-using OpenRA.Widgets;
 
 namespace OpenRA
 {
@@ -131,13 +130,13 @@ namespace OpenRA
 			if (type == Type.NodeList)
 			{
 				var listValue = (List<MiniYamlNode>)value;
-				if (required || listValue.Any())
+				if (required || listValue.Count > 0)
 					nodes.Add(new MiniYamlNode(key, null, listValue));
 			}
 			else if (type == Type.MiniYaml)
 			{
 				var yamlValue = (MiniYaml)value;
-				if (required || (yamlValue != null && (yamlValue.Value != null || yamlValue.Nodes.Any())))
+				if (required || (yamlValue != null && (yamlValue.Value != null || yamlValue.Nodes.Count > 0)))
 					nodes.Add(new MiniYamlNode(key, yamlValue));
 			}
 			else
@@ -152,6 +151,7 @@ namespace OpenRA
 	public class Map : IReadOnlyFileSystem
 	{
 		public const int SupportedMapFormat = 11;
+		const short InvalidCachedTerrainIndex = -1;
 
 		/// <summary>Defines the order of the fields in map.yaml</summary>
 		static readonly MapField[] YamlFields =
@@ -449,6 +449,19 @@ namespace OpenRA
 			}
 
 			AllEdgeCells = UpdateEdgeCells();
+
+			// Invalidate the entry for a cell if anything could cause the terrain index to change.
+			Action<CPos> invalidateTerrainIndex = c =>
+			{
+				if (cachedTerrainIndexes != null)
+					cachedTerrainIndexes[c] = InvalidCachedTerrainIndex;
+			};
+
+			// Even though the cache is lazily initialized, we must attach these event handlers on init.
+			// This ensures our handler to invalidate the cache runs first,
+			// so other listeners to these same events will get correct data when calling GetTerrainIndex.
+			CustomTerrain.CellEntryChanged += invalidateTerrainIndex;
+			Tiles.CellEntryChanged += invalidateTerrainIndex;
 		}
 
 		void UpdateRamp(CPos cell)
@@ -522,7 +535,7 @@ namespace OpenRA
 				while (true)
 				{
 					temp = new MPos(temp.U, temp.V - 1);
-					if (!inverseCellProjection.Contains(temp) || inverseCellProjection[temp].Any())
+					if (!inverseCellProjection.Contains(temp) || inverseCellProjection[temp].Count > 0)
 						break;
 
 					projectedHeight[temp] = height;
@@ -535,7 +548,7 @@ namespace OpenRA
 			while (inverseCellProjection.Contains((MPos)puv))
 			{
 				var inverse = inverseCellProjection[(MPos)puv];
-				if (inverse.Any())
+				if (inverse.Count > 0)
 				{
 					// The original games treat the top of cliffs the same way as the bottom
 					// This information isn't stored in the map data, so query the offset from the tileset
@@ -726,10 +739,10 @@ namespace OpenRA
 				{
 					var allTop = Unproject(new PPos(x, Bounds.Top));
 					var allBottom = Unproject(new PPos(x, Bounds.Bottom));
-					if (allTop.Any())
+					if (allTop.Count > 0)
 						top = Math.Min(top, allTop.MinBy(uv => uv.V).V);
 
-					if (allBottom.Any())
+					if (allBottom.Count > 0)
 						bottom = Math.Max(bottom, allBottom.MaxBy(uv => uv.V).V);
 				}
 			}
@@ -880,7 +893,7 @@ namespace OpenRA
 			// (c) u, v coordinates run diagonally to the cell axes, and we define
 			//     1024 as the length projected onto the primary cell axis
 			//  - 512 * sqrt(2) = 724
-			var z = Height.Contains(cell) ? 724 * Height[cell] + Grid.Ramps[Ramp[cell]].CenterHeightOffset : 0;
+			var z = Height.TryGetValue(cell, out var height) ? 724 * height + Grid.Ramps[Ramp[cell]].CenterHeightOffset : 0;
 			return new WPos(724 * (cell.X - cell.Y + 1), 724 * (cell.X + cell.Y + 1), z);
 		}
 
@@ -1088,8 +1101,7 @@ namespace OpenRA
 			{
 				var center = CenterOfCell(cell);
 				var offset = Grid.SubCellOffsets[index];
-				var ramp = Ramp.Contains(cell) ? Ramp[cell] : 0;
-				if (ramp != 0)
+				if (Ramp.TryGetValue(cell, out var ramp) && ramp != 0)
 				{
 					var r = Grid.Ramps[ramp];
 					offset += new WVec(0, 0, r.HeightOffset(offset.X, offset.Y) - r.CenterHeightOffset);
@@ -1110,11 +1122,7 @@ namespace OpenRA
 			var cell = CellContaining(pos);
 			var offset = pos - CenterOfCell(cell);
 
-			if (!Ramp.Contains(cell))
-				return new WDist(offset.Z);
-
-			var ramp = Ramp[cell];
-			if (ramp != 0)
+			if (Ramp.TryGetValue(cell, out var ramp) && ramp != 0)
 			{
 				var r = Grid.Ramps[ramp];
 				return new WDist(offset.Z + r.CenterHeightOffset - r.HeightOffset(offset.X, offset.Y));
@@ -1125,10 +1133,10 @@ namespace OpenRA
 
 		public WRot TerrainOrientation(CPos cell)
 		{
-			if (!Ramp.Contains(cell))
-				return WRot.None;
+			if (Ramp.TryGetValue(cell, out var ramp))
+				return Grid.Ramps[ramp].Orientation;
 
-			return Grid.Ramps[Ramp[cell]].Orientation;
+			return WRot.None;
 		}
 
 		public WVec Offset(CVec delta, int dz)
@@ -1290,18 +1298,11 @@ namespace OpenRA
 
 		public byte GetTerrainIndex(CPos cell)
 		{
-			const short InvalidCachedTerrainIndex = -1;
-
 			// Lazily initialize a cache for terrain indexes.
 			if (cachedTerrainIndexes == null)
 			{
 				cachedTerrainIndexes = new CellLayer<short>(this);
 				cachedTerrainIndexes.Clear(InvalidCachedTerrainIndex);
-
-				// Invalidate the entry for a cell if anything could cause the terrain index to change.
-				Action<CPos> invalidateTerrainIndex = c => cachedTerrainIndexes[c] = InvalidCachedTerrainIndex;
-				CustomTerrain.CellEntryChanged += invalidateTerrainIndex;
-				Tiles.CellEntryChanged += invalidateTerrainIndex;
 			}
 
 			var uv = cell.ToMPos(this);
@@ -1351,7 +1352,7 @@ namespace OpenRA
 			// Project this guessed cell and take the first available cell
 			// If it is projected outside the layer, then make another guess.
 			var allProjected = ProjectedCellsCovering(uv);
-			var projected = allProjected.Any() ? allProjected.First()
+			var projected = allProjected.Length > 0 ? allProjected.First()
 				: new PPos(uv.U, uv.V.Clamp(Bounds.Top, Bounds.Bottom));
 
 			// Clamp the projected cell to the map area
@@ -1361,7 +1362,7 @@ namespace OpenRA
 			// This may fail if the projected cell covered a cliff or another feature
 			// where there is a large change in terrain height.
 			var unProjected = Unproject(projected);
-			if (!unProjected.Any())
+			if (unProjected.Count == 0)
 			{
 				// Adjust V until we find a cell that works
 				for (var x = 2; x <= 2 * Grid.MaximumTerrainHeight; x++)
@@ -1372,12 +1373,12 @@ namespace OpenRA
 						continue;
 
 					unProjected = Unproject(test);
-					if (unProjected.Any())
+					if (unProjected.Count > 0)
 						break;
 				}
 
 				// This shouldn't happen.  But if it does, return the original value and hope the caller doesn't explode.
-				if (!unProjected.Any())
+				if (unProjected.Count == 0)
 				{
 					Log.Write("debug", "Failed to clamp map cell {0} to map bounds", uv);
 					return uv;
@@ -1403,7 +1404,7 @@ namespace OpenRA
 
 				cells = Unproject(new PPos(u, v));
 			}
-			while (!cells.Any());
+			while (cells.Count == 0);
 
 			return cells.Random(rand).ToCPos(Grid.Type);
 		}
@@ -1418,7 +1419,7 @@ namespace OpenRA
 			var allProjected = ProjectedCellsCovering(uv);
 
 			PPos edge;
-			if (allProjected.Any())
+			if (allProjected.Length > 0)
 			{
 				var puv = allProjected.First();
 				var horizontalBound = ((puv.U - Bounds.Left) < Bounds.Width / 2) ? Bounds.Left : Bounds.Right;
@@ -1433,7 +1434,7 @@ namespace OpenRA
 				edge = new PPos(Bounds.Left, Bounds.Top);
 
 			var unProjected = Unproject(edge);
-			if (!unProjected.Any())
+			if (unProjected.Count == 0)
 			{
 				// Adjust V until we find a cell that works
 				for (var x = 2; x <= 2 * Grid.MaximumTerrainHeight; x++)
@@ -1444,12 +1445,12 @@ namespace OpenRA
 						continue;
 
 					unProjected = Unproject(test);
-					if (unProjected.Any())
+					if (unProjected.Count > 0)
 						break;
 				}
 
 				// This shouldn't happen.  But if it does, return the original value and hope the caller doesn't explode.
-				if (!unProjected.Any())
+				if (unProjected.Count == 0)
 				{
 					Log.Write("debug", "Failed to find closest edge for map cell {0}", uv);
 					return uv;
@@ -1472,22 +1473,22 @@ namespace OpenRA
 			for (var u = Bounds.Left; u < Bounds.Right; u++)
 			{
 				unProjected = Unproject(new PPos(u, Bounds.Top));
-				if (unProjected.Any())
+				if (unProjected.Count > 0)
 					edgeCells.Add(unProjected.MinBy(x => x.V).ToCPos(Grid.Type));
 
 				unProjected = Unproject(new PPos(u, bottom));
-				if (unProjected.Any())
+				if (unProjected.Count > 0)
 					edgeCells.Add(unProjected.MaxBy(x => x.V).ToCPos(Grid.Type));
 			}
 
 			for (var v = Bounds.Top; v < Bounds.Bottom; v++)
 			{
 				unProjected = Unproject(new PPos(Bounds.Left, v));
-				if (unProjected.Any())
+				if (unProjected.Count > 0)
 					edgeCells.Add((v == bottom ? unProjected.MaxBy(x => x.V) : unProjected.MinBy(x => x.V)).ToCPos(Grid.Type));
 
 				unProjected = Unproject(new PPos(Bounds.Right - 1, v));
-				if (unProjected.Any())
+				if (unProjected.Count > 0)
 					edgeCells.Add((v == bottom ? unProjected.MaxBy(x => x.V) : unProjected.MinBy(x => x.V)).ToCPos(Grid.Type));
 			}
 
@@ -1539,7 +1540,7 @@ namespace OpenRA
 		public Stream Open(string filename)
 		{
 			// Explicit package paths never refer to a map
-			if (!filename.Contains("|") && Package.Contains(filename))
+			if (!filename.Contains('|') && Package.Contains(filename))
 				return Package.GetStream(filename);
 
 			return modData.DefaultFileSystem.Open(filename);
@@ -1554,7 +1555,7 @@ namespace OpenRA
 		public bool TryOpen(string filename, out Stream s)
 		{
 			// Explicit package paths never refer to a map
-			if (!filename.Contains("|"))
+			if (!filename.Contains('|'))
 			{
 				s = Package.GetStream(filename);
 				if (s != null)
@@ -1567,7 +1568,7 @@ namespace OpenRA
 		public bool Exists(string filename)
 		{
 			// Explicit package paths never refer to a map
-			if (!filename.Contains("|") && Package.Contains(filename))
+			if (!filename.Contains('|') && Package.Contains(filename))
 				return true;
 
 			return modData.DefaultFileSystem.Exists(filename);
@@ -1576,18 +1577,18 @@ namespace OpenRA
 		public bool IsExternalModFile(string filename)
 		{
 			// Explicit package paths never refer to a map
-			if (filename.Contains("|"))
+			if (filename.Contains('|'))
 				return modData.DefaultFileSystem.IsExternalModFile(filename);
 
 			return false;
 		}
 
-		public string Translate(string key, IDictionary<string, object> args = null, string attribute = null)
+		public string Translate(string key, IDictionary<string, object> args = null)
 		{
-			if (Translation.GetFormattedMessage(key, args, attribute) == key)
-				return Ui.Translate(key, args, attribute);
+			if (Translation.TryGetString(key, out var message, args))
+				return message;
 
-			return Translation.GetFormattedMessage(key, args, attribute);
+			return modData.Translation.GetString(key, args);
 		}
 	}
 }

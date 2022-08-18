@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -39,13 +39,10 @@ namespace OpenRA
 	}
 
 	[SuppressMessage("StyleCop.CSharp.NamingRules",
-		"SA1307:AccessibleFieldsMustBeginWithUpperCaseLetter",
-		Justification = "Fields names must match the with the remote API.")]
-	[SuppressMessage("StyleCop.CSharp.NamingRules",
-		"SA1304:NonPrivateReadonlyFieldsMustBeginWithUpperCaseLetter",
-		Justification = "Fields names must match the with the remote API.")]
-	[SuppressMessage("StyleCop.CSharp.NamingRules",
 		"SA1310:FieldNamesMustNotContainUnderscore",
+		Justification = "Fields names must match the with the remote API.")]
+	[SuppressMessage("Style",
+		"IDE1006:Naming Styles",
 		Justification = "Fields names must match the with the remote API.")]
 	public class RemoteMapData
 	{
@@ -136,12 +133,12 @@ namespace OpenRA
 						}
 
 						var sources = files.Select(s => MiniYaml.FromStream(fileSystem.Open(s), s).Where(IsLoadableRuleDefinition).ToList());
-						if (RuleDefinitions.Nodes.Any())
+						if (RuleDefinitions.Nodes.Count > 0)
 							sources = sources.Append(RuleDefinitions.Nodes.Where(IsLoadableRuleDefinition).ToList());
 
 						var yamlNodes = MiniYaml.Merge(sources);
-						WorldActorInfo = new ActorInfo(modData.ObjectCreator, "world", yamlNodes.First(n => n.Key.ToLowerInvariant() == "world").Value);
-						PlayerActorInfo = new ActorInfo(modData.ObjectCreator, "player", yamlNodes.First(n => n.Key.ToLowerInvariant() == "player").Value);
+						WorldActorInfo = new ActorInfo(modData.ObjectCreator, "world", yamlNodes.First(n => string.Equals(n.Key, "world", StringComparison.InvariantCultureIgnoreCase)).Value);
+						PlayerActorInfo = new ActorInfo(modData.ObjectCreator, "player", yamlNodes.First(n => string.Equals(n.Key, "player", StringComparison.InvariantCultureIgnoreCase)).Value);
 						return;
 					}
 				}
@@ -562,7 +559,7 @@ namespace OpenRA
 		Stream IReadOnlyFileSystem.Open(string filename)
 		{
 			// Explicit package paths never refer to a map
-			if (!filename.Contains("|") && Package.Contains(filename))
+			if (!filename.Contains('|') && Package.Contains(filename))
 				return Package.GetStream(filename);
 
 			return modData.DefaultFileSystem.Open(filename);
@@ -577,7 +574,7 @@ namespace OpenRA
 		bool IReadOnlyFileSystem.TryOpen(string filename, out Stream s)
 		{
 			// Explicit package paths never refer to a map
-			if (!filename.Contains("|"))
+			if (!filename.Contains('|'))
 			{
 				s = Package.GetStream(filename);
 				if (s != null)
@@ -590,7 +587,7 @@ namespace OpenRA
 		bool IReadOnlyFileSystem.Exists(string filename)
 		{
 			// Explicit package paths never refer to a map
-			if (!filename.Contains("|") && Package.Contains(filename))
+			if (!filename.Contains('|') && Package.Contains(filename))
 				return true;
 
 			return modData.DefaultFileSystem.Exists(filename);
@@ -599,7 +596,7 @@ namespace OpenRA
 		bool IReadOnlyFileSystem.IsExternalModFile(string filename)
 		{
 			// Explicit package paths never refer to a map
-			if (filename.Contains("|"))
+			if (filename.Contains('|'))
 				return modData.DefaultFileSystem.IsExternalModFile(filename);
 
 			return false;

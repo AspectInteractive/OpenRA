@@ -121,6 +121,9 @@ ChromeLayout:
 	common|chrome/gamesave-loading.yaml
 	common|chrome/text-notifications.yaml
 
+Translations:
+	common|languages/en.ftl
+
 Weapons:
 	d2k|weapons/debris.yaml
 	d2k|weapons/smallguns.yaml
@@ -144,6 +147,8 @@ Hotkeys:
 	common|hotkeys/supportpowers.yaml
 	common|hotkeys/viewport.yaml
 	common|hotkeys/chat.yaml
+	common|hotkeys/editor.yaml
+	common|hotkeys/control-groups.yaml
 	d2k|hotkeys.yaml
 
 LoadScreen: LogoStripeLoadScreen
@@ -198,6 +203,8 @@ Fonts:
 
 Missions:
 	d2k|missions.yaml
+
+DefaultOrderGenerator: UnitOrderGenerator
 
 SupportsMapsFrom: d2k
 

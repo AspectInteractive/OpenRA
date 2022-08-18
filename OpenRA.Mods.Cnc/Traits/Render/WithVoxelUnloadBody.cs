@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -59,7 +59,7 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 
 			var idleModel = self.World.ModelCache.GetModelSequence(rv.Image, info.IdleSequence);
 			modelAnimation = new ModelAnimation(idleModel, () => WVec.Zero,
-				() => body.QuantizeOrientation(self, self.Orientation),
+				() => body.QuantizeOrientation(self.Orientation),
 				() => Docked,
 				() => 0, info.ShowShadow);
 
@@ -67,7 +67,7 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 
 			var unloadModel = self.World.ModelCache.GetModelSequence(rv.Image, info.UnloadSequence);
 			rv.Add(new ModelAnimation(unloadModel, () => WVec.Zero,
-				() => body.QuantizeOrientation(self, self.Orientation),
+				() => body.QuantizeOrientation(self.Orientation),
 				() => !Docked,
 				() => 0, info.ShowShadow));
 		}

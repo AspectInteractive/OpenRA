@@ -4,9 +4,10 @@
 	ScreenMap:
 	ActorMap:
 	Selection:
+	ControlGroups:
 	MusicPlaylist:
 		VictoryMusic: score
-		DefeatMusic: maps
+		DefeatMusic: fsmap
 	TerrainRenderer:
     ClearThetaStarPathfinderOverlay:
 	ThetaStarPathfinderOverlay:
@@ -237,12 +238,13 @@ World:
 	ChatCommands:
 	DevCommands:
 	DebugVisualizationCommands:
+	PathFinderOverlay:
+	HierarchicalPathFinderOverlay:
 	PlayerCommands:
 	HelpCommand:
 	BuildingInfluence:
 	ProductionQueueFromSelection:
 		ProductionPaletteWidget: PRODUCTION_PALETTE
-	DomainIndex:
 	SmudgeLayer@SMALLSCORCH:
 		Type: SmallScorch
 		Sequence: smallscorches
@@ -382,6 +384,7 @@ World:
 	LoadWidgetAtGameStart:
 		ShellmapRoot: MAINMENU_PRERELEASE_NOTIFICATION
 	ScriptTriggers:
+	CellTriggerOverlay:
 	TimeLimitManager:
 	ColorPickerManager:
 		PreviewActor: harv.colorpicker

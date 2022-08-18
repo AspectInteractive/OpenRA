@@ -131,7 +131,7 @@ Assemblies:
 ChromeLayout:
 	common|chrome/ingame.yaml
 	common|chrome/ingame-chat.yaml
-	common|chrome/ingame-transients.yaml
+	ts|chrome/ingame-transients.yaml
 	common|chrome/ingame-fmvplayer.yaml
 	common|chrome/ingame-menu.yaml
 	common|chrome/ingame-info.yaml
@@ -183,6 +183,9 @@ ChromeLayout:
 	common|chrome/editor.yaml
 	common|chrome/text-notifications.yaml
 
+Translations:
+	common|languages/en.ftl
+
 Voices:
 	ts|audio/voices.yaml
 
@@ -201,6 +204,8 @@ Hotkeys:
 	common|hotkeys/supportpowers.yaml
 	common|hotkeys/viewport.yaml
 	common|hotkeys/chat.yaml
+	common|hotkeys/editor.yaml
+	common|hotkeys/control-groups.yaml
 	ts|hotkeys.yaml
 
 LoadScreen: LogoStripeLoadScreen
@@ -250,6 +255,8 @@ Fonts:
 		Font: common|FreeSansBold.ttf
 		Size: 32
 		Ascender: 24
+
+DefaultOrderGenerator: UnitOrderGenerator
 
 SupportsMapsFrom: ts
 

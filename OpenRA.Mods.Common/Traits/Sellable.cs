@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -27,8 +27,11 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly string[] SellSounds = Array.Empty<string>();
 
 		[NotificationReference("Speech")]
-		[Desc("The audio notification type to play.")]
-		public string Notification = null;
+		[Desc("Speech notification to play.")]
+		public readonly string Notification = null;
+
+		[Desc("Text notification to display.")]
+		public string TextNotification = null;
 
 		[Desc("Whether to show the cash tick indicators rising from the actor.")]
 		public readonly bool ShowTicks = true;

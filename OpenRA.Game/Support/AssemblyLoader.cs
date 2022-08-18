@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,7 +11,7 @@
 
 // Not used/usable on Mono. Only used for Dotnet Core.
 // Based on https://github.com/natemcmaster/DotNetCorePlugins and used under the terms of the Apache 2.0 license
-#if !MONO
+#if NET5_0_OR_GREATER
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -306,7 +306,7 @@ namespace OpenRA.Support
 
 		public static AssemblyLoadContextBuilder AddDependencyContext(this AssemblyLoadContextBuilder builder, DependencyContext dependencyContext)
 		{
-			var ridGraph = dependencyContext.RuntimeGraph.Any()
+			var ridGraph = dependencyContext.RuntimeGraph.Count > 0
 				? dependencyContext.RuntimeGraph
 				: DependencyContext.Default.RuntimeGraph;
 

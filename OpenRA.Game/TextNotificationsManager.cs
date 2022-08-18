@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using OpenRA.Primitives;
 using OpenRA.Widgets;
 
@@ -16,9 +17,12 @@ namespace OpenRA
 {
 	public static class TextNotificationsManager
 	{
+		public static readonly int SystemClientId = -1;
 		static readonly string SystemMessageLabel;
 
 		public static long ChatDisabledUntil { get; internal set; }
+		static readonly List<TextNotification> NotificationsCache = new List<TextNotification>();
+		public static IReadOnlyList<TextNotification> Notifications => NotificationsCache;
 
 		static TextNotificationsManager()
 		{
@@ -26,14 +30,23 @@ namespace OpenRA
 				SystemMessageLabel = "Battlefield Control";
 		}
 
+		public static void AddTransientLine(string text, Player player)
+		{
+			if (string.IsNullOrEmpty(text))
+				return;
+
+			if (player == null || player == player.World.LocalPlayer)
+				AddTextNotification(TextNotificationPool.Transients, SystemClientId, SystemMessageLabel, text);
+		}
+
 		public static void AddFeedbackLine(string text)
 		{
-			AddTextNotification(TextNotificationPool.Feedback, SystemMessageLabel, text);
+			AddTextNotification(TextNotificationPool.Feedback, SystemClientId, SystemMessageLabel, text);
 		}
 
 		public static void AddMissionLine(string prefix, string text, Color? prefixColor = null)
 		{
-			AddTextNotification(TextNotificationPool.Mission, prefix, text, prefixColor);
+			AddTextNotification(TextNotificationPool.Mission, SystemClientId, prefix, text, prefixColor);
 		}
 
 		public static void AddSystemLine(string text)
@@ -43,12 +56,12 @@ namespace OpenRA
 
 		public static void AddSystemLine(string prefix, string text)
 		{
-			AddTextNotification(TextNotificationPool.System, prefix, text);
+			AddTextNotification(TextNotificationPool.System, SystemClientId, prefix, text);
 		}
 
-		public static void AddChatLine(string prefix, string text, Color? prefixColor = null, Color? textColor = null)
+		public static void AddChatLine(int clientId, string prefix, string text, Color? prefixColor = null, Color? textColor = null)
 		{
-			AddTextNotification(TextNotificationPool.Chat, prefix, text, prefixColor, textColor);
+			AddTextNotification(TextNotificationPool.Chat, clientId, prefix, text, prefixColor, textColor);
 		}
 
 		public static void Debug(string s, params object[] args)
@@ -56,10 +69,15 @@ namespace OpenRA
 			AddSystemLine("Debug", string.Format(s, args));
 		}
 
-		static void AddTextNotification(TextNotificationPool pool, string prefix, string text, Color? prefixColor = null, Color? textColor = null)
+		static void AddTextNotification(TextNotificationPool pool, int clientId, string prefix, string text, Color? prefixColor = null, Color? textColor = null)
 		{
 			if (IsPoolEnabled(pool))
-				Game.OrderManager.AddTextNotification(new TextNotification(pool, prefix, text, prefixColor, textColor));
+			{
+				var textNotification = new TextNotification(pool, clientId, prefix, text, prefixColor, textColor);
+
+				NotificationsCache.Add(textNotification);
+				Ui.Send(textNotification);
+			}
 		}
 
 		static bool IsPoolEnabled(TextNotificationPool pool)
@@ -69,7 +87,13 @@ namespace OpenRA
 			return pool == TextNotificationPool.Chat ||
 				pool == TextNotificationPool.System ||
 				pool == TextNotificationPool.Mission ||
+				(pool == TextNotificationPool.Transients && filters.HasFlag(TextNotificationPoolFilters.Transients)) ||
 				(pool == TextNotificationPool.Feedback && filters.HasFlag(TextNotificationPoolFilters.Feedback));
+		}
+
+		public static void Clear()
+		{
+			NotificationsCache.Clear();
 		}
 	}
 }

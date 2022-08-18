@@ -35,6 +35,7 @@ mcv:
 		Offset: -1,-1
 		TransformSounds: BUILD1.WAV
 		NoTransformNotification: CannotDeploy
+		NoTransformTextNotification: Cannot deploy here.
 	SpawnActorOnDeath:
 		Actor: mcv.husk
 		OwnerType: InternalName
@@ -142,6 +143,7 @@ trike:
 		LocalOffset: -544,0,0
 		MuzzleSequence: muzzle
 	AttackFrontal:
+		FacingTolerance: 0
 	Explodes:
 		Weapon: UnitExplodeSmall
 		EmptyWeapon: UnitExplodeSmall
@@ -178,6 +180,7 @@ quad:
 		Weapon: Rocket
 		LocalOffset: 128,64,64, 128,-64,64
 	AttackFrontal:
+		FacingTolerance: 0
 	Explodes:
 		Weapon: UnitExplodeSmall
 		EmptyWeapon: UnitExplodeSmall
@@ -222,6 +225,7 @@ siege_tank:
 		LocalOffset: 512,0,320
 		MuzzleSequence: muzzle
 	AttackFrontal:
+		FacingTolerance: 0
 	WithMuzzleOverlay:
 	WithSpriteTurret:
 	Explodes:
@@ -268,6 +272,7 @@ missile_tank:
 		Weapon: mtank_pri
 		LocalOffset: -128,128,171, -128,-128,171
 	AttackFrontal:
+		FacingTolerance: 0
 	AutoTarget:
 		InitialStanceAI: Defend
 	Explodes:
@@ -312,6 +317,7 @@ sonic_tank:
 		Weapon: Sound
 		LocalOffset: 600,0,427
 	AttackFrontal:
+		FacingTolerance: 0
 	Explodes:
 		Weapon: UnitExplodeLarge
 		EmptyWeapon: UnitExplodeLarge
@@ -358,6 +364,7 @@ devastator:
 		LocalOffset: 640,0,32
 		MuzzleSequence: muzzle
 	AttackFrontal:
+		FacingTolerance: 0
 	WithMuzzleOverlay:
 		IgnoreOffset: true
 	Explodes:
@@ -429,6 +436,7 @@ raider:
 		LocalOffset: 170,0,0
 		MuzzleSequence: muzzle
 	AttackFrontal:
+		FacingTolerance: 0
 	Explodes:
 		Weapon: UnitExplodeSmall
 		EmptyWeapon: UnitExplodeSmall
@@ -493,6 +501,7 @@ deviator:
 		Weapon: DeviatorMissile
 		LocalOffset: -299,0,85
 	AttackFrontal:
+		FacingTolerance: 0
 	AutoTarget:
 		InitialStanceAI: Defend
 	Explodes:

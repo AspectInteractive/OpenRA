@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2021 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -98,7 +98,7 @@ namespace OpenRA.Mods.Common.Scripting
 				try
 				{
 					group.Remove(m);
-					if (!group.Any())
+					if (group.Count == 0)
 						using (f)
 							f.Call();
 				}
@@ -218,7 +218,7 @@ namespace OpenRA.Mods.Common.Scripting
 					if (!group.Remove(m))
 						return;
 
-					if (!group.Any())
+					if (group.Count == 0)
 					{
 						// Functions can only be .Call()ed once, so operate on a copy so we can reuse it later
 						var temp = (LuaFunction)f.CopyReference();
@@ -304,7 +304,7 @@ namespace OpenRA.Mods.Common.Scripting
 					if (!group.Remove(m))
 						return;
 
-					if (!group.Any())
+					if (group.Count == 0)
 						using (f)
 							f.Call().Dispose();
 				}

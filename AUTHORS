@@ -58,6 +58,7 @@ Also thanks to:
     * DeadlySurprise
     * Dmitri Suvorov (suvjunmd)
     * dtluna
+    * Eduardo Cáceres (eduherminio)
     * Erasmus Schroder (rasco)
     * Eric Bajumpaa (SteelPhase)
     * Evgeniy Sergeev (evgeniysergeev)
@@ -69,6 +70,7 @@ Also thanks to:
     * Glenn Martin Jensen (Baxxster)
     * Gordon Martin (Happy0)
     * Guido Lipke (LipkeGu)
+    * Gustas Kažukauskas (Punsho)
     * Hervé Matysiak (Herve-M)
     * Huw Pascoe
     * Ian T. Jacobsen (Smilex)
@@ -135,7 +137,6 @@ Also thanks to:
     * Rikhardur Bjarni Einarsson (WolfGaming)
     * Sascha Biedermann (bidifx)
     * Sean Hunt (coppro)
-    * Sebastien Kerguen (xanax)
     * Shawn Collins (UberWaffe)
     * Simon Verbeke (Saticmotion)
     * Stuart McHattie (SDJMcHattie)
@@ -201,6 +202,9 @@ Using ANGLE distributed under the BS3 3-Clause license.
 
 Using Pfim developed by Nick Babcock
 distributed under the MIT license.
+
+Using Linguini by the Space Station 14 team
+licensed under Apache and MIT terms.
 
 This site or product includes IP2Location LITE data
 available from http://www.ip2location.com.
