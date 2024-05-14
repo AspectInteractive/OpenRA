@@ -36,7 +36,7 @@ namespace OpenRA
 		Queued = 0x08,
 		ExtraLocation = 0x10,
 		ExtraData = 0x20,
-		TargetIncludesCell = 0x40,
+		TargetIsCell = 0x40,
 		Subject = 0x80,
 		Grouped = 0x100
 	}
@@ -144,32 +144,24 @@ namespace OpenRA
 									break;
 								}
 
-								case TargetType.TerrainCell:
-									if (flags.HasField(OrderFields.TargetIncludesCell))
+								case TargetType.Terrain:
+								{
+									if (flags.HasField(OrderFields.TargetIsCell))
 									{
 										var cell = new CPos(r.ReadInt32());
 										var subCell = (SubCell)r.ReadByte();
 										if (world != null)
 											target = Target.FromCell(world, cell, subCell);
 									}
-
-									break;
-								case TargetType.TerrainCellPos:
-									if (flags.HasField(OrderFields.TargetIncludesCell))
+									else
 									{
-										var cell = new CPos(r.ReadInt32());
-										var subCell = (SubCell)r.ReadByte();
 										var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
-										if (world != null)
-											target = Target.FromCellWithTerrainPos(cell, subCell, pos);
+										target = Target.FromPos(pos);
 									}
 
 									break;
-								case TargetType.TerrainPos:
-									var pos2 = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
-									target = Target.FromPos(pos2);
-									break;
 								}
+							}
 						}
 
 						var targetString = flags.HasField(OrderFields.TargetString) ? r.ReadString() : null;
@@ -364,7 +356,7 @@ namespace OpenRA
 						fields |= OrderFields.ExtraLocation;
 
 					if (Target.SerializableCell != null)
-						fields |= OrderFields.TargetIncludesCell;
+						fields |= OrderFields.TargetIsCell;
 
 					w.Write((short)fields);
 
@@ -377,37 +369,35 @@ namespace OpenRA
 						switch (Target.SerializableType)
 						{
 							case TargetType.Actor:
+							{
 								w.Write(UIntFromActor(Target.SerializableActor));
 								w.Write(Target.SerializableGeneration);
 								break;
+							}
+
 							case TargetType.FrozenActor:
+							{
 								w.Write(Target.FrozenActor.Viewer.PlayerActor.ActorID);
 								w.Write(Target.FrozenActor.ID);
 								break;
-							case TargetType.TerrainCell:
-								if (fields.HasField(OrderFields.TargetIncludesCell))
+							}
+
+							case TargetType.Terrain:
+							{
+								if (fields.HasField(OrderFields.TargetIsCell))
 								{
 									w.Write(Target.SerializableCell.Value.Bits);
 									w.Write((byte)Target.SerializableSubCell);
 								}
-
-								break;
-							case TargetType.TerrainCellPos:
-								if (fields.HasField(OrderFields.TargetIncludesCell))
+								else
 								{
-									w.Write(Target.SerializableCell.Value.Bits);
-									w.Write((byte)Target.SerializableSubCell);
 									w.Write(Target.SerializablePos.X);
 									w.Write(Target.SerializablePos.Y);
 									w.Write(Target.SerializablePos.Z);
 								}
 
 								break;
-							case TargetType.TerrainPos:
-								w.Write(Target.SerializablePos.X);
-								w.Write(Target.SerializablePos.Y);
-								w.Write(Target.SerializablePos.Z);
-								break;
+							}
 						}
 					}
 

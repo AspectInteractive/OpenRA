@@ -148,9 +148,7 @@ namespace OpenRA
 
 					return (int)(actor.ActorID << 16) * 0x567;
 
-				case TargetType.TerrainCell:
-				case TargetType.TerrainCellPos:
-				case TargetType.TerrainPos:
+				case TargetType.Terrain:
 					return HashUsingHashCode(target.CenterPosition);
 
 				default:

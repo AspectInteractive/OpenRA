@@ -204,7 +204,7 @@ namespace OpenRA.Graphics
 				if (!actor.IsInWorld || actor.Disposed || (trait.SpatiallyPartitionable && !onScreenActors.Contains(actor)))
 					return;
 
-				foreach (var renderAnnotation in trait.RenderAnnotations(actor, this))
+				foreach (var renderAnnotation in trait.RenderAnnotations(actor, this)
 															.OrderBy(RenderableLayer)
 															.ThenBy(RenderableZPositionComparisonKey))
 					preparedAnnotationRenderables.Add(renderAnnotation.PrepareRender(this));

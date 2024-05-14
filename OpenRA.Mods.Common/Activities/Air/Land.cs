@@ -114,7 +114,7 @@ namespace OpenRA.Mods.Common.Activities
 				return true;
 
 			// Look for free landing cell
-			if (target.Type == TargetType.TerrainCell && !landingInitiated)
+			if (target.Type == TargetType.Terrain && !landingInitiated)
 			{
 				var newLocation = aircraft.FindLandingLocation(landingCell, landRange);
 

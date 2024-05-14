@@ -36,7 +36,7 @@ namespace OpenRA.Mods.Common.Commands
 
 	public class ChatCommands : INotifyChat
 	{
-		public Dictionary<string, IChatCommand> Commands { get; }
+		public Dictionary<string, List<IChatCommand>> Commands { get; }
 
 		public ChatCommands()
 		{

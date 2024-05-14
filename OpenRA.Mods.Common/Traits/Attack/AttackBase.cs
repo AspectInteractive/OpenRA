@@ -511,9 +511,8 @@ namespace OpenRA.Mods.Common.Traits
 					case TargetType.Actor:
 					case TargetType.FrozenActor:
 						return CanTargetActor(self, target, ref modifiers, ref cursor);
-					case TargetType.TerrainCell:
-					case TargetType.TerrainCellPos:
-						return CanTargetLocation(self, self.World.Map.CellContaining(target.CenterPosition), othersAtTarget, modifiers, ref cursor);
+					case TargetType.Terrain:
+						return CanTargetLocation(self, self.World.Map.CellContaining(target.CenterPosition), modifiers, ref cursor);
 					default:
 						return false;
 				}

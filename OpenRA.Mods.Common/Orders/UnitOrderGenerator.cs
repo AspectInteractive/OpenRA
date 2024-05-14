@@ -190,7 +190,7 @@ namespace OpenRA.Mods.Common.Orders
 				{
 					var localModifiers = modifiers;
 					string cursor = null;
-					if (o.Order.CanTarget(self, target, actorsAt, ref localModifiers, ref cursor))
+					if (o.Order.CanTarget(self, target, ref localModifiers, ref cursor))
 					{
 						return new UnitOrderResult(self, o.Order, o.Trait, cursor, target);
 					}

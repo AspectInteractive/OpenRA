@@ -15,7 +15,8 @@ using System.Linq;
 
 namespace OpenRA.Traits
 {
-	public enum TargetType : byte { Invalid, Actor, TerrainCell, TerrainPos, TerrainCellPos, FrozenActor }
+	// public enum TargetType : byte { Invalid, Actor, TerrainCell, TerrainPos, TerrainCellPos, FrozenActor }
+	public enum TargetType : byte { Invalid, Actor, Terrain, FrozenActor }
 
 	public readonly struct Target
 	{
@@ -33,7 +34,7 @@ namespace OpenRA.Traits
 
 		Target(WPos terrainCenterPosition, WPos[] terrainPositions = null)
 		{
-			type = TargetType.TerrainPos;
+			type = TargetType.Terrain;
 			this.terrainCenterPosition = terrainCenterPosition;
 			this.terrainPositions = terrainPositions ?? new[] { terrainCenterPosition };
 
@@ -46,7 +47,7 @@ namespace OpenRA.Traits
 
 		Target(World w, CPos c, SubCell subCell)
 		{
-			type = TargetType.TerrainCell;
+			type = TargetType.Terrain;
 			terrainCenterPosition = w.Map.CenterOfSubCell(c, subCell);
 			terrainPositions = new[] { terrainCenterPosition };
 			cell = c;
@@ -59,7 +60,7 @@ namespace OpenRA.Traits
 
 		Target(CPos c, SubCell subCell, WPos terrainCenterPosition)
 		{
-			type = TargetType.TerrainCellPos;
+			type = TargetType.Terrain;
 			this.terrainCenterPosition = terrainCenterPosition;
 			terrainPositions = new[] { terrainCenterPosition };
 			cell = c;
@@ -171,11 +172,7 @@ namespace OpenRA.Traits
 				case TargetType.Invalid:
 					return false;
 				default:
-				case TargetType.TerrainCell:
-					return true;
-				case TargetType.TerrainPos:
-					return true;
-				case TargetType.TerrainCellPos:
+				case TargetType.Terrain:
 					return true;
 			}
 		}
@@ -216,9 +213,7 @@ namespace OpenRA.Traits
 						return actor.CenterPosition;
 					case TargetType.FrozenActor:
 						return frozen.CenterPosition;
-					case TargetType.TerrainCell:
-					case TargetType.TerrainPos:
-					case TargetType.TerrainCellPos:
+					case TargetType.Terrain:
 						return terrainCenterPosition;
 					default:
 					case TargetType.Invalid:
@@ -240,11 +235,7 @@ namespace OpenRA.Traits
 					case TargetType.FrozenActor:
 						// TargetablePositions may be null if it is Invalid
 						return frozen.TargetablePositions ?? NoPositions;
-					case TargetType.TerrainCell:
-						return terrainPositions;
-					case TargetType.TerrainCellPos:
-						return terrainPositions;
-					case TargetType.TerrainPos:
+					case TargetType.Terrain:
 						return terrainPositions;
 					default:
 					case TargetType.Invalid:
@@ -266,17 +257,19 @@ namespace OpenRA.Traits
 
 		public static bool IsTerrainType(TargetType targType)
 		{
-			return (targType == TargetType.TerrainCell ||
-					targType == TargetType.TerrainPos ||
-					targType == TargetType.TerrainCellPos);
+			return targType == TargetType.Terrain;
+			/*return (targType == TargetType.TerrainCell ||
+				targType == TargetType.TerrainPos ||
+				targType == TargetType.TerrainCellPos); */
 		}
 
 		public bool SelfIsTerrainCellType() { return IsTerrainCellType(type); }
 
 		public static bool IsTerrainCellType(TargetType targType)
 		{
-			return (targType == TargetType.TerrainCell ||
-					targType == TargetType.TerrainCellPos);
+			return targType == TargetType.Terrain;
+			/*return (targType == TargetType.TerrainCell ||
+					targType == TargetType.TerrainCellPos); */
 		}
 
 		public override string ToString()
@@ -287,11 +280,7 @@ namespace OpenRA.Traits
 					return actor.ToString();
 				case TargetType.FrozenActor:
 					return frozen.ToString();
-				case TargetType.TerrainCell:
-					return terrainCenterPosition.ToString();
-				case TargetType.TerrainPos:
-					return terrainCenterPosition.ToString();
-				case TargetType.TerrainCellPos:
+				case TargetType.Terrain:
 					return terrainCenterPosition.ToString();
 				default:
 				case TargetType.Invalid:
@@ -307,9 +296,9 @@ namespace OpenRA.Traits
 			switch (me.type)
 			{
 				case TargetType.Terrain:
-					return me.terrainCenterPosition == other.terrainCenterPosition
-						&& me.terrainPositions == other.terrainPositions
-						&& me.cell == other.cell && me.subCell == other.subCell;
+					return me.cell == other.cell && me.subCell == other.subCell
+						&& me.CenterPosition == other.CenterPosition
+						&& me.terrainPositions == other.terrainPositions;
 
 				case TargetType.Actor:
 					return me.Actor == other.Actor && me.generation == other.generation;

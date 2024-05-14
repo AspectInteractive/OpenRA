@@ -538,7 +538,7 @@ namespace OpenRA.Mods.Common.Graphics
 			return GetSprite(start, frame, WAngle.Zero);
 		}
 
-		public Sprite GetSprite(int frame, WAngle facing, out WAngle rotation)
+		public Sprite GetSprite(int frame, WAngle facing)
 		{
 			return GetSprite(start, frame, facing);
 		}

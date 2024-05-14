@@ -1052,6 +1052,7 @@ namespace OpenRA
 			var a1 = cellEdge.ElementAt(1);
 			return WPos.DoTwoLinesIntersect(a0, a1, b0, b1);
 		}
+
 		public static WPos? CellEdgeIntersectionWithLine(List<WPos> cellEdge, WPos b0, WPos b1)
 		{
 			var a0 = cellEdge.ElementAt(0);
