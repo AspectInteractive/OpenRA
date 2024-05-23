@@ -55,7 +55,7 @@ namespace OpenRA.Traits
 			FrozenActor = null;
 			generation = 0;
 		}
-
+		
 		Target(Actor a, int generation)
 		{
 			type = TargetType.Actor;
@@ -65,6 +65,44 @@ namespace OpenRA.Traits
 			terrainCenterPosition = WPos.Zero;
 			terrainPositions = null;
 			FrozenActor = null;
+			cell = null;
+			subCell = null;
+		}
+
+        Target(CPos c, SubCell subCell, WPos terrainCenterPosition)
+		{
+			type = TargetType.Terrain;
+			this.terrainCenterPosition = terrainCenterPosition;
+			terrainPositions = new[] { terrainCenterPosition };
+			cell = c;
+			this.subCell = subCell;
+
+			actor = null;
+			frozen = null;
+			generation = 0;
+		}
+
+		Target(Actor a, WPos terrainPos = default)
+		{
+			type = TargetType.Actor;
+			actor = a;
+			generation = a.Generation;
+			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
+			terrainPositions = null;
+			frozen = null;
+			cell = null;
+			subCell = null;
+		}
+
+
+		Target(Actor a, WPos terrainPos = default)
+		{
+			type = TargetType.Actor;
+			actor = a;
+			generation = a.Generation;
+			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
+			terrainPositions = null;
+			frozen = null;
 			cell = null;
 			subCell = null;
 		}
@@ -82,11 +120,25 @@ namespace OpenRA.Traits
 			generation = 0;
 		}
 
+		Target(FrozenActor fa, WPos terrainPos = default)
+		{
+			type = TargetType.FrozenActor;
+			frozen = fa;
+
+			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
+			terrainPositions = null;
+			actor = null;
+			cell = null;
+			subCell = null;
+			generation = 0;
+		}
+
 		public static Target FromPos(WPos p) { return new Target(p); }
 		public static Target FromTargetPositions(in Target t) { return new Target(t.CenterPosition, t.Positions.ToArray()); }
 		public static Target FromCell(World w, CPos c, SubCell subCell = SubCell.FullCell) { return new Target(w, c, subCell); }
 		public static Target FromActor(Actor a) { return a != null ? new Target(a, a.Generation) : Invalid; }
 		public static Target FromFrozenActor(FrozenActor fa) { return new Target(fa); }
+		public static Target FromFrozenActorWithTerrainPos(FrozenActor fa, WPos terrainPos = default) { return new Target(fa, terrainPos); }
 
 		public TargetType Type
 		{

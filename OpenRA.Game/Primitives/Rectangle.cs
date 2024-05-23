@@ -26,6 +26,11 @@ namespace OpenRA.Primitives
 			return new Rectangle(left, top, right - left, bottom - top);
 		}
 
+		public static Rectangle FromTLBR(int2 topLeft, int2 bottomRight)
+		{
+			return new Rectangle(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
+		}
+
 		public static Rectangle Union(Rectangle a, Rectangle b)
 		{
 			return FromLTRB(Math.Min(a.Left, b.Left), Math.Min(a.Top, b.Top), Math.Max(a.Right, b.Right), Math.Max(a.Bottom, b.Bottom));
@@ -99,11 +104,27 @@ namespace OpenRA.Primitives
 		}
 
 		public readonly bool IntersectsWith(Rectangle rect)
+
 		{
 			return Left < rect.Right && Right > rect.Left && Top < rect.Bottom && Bottom > rect.Top;
 		}
+        
+		public bool IntersectsWithRectangle(Rectangle rect) { return IntersectsWith(rect); }
 
 		readonly bool IntersectsWithInclusive(Rectangle r)
+		public bool IntersectsWithCircle(int2 circleCenter, int circleRadius)
+		{
+			var rectLeft = TopLeft.X;
+			var rectTop = TopLeft.Y;
+			var rectRight = BottomRight.X;
+			var rectBottom = BottomRight.Y;
+
+			var deltaX = circleCenter.X - Math.Max(rectLeft, Math.Min(circleCenter.X, rectRight));
+			var deltaY = circleCenter.Y - Math.Max(rectTop, Math.Min(circleCenter.Y, rectBottom));
+			return (deltaX * deltaX + deltaY * deltaY) < (circleRadius * circleRadius);
+		}
+
+		bool IntersectsWithInclusive(Rectangle r)
 		{
 			return Left <= r.Right && Right >= r.Left && Top <= r.Bottom && Bottom >= r.Top;
 		}

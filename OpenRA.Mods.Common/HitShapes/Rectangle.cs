@@ -113,12 +113,68 @@ namespace OpenRA.Mods.Common.HitShapes
 			return new WDist(r.HorizontalLength);
 		}
 
+		bool IHitShape.IntersectsWithHitShape(int2 selfCenter, int2 secondCenter, HitShape hitShape)
+		{
+			if (hitShape.Info.Type is RectangleShape rect)
+				return IntersectsWithHitShape(selfCenter, secondCenter, rect);
+			else if (hitShape.Info.Type is CircleShape circ)
+				return IntersectsWithHitShape(selfCenter, secondCenter, circ);
+			else if (hitShape.Info.Type is PolygonShape poly)
+				return IntersectsWithHitShape(selfCenter, secondCenter, poly);
+			else if (hitShape.Info.Type is CapsuleShape caps)
+				return IntersectsWithHitShape(selfCenter, secondCenter, caps);
+			else
+				return false;
+		}
+
+		// Must only be used with non-rotated rectangles
+		bool IntersectsWithHitShape(int2 selfCenter, int2 rectCenter, RectangleShape rectHitShape)
+		{
+			if (LocalYaw != WAngle.Zero)
+				throw new ArgumentException($"Rectangle's local yaw is a non-zero value of {LocalYaw}, which is invalid for IntersectsWithRectangleHitShape()");
+
+			var rect1 = Rectangle.FromTLBR(selfCenter + TopLeft, selfCenter + BottomRight);
+			var rect2 = Rectangle.FromTLBR(rectCenter + rectHitShape.TopLeft, rectCenter + rectHitShape.BottomRight);
+			return rect1.IntersectsWithRectangle(rect2);
+		}
+
+		// Must only be used with non-rotated rectangles
+		bool IntersectsWithHitShape(int2 selfCenter, int2 circleCenter, CircleShape circleHitShape)
+		{
+			if (LocalYaw != WAngle.Zero)
+				throw new ArgumentException($"Rectangle's local yaw is a non-zero value of {LocalYaw}, which is invalid for IntersectsWithCircleHitShape()");
+
+			var rect = Rectangle.FromTLBR(selfCenter + TopLeft, selfCenter + BottomRight);
+			var circleRadius = circleHitShape.Radius.Length;
+
+			/*System.Console.WriteLine($"rectTL: {selfCenter + TopLeft}, rectBR: {selfCenter + BottomRight}, circleCenter: {circleCenter}, circleRadius: {circleRadius}");*/
+
+			return rect.IntersectsWithCircle(circleCenter, circleRadius);
+		}
+
+		bool IntersectsWithHitShape(int2 selfCenter, int2 polygonCenter, PolygonShape polygonHitShape) { return false; } // to be implemented
+		bool IntersectsWithHitShape(int2 selfCenter, int2 capsuleCenter, CapsuleShape capsuleHitShape) { return false; } // to be implemented
+
+		WPos[] IHitShape.GetCorners(int2 selfCenter)
+		{
+			var corners = new WPos[4];
+			var topRight = new int2(BottomRight.X, TopLeft.Y);
+			var bottomLeft = new int2(TopLeft.X, BottomRight.Y);
+			corners[0] = new WPos(selfCenter.X + TopLeft.X, selfCenter.Y + TopLeft.Y, 0);
+			corners[1] = new WPos(selfCenter.X + topRight.X, selfCenter.Y + topRight.Y, 0);
+			corners[2] = new WPos(selfCenter.X + bottomLeft.X, selfCenter.Y + bottomLeft.Y, 0);
+			corners[3] = new WPos(selfCenter.X + BottomRight.X, selfCenter.Y + BottomRight.Y, 0);
+			return corners;
+		}
+
 		public WDist DistanceFromEdge(WPos pos, WPos origin, WRot orientation)
 		{
 			orientation += WRot.FromYaw(LocalYaw);
 
 			if (pos.Z > origin.Z + VerticalTopOffset)
+			{
 				return DistanceFromEdge((pos - (origin + new WVec(0, 0, VerticalTopOffset))).Rotate(-orientation));
+			}
 
 			if (pos.Z < origin.Z + VerticalBottomOffset)
 				return DistanceFromEdge((pos - (origin + new WVec(0, 0, VerticalBottomOffset))).Rotate(-orientation));

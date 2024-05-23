@@ -134,6 +134,15 @@ namespace OpenRA.Mods.Common
 			return WPos.Lerp(fromPos, toPos, 1, 2);
 		}
 
+		public static WPos BetweenCellAndPos(World w, CPos from, WPos toPos)
+		{
+			var fromPos = from.Layer == 0 ? w.Map.CenterOfCell(from) :
+				w.GetCustomMovementLayers()[from.Layer].CenterOfCell(from);
+			return WPos.Lerp(fromPos, toPos, 1, 2);
+		}
+
+		public static WPos BetweenTwoPos(WPos fromPos, WPos toPos) { return WPos.Lerp(fromPos, toPos, 1, 2); }
+
 		public static WAngle GetVerticalAngle(WPos source, WPos target)
 		{
 			var delta = target - source;

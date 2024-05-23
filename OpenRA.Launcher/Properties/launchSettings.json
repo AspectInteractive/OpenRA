@@ -15,6 +15,18 @@
     "Tiberian Sun": {
       "commandName": "Project",
       "commandLineArgs": "Engine.EngineDir=\"..\" Game.Mod=ts"
+    },
+    "Red Alert - Test Map": {
+      "commandName": "Project",
+      "commandLineArgs": "Engine.EngineDir=\"..\" Game.Mod=ra Launch.Map=\"G:\\Jire\\mods\\ra\\maps\\warwind.oramap\""
+    },
+    "WSL 2": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "Tiberian Sun - Test Map": {
+      "commandName": "Project",
+      "commandLineArgs": "Engine.EngineDir=\"..\" Game.Mod=ts Launch.Map=\"G:\\Jire\\mods\\ts\\maps\\arivruns\""
     }
   }
 }

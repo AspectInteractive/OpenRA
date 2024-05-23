@@ -2,6 +2,28 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Launch Test Map (RA)",
+			"type": "coreclr",
+			"request": "launch",
+			"program": "${workspaceRoot}/bin/OpenRA.dll",
+			"windows": {
+				"program": "${workspaceRoot}/bin/OpenRA.exe",
+			},
+			"args": ["Game.Mod=ra", "Engine.EngineDir=..", "Launch.Map=G:\\Jire\\mods\\ra\\maps\\warwind.oramap"],
+			"preLaunchTask": "build",
+		},
+		{
+			"name": "Launch Test Map (TS)",
+			"type": "coreclr",
+			"request": "launch",
+			"program": "${workspaceRoot}/bin/OpenRA.dll",
+			"windows": {
+				"program": "${workspaceRoot}/bin/OpenRA.exe",
+			},
+			"args": ["Game.Mod=ts", "Engine.EngineDir=..", "Launch.Map=G:\\Jire\\mods\\ts\\maps\\arivruns"],
+			"preLaunchTask": "build",
+		},
+		{
 			"name": "Launch (TD)",
 			"type": "coreclr",
 			"request": "launch",

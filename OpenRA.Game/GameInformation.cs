@@ -17,6 +17,11 @@ using OpenRA.Primitives;
 
 namespace OpenRA
 {
+	static class Globals
+	{
+		public static long LastTimeSaved { get; set; }
+	}
+
 	public class GameInformation
 	{
 		public string Mod;

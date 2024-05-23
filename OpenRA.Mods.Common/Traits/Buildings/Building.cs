@@ -34,7 +34,7 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("x means cell is blocked, capital X means blocked but not counting as targetable, ",
 			"= means part of the footprint but passable, _ means completely empty.")]
 		[FieldLoader.LoadUsing(nameof(LoadFootprint))]
-		public readonly Dictionary<CVec, FootprintCellType> Footprint;
+		public readonly Footprint BuildingFootprint;
 
 		public readonly CVec Dimensions = new(1, 1);
 
@@ -62,93 +62,14 @@ namespace OpenRA.Mods.Common.Traits
 
 		public override object Create(ActorInitializer init) { return new Building(init, this); }
 
-		protected static object LoadFootprint(MiniYaml yaml)
-		{
-			var footprintYaml = yaml.NodeWithKeyOrDefault("Footprint");
-			var footprintChars = footprintYaml?.Value.Value.Where(x => !char.IsWhiteSpace(x)).ToArray() ?? new[] { 'x' };
+		protected static object LoadFootprint(MiniYaml yaml) { return new Footprint(yaml); }
 
-			var dimensionsYaml = yaml.NodeWithKeyOrDefault("Dimensions");
-			var dim = dimensionsYaml != null ? FieldLoader.GetValue<CVec>("Dimensions", dimensionsYaml.Value.Value) : new CVec(1, 1);
-
-			if (footprintChars.Length != dim.X * dim.Y)
-			{
-				var fp = footprintYaml.Value.Value;
-				var dims = dim.X + "x" + dim.Y;
-				throw new YamlException($"Invalid footprint: {fp} does not match dimensions {dims}");
-			}
-
-			var index = 0;
-			var ret = new Dictionary<CVec, FootprintCellType>();
-			for (var y = 0; y < dim.Y; y++)
-			{
-				for (var x = 0; x < dim.X; x++)
-				{
-					var c = footprintChars[index++];
-					if (!Enum.IsDefined(typeof(FootprintCellType), (FootprintCellType)c))
-						throw new YamlException($"Invalid footprint cell type '{c}'");
-
-					ret[new CVec(x, y)] = (FootprintCellType)c;
-				}
-			}
-
-			return ret;
-		}
-
-		public IEnumerable<CPos> FootprintTiles(CPos location, FootprintCellType type)
-		{
-			return Footprint.Where(kv => kv.Value == type).Select(kv => location + kv.Key);
-		}
-
-		public IEnumerable<CPos> Tiles(CPos location)
-		{
-			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedPassable))
-				yield return t;
-
-			foreach (var t in FootprintTiles(location, FootprintCellType.Occupied))
-				yield return t;
-
-			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedUntargetable))
-				yield return t;
-
-			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedPassableTransitOnly))
-				yield return t;
-		}
-
-		public IEnumerable<CPos> FrozenUnderFogTiles(CPos location)
-		{
-			foreach (var t in FootprintTiles(location, FootprintCellType.Empty))
-				yield return t;
-
-			foreach (var t in Tiles(location))
-				yield return t;
-		}
-
-		public IEnumerable<CPos> OccupiedTiles(CPos location)
-		{
-			foreach (var t in FootprintTiles(location, FootprintCellType.Occupied))
-				yield return t;
-
-			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedUntargetable))
-				yield return t;
-
-			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedPassableTransitOnly))
-				yield return t;
-		}
-
-		public IEnumerable<CPos> PathableTiles(CPos location)
-		{
-			foreach (var t in FootprintTiles(location, FootprintCellType.Empty))
-				yield return t;
-
-			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedPassable))
-				yield return t;
-		}
-
-		public IEnumerable<CPos> TransitOnlyTiles(CPos location)
-		{
-			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedPassableTransitOnly))
-				yield return t;
-		}
+		public IEnumerable<CPos> FootprintTiles(CPos location, FootprintCellType type) { return BuildingFootprint.FootprintTiles(location, type); }
+		public IEnumerable<CPos> Tiles(CPos location) { return BuildingFootprint.Tiles(location); }
+		public IEnumerable<CPos> FrozenUnderFogTiles(CPos location) { return BuildingFootprint.FrozenUnderFogTiles(location); }
+		public IEnumerable<CPos> OccupiedTiles(CPos location) { return BuildingFootprint.OccupiedTiles(location); }
+		public IEnumerable<CPos> PathableTiles(CPos location) { return BuildingFootprint.PathableTiles(location); }
+		public IEnumerable<CPos> TransitOnlyTiles(CPos location) { return BuildingFootprint.TransitOnlyTiles(location); }
 
 		public WVec CenterOffset(World w)
 		{

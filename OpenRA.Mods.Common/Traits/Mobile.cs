@@ -915,6 +915,20 @@ namespace OpenRA.Mods.Common.Traits
 			if (order is MoveOrderTargeter)
 				return new Order("Move", self, target, queued);
 
+			/*if (!IsTraitDisabled &&
+			(order.OrderID == "Enter" || order.OrderID == "Move" || order.OrderID == "Land" || order.OrderID == "ForceEnter"))
+			{
+				System.Console.WriteLine("Order Created");
+				return new Order(order.OrderID, self, target, queued);
+			}*/
+
+			/*if (!IsTraitDisabled &&
+			(order.OrderID == "Enter" || order.OrderID == "Move" || order.OrderID == "Land" || order.OrderID == "ForceEnter"))
+			{
+				System.Console.WriteLine("Order Created");
+				return new Order(order.OrderID, self, target, queued);
+			}*/
+
 			return null;
 		}
 

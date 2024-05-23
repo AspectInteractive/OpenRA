@@ -383,5 +383,6 @@ namespace OpenRA.Network
 
 			Recorder?.Dispose();
 		}
+
 	}
 }

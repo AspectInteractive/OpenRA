@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "OpenRA.Mods.Common": {
+      "commandName": "Project"
+    }
+  }
+}

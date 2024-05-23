@@ -304,5 +304,7 @@ namespace OpenRA.Traits
 			var bounds = partitionedMouseActorBounds.Values.Select(a => a.Bounds);
 			return viewer != null ? bounds.Concat(partitionedMouseFrozenActors[viewer].Items.Select(fa => fa.MouseBounds)) : bounds;
 		}
+
+		public WorldRenderer GetWorldRenderer() { return worldRenderer; }
 	}
 }

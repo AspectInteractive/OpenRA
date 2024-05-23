@@ -25,26 +25,37 @@ namespace OpenRA.Mods.Common.Orders
 
 		protected static Target TargetForInput(World world, CPos cell, int2 worldPixel, MouseInput mi)
 		{
+			var worldRenderer = world.ScreenMap.GetWorldRenderer();
+			var terrainPosCell = worldRenderer.Viewport.ViewToWorld(mi.Location);
+			var terrainPos = worldRenderer.Viewport.ViewToWorldPxWithCellZ(mi.Location);
+			/*var terrainPos = worldRenderer.ProjectedPosition(worldRenderer.Viewport.ViewToWorldPx(mi.Location));*/
 			var actor = world.ScreenMap.ActorsAtMouse(mi)
 				.Where(a => !a.Actor.IsDead && a.Actor.Info.HasTraitInfo<ITargetableInfo>() && !world.FogObscures(a.Actor))
 				.WithHighestSelectionPriority(worldPixel, mi.Modifiers);
 
 			if (actor != null)
-				return Target.FromActor(actor);
+				return Target.FromActorWithTerrainPos(actor, terrainPos);
 
 			var frozen = world.ScreenMap.FrozenActorsAtMouse(world.RenderPlayer, mi)
 				.Where(a => a.Info.HasTraitInfo<ITargetableInfo>() && a.Visible && a.HasRenderables)
 				.WithHighestSelectionPriority(worldPixel, mi.Modifiers);
 
 			if (frozen != null)
-				return Target.FromFrozenActor(frozen);
+				return Target.FromFrozenActorWithTerrainPos(frozen, terrainPos);
 
-			return Target.FromCell(world, cell);
+			#if DEBUG
+			// System.Console.WriteLine($"terrainPos: {terrainPos}, world.Map.CenterOfCell(terrainPosCell): {world.Map.CenterOfCell(terrainPosCell)}");
+			#endif
+			return Target.FromCellWithTerrainPos(cell, SubCell.FullCell, terrainPos); // use world.Map.CenterOfCell(cell) instead of terrainPos if this is needed
 		}
 
 		public virtual IEnumerable<Order> Order(World world, CPos cell, int2 worldPixel, MouseInput mi)
 		{
 			var target = TargetForInput(world, cell, worldPixel, mi);
+			#if DEBUG
+			System.Console.WriteLine($"Order issued with targCenterPos {target.CenterPosition} at {(System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond)}");
+			#endif
+			var actorsAt = world.ActorMap.GetActorsAt(cell).ToList();
 			var orders = world.Selection.Actors
 				.Select(a => OrderForUnit(a, target, cell, mi))
 				.Where(o => o != null)

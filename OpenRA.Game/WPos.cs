@@ -39,6 +39,8 @@ namespace OpenRA
 		/// Returns the linear interpolation between points 'a' and 'b'.
 		/// </summary>
 		public static WPos Lerp(in WPos a, in WPos b, int mul, int div) { return a + (b - a) * mul / div; }
+		public int2 XYToInt2() { return new int2(X, Y); }
+		public static int2 XYToInt2(in WPos a) { return new int2(a.X, a.Y); }
 
 		/// <summary>
 		/// Returns the linear interpolation between points 'a' and 'b'.
@@ -68,6 +70,64 @@ namespace OpenRA
 			var clampedOffset = (int)(offset + ret.Z).Clamp(int.MinValue, int.MaxValue);
 
 			return new WPos(ret.X, ret.Y, clampedOffset);
+		}
+
+		public static int GetIntersectingX(WPos p1, WPos p2, int y)
+		{
+			return Math.Abs(p2.Y - p1.Y) < double.Epsilon ? p1.Y : ((p2.X - p1.X) * (y - p1.Y) / (p2.Y - p1.Y)) + p1.X;
+		}
+
+		public static int GetIntersectingY(WPos p1, WPos p2, int x)
+		{
+			return Math.Abs(p2.X - p1.X) < double.Epsilon ? p1.X : ((p2.Y - p1.Y) * (x - p1.X) / (p2.X - p1.X)) + p1.Y;
+		}
+
+		// Check the direction these three points rotate
+		private static int DoTwoLinesIntersect_RotationDirection(WPos p1, WPos p2, WPos p3)
+		{
+			if (((p3.Y - p1.Y) * (p2.X - p1.X)) > ((p2.Y - p1.Y) * (p3.X - p1.X)))
+				return 1;
+			else if (((p3.Y - p1.Y) * (p2.X - p1.X)) == ((p2.Y - p1.Y) * (p3.X - p1.X)))
+				return 0;
+			else
+				return -1;
+		}
+
+		private static bool DoTwoLinesIntersect_ContainsSegment(WPos p1, WPos p2, WPos s)
+		{
+			if (p1.X < p2.X && p1.X < s.X && s.X < p2.X)
+				return true;
+			else if (p2.X < p1.X && p2.X < s.X && s.X < p1.X)
+				return true;
+			else if (p1.Y < p2.Y && p1.Y < s.Y && s.Y < p2.Y)
+				return true;
+			else if (p2.Y < p1.Y && p2.Y < s.Y && s.Y < p1.Y)
+				return true;
+			else if ((p1.X == s.X && p1.Y == s.Y) || (p2.X == s.X && p2.Y == s.Y))
+				return true;
+			return false;
+		}
+
+		public static bool DoTwoLinesIntersect(WPos a0, WPos a1, WPos b0, WPos b1)
+		{
+			var f1 = DoTwoLinesIntersect_RotationDirection(a0, a1, b1);
+			var f2 = DoTwoLinesIntersect_RotationDirection(a0, a1, b0);
+			var f3 = DoTwoLinesIntersect_RotationDirection(a0, b0, b1);
+			var f4 = DoTwoLinesIntersect_RotationDirection(a1, b0, b1);
+
+			// If the faces rotate opposite directions, they intersect.
+			var intersect = f1 != f2 && f3 != f4;
+
+			// If the segments are on the same line, we have to check for overlap.
+			if (f1 == 0 && f2 == 0 && f3 == 0 && f4 == 0)
+			{
+				intersect = DoTwoLinesIntersect_ContainsSegment(a0, a1, b0) ||
+							DoTwoLinesIntersect_ContainsSegment(a0, a1, b1) ||
+							DoTwoLinesIntersect_ContainsSegment(b0, b1, a0) ||
+							DoTwoLinesIntersect_ContainsSegment(b0, b1, a1);
+			}
+
+			return intersect;
 		}
 
 		public override int GetHashCode() { return X.GetHashCode() ^ Y.GetHashCode() ^ Z.GetHashCode(); }

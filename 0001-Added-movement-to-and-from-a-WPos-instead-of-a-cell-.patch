@@ -1,0 +1,1797 @@
+From 81c0f581e73547fc3965a7c216cfb74227ff44e3 Mon Sep 17 00:00:00 2001
+From: GeorgeD64 <the_vortex01@hotmail.com>
+Date: Sun, 29 Aug 2021 15:48:10 +1000
+Subject: [PATCH] Added movement to and from a WPos instead of a cell, via the
+ new MoveOffGrid and MobileOffGrid activity and trait
+
+---
+ OpenRA.Game/Actor.cs                          |   3 +
+ OpenRA.Game/GameRules/WeaponInfo.cs           |   2 +-
+ OpenRA.Game/Network/Order.cs                  |  59 ++++++++++------
+ OpenRA.Game/Orders/UnitOrderGenerator.cs      |   7 +-
+ OpenRA.Game/Sync.cs                           |  16 +++--
+ OpenRA.Game/Traits/Target.cs                  |  58 ++++++++++++++--
+ OpenRA.Mods.Cnc/Activities/LeapAttack.cs      |   2 +-
+ OpenRA.Mods.Cnc/Traits/Minelayer.cs           |   2 +-
+ OpenRA.Mods.Common/Activities/Air/Fly.cs      |   2 +-
+ .../Activities/Air/FlyAttack.cs               |   2 +-
+ .../Activities/Air/FlyFollow.cs               |   2 +-
+ OpenRA.Mods.Common/Activities/Air/Land.cs     |   2 +-
+ OpenRA.Mods.Common/Activities/Attack.cs       |   2 +-
+ OpenRA.Mods.Common/Activities/Move/Follow.cs  |   2 +-
+ .../Activities/Move/MoveAdjacentTo.cs         |   2 +-
+ .../Activities/Move/MoveOffGrid.cs            |   2 +-
+ .../Activities/Move/MoveOffGridFollow.cs      |   2 +-
+ OpenRA.Mods.Common/Traits/Air/Aircraft.cs     |   3 +-
+ .../Traits/Attack/AttackBase.cs               |  17 ++---
+ .../Traits/Attack/AttackFollow.cs             |   2 +-
+ .../Traits/Buildings/RallyPoint.cs            |   2 +-
+ .../Buildings/TransformsIntoAircraft.cs       |   2 +-
+ .../Traits/Buildings/TransformsIntoMobile.cs  |   2 +-
+ .../Conditions/GrantConditionOnAttack.cs      |   2 +-
+ OpenRA.Mods.Common/Traits/Harvester.cs        |   2 +-
+ OpenRA.Mods.Common/Traits/Mobile.cs           |   2 +-
+ OpenRA.Mods.Common/Traits/MobileOffGrid.cs    |  63 +++---------------
+ .../Traits/World/OrderEffects.cs              |   4 +-
+ ...ion_TimeDeltaCalculator_newnewnetcode.xlsx | Bin 82705 -> 82417 bytes
+ mods/ra/rules/defaults.yaml                   |   2 -
+ mods/ra/rules/vehicles.yaml                   |   4 +-
+ 31 files changed, 152 insertions(+), 122 deletions(-)
+
+diff --git a/OpenRA.Game/Actor.cs b/OpenRA.Game/Actor.cs
+index 3f5388aa58..2f9b5a5810 100644
+--- a/OpenRA.Game/Actor.cs
++++ b/OpenRA.Game/Actor.cs
+@@ -436,7 +436,10 @@ public void Dispose()
+ 		public void ResolveOrder(Order order)
+ 		{
+ 			foreach (var r in resolveOrders)
++			{
++				System.Console.WriteLine($"Resolving order {order} with Targ Type {order.Target.Type}");
+ 				r.ResolveOrder(this, order);
++			}
+ 		}
+
+ 		// TODO: move elsewhere.
+diff --git a/OpenRA.Game/GameRules/WeaponInfo.cs b/OpenRA.Game/GameRules/WeaponInfo.cs
+index 5caed8beba..6ba287264f 100644
+--- a/OpenRA.Game/GameRules/WeaponInfo.cs
++++ b/OpenRA.Game/GameRules/WeaponInfo.cs
+@@ -171,7 +171,7 @@ public bool IsValidAgainst(in Target target, World world, Actor firedBy)
+ 			if (target.Type == TargetType.FrozenActor)
+ 				return IsValidAgainst(target.FrozenActor, firedBy);
+
+-			if (target.Type == TargetType.Terrain)
++			if (target.SelfIsTerrainCellType())
+ 			{
+ 				var dat = world.Map.DistanceAboveTerrain(target.CenterPosition);
+ 				if (dat > AirThreshold)
+diff --git a/OpenRA.Game/Network/Order.cs b/OpenRA.Game/Network/Order.cs
+index bd4e205248..2d74066fe8 100644
+--- a/OpenRA.Game/Network/Order.cs
++++ b/OpenRA.Game/Network/Order.cs
+@@ -34,7 +34,7 @@ enum OrderFields : short
+ 		Queued = 0x08,
+ 		ExtraLocation = 0x10,
+ 		ExtraData = 0x20,
+-		TargetIsCell = 0x40,
++		TargetIncludesCell = 0x40,
+ 		Subject = 0x80,
+ 		Grouped = 0x100
+ 	}
+@@ -139,24 +139,32 @@ public static Order Deserialize(World world, BinaryReader r)
+ 										break;
+ 									}
+
+-								case TargetType.Terrain:
++								case TargetType.TerrainCell:
++									if (flags.HasField(OrderFields.TargetIncludesCell))
+ 									{
+-										if (flags.HasField(OrderFields.TargetIsCell))
+-										{
+-											var cell = new CPos(r.ReadInt32());
+-											var subCell = (SubCell)r.ReadByte();
+-											if (world != null)
+-												target = Target.FromCell(world, cell, subCell);
+-										}
+-										else
+-										{
+-											var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
+-											target = Target.FromPos(pos);
+-										}
++										var cell = new CPos(r.ReadInt32());
++										var subCell = (SubCell)r.ReadByte();
++										if (world != null)
++											target = Target.FromCell(world, cell, subCell);
++									}
+
+-										break;
++									break;
++								case TargetType.TerrainCellPos:
++									if (flags.HasField(OrderFields.TargetIncludesCell))
++									{
++										var cell = new CPos(r.ReadInt32());
++										var subCell = (SubCell)r.ReadByte();
++										var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
++										if (world != null)
++											target = Target.FromCellWithTerrainPos(cell, subCell, pos);
+ 									}
+-							}
++
++									break;
++								case TargetType.TerrainPos:
++									var pos2 = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
++									target = Target.FromPos(pos2);
++									break;
++								}
+ 						}
+
+ 						var targetString = flags.HasField(OrderFields.TargetString) ? r.ReadString() : null;
+@@ -350,7 +358,7 @@ public byte[] Serialize()
+ 						fields |= OrderFields.ExtraLocation;
+
+ 					if (Target.SerializableCell != null)
+-						fields |= OrderFields.TargetIsCell;
++						fields |= OrderFields.TargetIncludesCell;
+
+ 					w.Write((short)fields);
+
+@@ -369,14 +377,25 @@ public byte[] Serialize()
+ 								w.Write(Target.FrozenActor.Viewer.PlayerActor.ActorID);
+ 								w.Write(Target.FrozenActor.ID);
+ 								break;
+-							case TargetType.Terrain:
+-								if (fields.HasField(OrderFields.TargetIsCell))
++							case TargetType.TerrainCell:
++								if (fields.HasField(OrderFields.TargetIncludesCell))
+ 								{
+ 									w.Write(Target.SerializableCell.Value);
+ 									w.Write((byte)Target.SerializableSubCell);
+ 								}
+-								else
++
++								break;
++							case TargetType.TerrainCellPos:
++								if (fields.HasField(OrderFields.TargetIncludesCell))
++								{
++									w.Write(Target.SerializableCell.Value);
++									w.Write((byte)Target.SerializableSubCell);
+ 									w.Write(Target.SerializablePos);
++								}
++
++								break;
++							case TargetType.TerrainPos:
++								w.Write(Target.SerializablePos);
+ 								break;
+ 						}
+ 					}
+diff --git a/OpenRA.Game/Orders/UnitOrderGenerator.cs b/OpenRA.Game/Orders/UnitOrderGenerator.cs
+index f10c2252a3..84542ec7d1 100644
+--- a/OpenRA.Game/Orders/UnitOrderGenerator.cs
++++ b/OpenRA.Game/Orders/UnitOrderGenerator.cs
+@@ -40,13 +40,13 @@ static Target TargetForInput(World world, CPos cell, int2 worldPixel, MouseInput
+ 			if (frozen != null)
+ 				return Target.FromFrozenActorWithTerrainPos(frozen, terrainPos);
+
+-			return Target.FromCell(world, cell);
++			return Target.FromCellWithTerrainPos(cell, SubCell.FullCell, terrainPos);
+ 		}
+
+ 		public virtual IEnumerable<Order> Order(World world, CPos cell, int2 worldPixel, MouseInput mi)
+ 		{
+			#if DEBUG
+-			System.Console.WriteLine("Order issued at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
+			#endif
+ 			var target = TargetForInput(world, cell, worldPixel, mi);
+			#if DEBUG
++			System.Console.WriteLine($"Order issued with targCenterPos {target.CenterPosition} at {(System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond)}");
+			#endif
+ 			var actorsAt = world.ActorMap.GetActorsAt(cell).ToList();
+ 			var orders = world.Selection.Actors
+ 				.Select(a => OrderForUnit(a, target, actorsAt, cell, mi))
+@@ -178,10 +178,13 @@ static UnitOrderResult OrderForUnit(Actor self, Target target, List<Actor> actor
+ 					var localModifiers = modifiers;
+ 					string cursor = null;
+ 					if (o.Order.CanTarget(self, target, actorsAt, ref localModifiers, ref cursor))
++					{
+ 						return new UnitOrderResult(self, o.Order, o.Trait, cursor, target);
++					}
+ 				}
+
+ 				// No valid orders, so check for orders against the cell
++				System.Console.WriteLine($"Default case issued with default xy {xy}");
+ 				target = Target.FromCell(self.World, xy);
+ 			}
+
+diff --git a/OpenRA.Game/Sync.cs b/OpenRA.Game/Sync.cs
+index 40f3e389a1..2705228249 100644
+--- a/OpenRA.Game/Sync.cs
++++ b/OpenRA.Game/Sync.cs
+@@ -134,21 +134,23 @@ public static int HashPlayer(Player p)
+ 			return 0;
+ 		}
+
+-		public static int HashTarget(Target t)
++		public static int HashTarget(Target target)
+ 		{
+-			switch (t.Type)
++			switch (target.Type)
+ 			{
+ 				case TargetType.Actor:
+-					return (int)(t.Actor.ActorID << 16) * 0x567;
++					return (int)(target.Actor.ActorID << 16) * 0x567;
+
+ 				case TargetType.FrozenActor:
+-					if (t.FrozenActor.Actor == null)
++					if (target.FrozenActor.Actor == null)
+ 						return 0;
+
+-					return (int)(t.FrozenActor.Actor.ActorID << 16) * 0x567;
++					return (int)(target.FrozenActor.Actor.ActorID << 16) * 0x567;
+
+-				case TargetType.Terrain:
+-					return HashUsingHashCode(t.CenterPosition);
++				case TargetType.TerrainCell:
++				case TargetType.TerrainCellPos:
++				case TargetType.TerrainPos:
++					return HashUsingHashCode(target.CenterPosition);
+
+ 				default:
+ 				case TargetType.Invalid:
+diff --git a/OpenRA.Game/Traits/Target.cs b/OpenRA.Game/Traits/Target.cs
+index ff106957f9..0190ca2baf 100644
+--- a/OpenRA.Game/Traits/Target.cs
++++ b/OpenRA.Game/Traits/Target.cs
+@@ -15,7 +15,8 @@
+
+ namespace OpenRA.Traits
+ {
+-	public enum TargetType : byte { Invalid, Actor, Terrain, FrozenActor }
++	public enum TargetType : byte { Invalid, Actor, TerrainCell, TerrainPos, TerrainCellPos, FrozenActor }
++
+ 	public readonly struct Target
+ 	{
+ 		public static readonly Target[] None = { };
+@@ -32,7 +33,7 @@ public enum TargetType : byte { Invalid, Actor, Terrain, FrozenActor }
+
+ 		Target(WPos terrainCenterPosition, WPos[] terrainPositions = null)
+ 		{
+-			type = TargetType.Terrain;
++			type = TargetType.TerrainPos;
+ 			this.terrainCenterPosition = terrainCenterPosition;
+ 			this.terrainPositions = terrainPositions ?? new[] { terrainCenterPosition };
+
+@@ -45,7 +46,7 @@ public enum TargetType : byte { Invalid, Actor, Terrain, FrozenActor }
+
+ 		Target(World w, CPos c, SubCell subCell)
+ 		{
+-			type = TargetType.Terrain;
++			type = TargetType.TerrainCell;
+ 			terrainCenterPosition = w.Map.CenterOfSubCell(c, subCell);
+ 			terrainPositions = new[] { terrainCenterPosition };
+ 			cell = c;
+@@ -56,6 +57,19 @@ public enum TargetType : byte { Invalid, Actor, Terrain, FrozenActor }
+ 			generation = 0;
+ 		}
+
++		Target(CPos c, SubCell subCell, WPos terrainCenterPosition)
++		{
++			type = TargetType.TerrainCellPos;
++			this.terrainCenterPosition = terrainCenterPosition;
++			terrainPositions = new[] { terrainCenterPosition };
++			cell = c;
++			this.subCell = subCell;
++
++			actor = null;
++			frozen = null;
++			generation = 0;
++		}
++
+ 		Target(Actor a)
+ 		{
+ 			type = TargetType.Actor;
+@@ -109,6 +123,12 @@ public enum TargetType : byte { Invalid, Actor, Terrain, FrozenActor }
+ 		public static Target FromPos(WPos p) { return new Target(p); }
+ 		public static Target FromTargetPositions(in Target t) { return new Target(t.CenterPosition, t.Positions.ToArray()); }
+ 		public static Target FromCell(World w, CPos c, SubCell subCell = SubCell.FullCell) { return new Target(w, c, subCell); }
++
++		public static Target FromCellWithTerrainPos(CPos c, SubCell subCell = SubCell.FullCell, WPos terrainPos = default)
++		{
++			return new Target(c, subCell, terrainPos);
++		}
++
+ 		public static Target FromActor(Actor a) { return a != null ? new Target(a) : Invalid; }
+ 		public static Target FromActorWithTerrainPos(Actor a, WPos terrainPos = default) { return a != null ? new Target(a, terrainPos) : Invalid; }
+ 		public static Target FromFrozenActor(FrozenActor fa) { return new Target(fa); }
+@@ -150,7 +170,9 @@ public bool IsValidFor(Actor targeter)
+ 				case TargetType.Invalid:
+ 					return false;
+ 				default:
+-				case TargetType.Terrain:
++				case TargetType.TerrainCell:
++				case TargetType.TerrainPos:
++				case TargetType.TerrainCellPos:
+ 					return true;
+ 			}
+ 		}
+@@ -185,13 +207,16 @@ public WPos CenterPosition
+ 		{
+ 			get
+ 			{
++				System.Console.WriteLine($"Target type is : {Type}");
+ 				switch (Type)
+ 				{
+ 					case TargetType.Actor:
+ 						return actor.CenterPosition;
+ 					case TargetType.FrozenActor:
+ 						return frozen.CenterPosition;
+-					case TargetType.Terrain:
++					case TargetType.TerrainCell:
++					case TargetType.TerrainPos:
++					case TargetType.TerrainCellPos:
+ 						return terrainCenterPosition;
+ 					default:
+ 					case TargetType.Invalid:
+@@ -213,7 +238,7 @@ public IEnumerable<WPos> Positions
+ 					case TargetType.FrozenActor:
+ 						// TargetablePositions may be null if it is Invalid
+ 						return frozen.TargetablePositions ?? NoPositions;
+-					case TargetType.Terrain:
++					case TargetType.TerrainCell:
+ 						return terrainPositions;
+ 					default:
+ 					case TargetType.Invalid:
+@@ -231,6 +256,23 @@ public bool IsInRange(WPos origin, WDist range)
+ 			return Positions.Any(t => (t - origin).HorizontalLengthSquared <= range.LengthSquared);
+ 		}
+
++		public bool SelfIsTerrainType() { return IsTerrainType(type); }
++
++		public static bool IsTerrainType(TargetType targType)
++		{
++			return (targType == TargetType.TerrainCell ||
++					targType == TargetType.TerrainPos ||
++					targType == TargetType.TerrainCellPos);
++		}
++
++		public bool SelfIsTerrainCellType() { return IsTerrainCellType(type); }
++
++		public static bool IsTerrainCellType(TargetType targType)
++		{
++			return (targType == TargetType.TerrainCell ||
++					targType == TargetType.TerrainCellPos);
++		}
++
+ 		public override string ToString()
+ 		{
+ 			switch (Type)
+@@ -241,7 +283,9 @@ public override string ToString()
+ 				case TargetType.FrozenActor:
+ 					return frozen.ToString();
+
+-				case TargetType.Terrain:
++				case TargetType.TerrainCell:
++				case TargetType.TerrainPos:
++				case TargetType.TerrainCellPos:
+ 					return terrainCenterPosition.ToString();
+
+ 				default:
+diff --git a/OpenRA.Mods.Cnc/Activities/LeapAttack.cs b/OpenRA.Mods.Cnc/Activities/LeapAttack.cs
+index c0c806e561..48214d1b78 100644
+--- a/OpenRA.Mods.Cnc/Activities/LeapAttack.cs
++++ b/OpenRA.Mods.Cnc/Activities/LeapAttack.cs
+@@ -51,7 +51,7 @@ public LeapAttack(Actor self, in Target target, bool allowMovement, bool forceAt
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-			    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++			    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 			{
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 				lastVisibleMinRange = attack.GetMinimumRangeVersusTarget(target);
+diff --git a/OpenRA.Mods.Cnc/Traits/Minelayer.cs b/OpenRA.Mods.Cnc/Traits/Minelayer.cs
+index 48375d96d1..b7e1d0637e 100644
+--- a/OpenRA.Mods.Cnc/Traits/Minelayer.cs
++++ b/OpenRA.Mods.Cnc/Traits/Minelayer.cs
+@@ -363,7 +363,7 @@ public BeginMinefieldOrderTargeter(string cursor)
+
+ 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (target.Type != TargetType.Terrain)
++				if (!target.SelfIsTerrainType())
+ 					return false;
+
+ 				var location = self.World.Map.CellContaining(target.CenterPosition);
+diff --git a/OpenRA.Mods.Common/Activities/Air/Fly.cs b/OpenRA.Mods.Common/Activities/Air/Fly.cs
+index 4c3c298282..8845818149 100644
+--- a/OpenRA.Mods.Common/Activities/Air/Fly.cs
++++ b/OpenRA.Mods.Common/Activities/Air/Fly.cs
+@@ -46,7 +46,7 @@ public Fly(Actor self, in Target t, WPos? initialTargetPosition = null, Color? t
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-			    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++			    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 			else if (initialTargetPosition.HasValue)
+ 				lastVisibleTarget = Target.FromPos(initialTargetPosition.Value);
+diff --git a/OpenRA.Mods.Common/Activities/Air/FlyAttack.cs b/OpenRA.Mods.Common/Activities/Air/FlyAttack.cs
+index fb8c3b748b..2845024d5b 100644
+--- a/OpenRA.Mods.Common/Activities/Air/FlyAttack.cs
++++ b/OpenRA.Mods.Common/Activities/Air/FlyAttack.cs
+@@ -53,7 +53,7 @@ public FlyAttack(Actor self, AttackSource source, in Target target, bool forceAt
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-				|| target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++				|| target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 			{
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 				lastVisibleMaximumRange = attackAircraft.GetMaximumRangeVersusTarget(target);
+diff --git a/OpenRA.Mods.Common/Activities/Air/FlyFollow.cs b/OpenRA.Mods.Common/Activities/Air/FlyFollow.cs
+index eeaf07be58..892bf5dc6b 100644
+--- a/OpenRA.Mods.Common/Activities/Air/FlyFollow.cs
++++ b/OpenRA.Mods.Common/Activities/Air/FlyFollow.cs
+@@ -40,7 +40,7 @@ public class FlyFollow : Activity
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-			    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++			    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 			else if (initialTargetPosition.HasValue)
+ 				lastVisibleTarget = Target.FromPos(initialTargetPosition.Value);
+diff --git a/OpenRA.Mods.Common/Activities/Air/Land.cs b/OpenRA.Mods.Common/Activities/Air/Land.cs
+index 556ac899b9..9fc43b558b 100644
+--- a/OpenRA.Mods.Common/Activities/Air/Land.cs
++++ b/OpenRA.Mods.Common/Activities/Air/Land.cs
+@@ -114,7 +114,7 @@ public override bool Tick(Actor self)
+ 				return true;
+
+ 			// Look for free landing cell
+-			if (target.Type == TargetType.Terrain && !landingInitiated)
++			if (target.Type == TargetType.TerrainCell && !landingInitiated)
+ 			{
+ 				var newLocation = aircraft.FindLandingLocation(landingCell, landRange);
+
+diff --git a/OpenRA.Mods.Common/Activities/Attack.cs b/OpenRA.Mods.Common/Activities/Attack.cs
+index 685074bbb3..ddcba79589 100644
+--- a/OpenRA.Mods.Common/Activities/Attack.cs
++++ b/OpenRA.Mods.Common/Activities/Attack.cs
+@@ -61,7 +61,7 @@ public Attack(Actor self, in Target target, bool allowMovement, bool forceAttack
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-			    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++			    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 			{
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+
+diff --git a/OpenRA.Mods.Common/Activities/Move/Follow.cs b/OpenRA.Mods.Common/Activities/Move/Follow.cs
+index bee5a9bc49..fa5f12c70c 100644
+--- a/OpenRA.Mods.Common/Activities/Move/Follow.cs
++++ b/OpenRA.Mods.Common/Activities/Move/Follow.cs
+@@ -40,7 +40,7 @@ public class Follow : Activity
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-			    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++			    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 			else if (initialTargetPosition.HasValue)
+ 				lastVisibleTarget = Target.FromPos(initialTargetPosition.Value);
+diff --git a/OpenRA.Mods.Common/Activities/Move/MoveAdjacentTo.cs b/OpenRA.Mods.Common/Activities/Move/MoveAdjacentTo.cs
+index f6a68a1d1a..2a258c7fd5 100644
+--- a/OpenRA.Mods.Common/Activities/Move/MoveAdjacentTo.cs
++++ b/OpenRA.Mods.Common/Activities/Move/MoveAdjacentTo.cs
+@@ -45,7 +45,7 @@ public MoveAdjacentTo(Actor self, in Target target, WPos? initialTargetPosition
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-			    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++			    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 			{
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 				lastVisibleTargetLocation = self.World.Map.CellContaining(target.CenterPosition);
+diff --git a/OpenRA.Mods.Common/Activities/Move/MoveOffGrid.cs b/OpenRA.Mods.Common/Activities/Move/MoveOffGrid.cs
+index 200ba38d2a..cabef9bfd3 100644
+--- a/OpenRA.Mods.Common/Activities/Move/MoveOffGrid.cs
++++ b/OpenRA.Mods.Common/Activities/Move/MoveOffGrid.cs
+@@ -47,7 +47,7 @@ public MoveOffGrid(Actor self, in Target t, WPos? initialTargetPosition = null,
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-				|| target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++				|| target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 			else if (initialTargetPosition.HasValue)
+ 				lastVisibleTarget = Target.FromPos(initialTargetPosition.Value);
+diff --git a/OpenRA.Mods.Common/Activities/Move/MoveOffGridFollow.cs b/OpenRA.Mods.Common/Activities/Move/MoveOffGridFollow.cs
+index d2c6c44ad7..3bfd60d011 100644
+--- a/OpenRA.Mods.Common/Activities/Move/MoveOffGridFollow.cs
++++ b/OpenRA.Mods.Common/Activities/Move/MoveOffGridFollow.cs
+@@ -40,7 +40,7 @@ public class MoveOffGridFollow : Activity
+ 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 			// Moving to any position (even if quite stale) is still better than immediately giving up
+ 			if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-			    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++			    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainType())
+ 				lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 			else if (initialTargetPosition.HasValue)
+ 				lastVisibleTarget = Target.FromPos(initialTargetPosition.Value);
+diff --git a/OpenRA.Mods.Common/Traits/Air/Aircraft.cs b/OpenRA.Mods.Common/Traits/Air/Aircraft.cs
+index cb3f6d3b92..492b9adb1f 100644
+--- a/OpenRA.Mods.Common/Traits/Air/Aircraft.cs
++++ b/OpenRA.Mods.Common/Traits/Air/Aircraft.cs
+@@ -1286,7 +1286,8 @@ public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> a
+
+ 			public virtual bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (target.Type != TargetType.Terrain || (aircraft.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
++				if (!target.SelfIsTerrainType() ||
++					(aircraft.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+ 					return false;
+
+ 				var location = self.World.Map.CellContaining(target.CenterPosition);
+diff --git a/OpenRA.Mods.Common/Traits/Attack/AttackBase.cs b/OpenRA.Mods.Common/Traits/Attack/AttackBase.cs
+index 3aae012c30..2031b26321 100644
+--- a/OpenRA.Mods.Common/Traits/Attack/AttackBase.cs
++++ b/OpenRA.Mods.Common/Traits/Attack/AttackBase.cs
+@@ -360,26 +360,26 @@ public WDist GetMaximumRangeVersusTarget(in Target target)
+ 		}
+
+ 		// Enumerates all armaments, that this actor possesses, that can be used against Target t
+-		public IEnumerable<Armament> ChooseArmamentsForTarget(Target t, bool forceAttack)
++		public IEnumerable<Armament> ChooseArmamentsForTarget(Target target, bool forceAttack)
+ 		{
+ 			// If force-fire is not used, and the target requires force-firing or the target is
+ 			// terrain or invalid, no armaments can be used
+-			if (!forceAttack && (t.Type == TargetType.Terrain || t.Type == TargetType.Invalid || t.RequiresForceFire))
++			if (!forceAttack && (target.SelfIsTerrainType() || target.Type == TargetType.Invalid || target.RequiresForceFire))
+ 				return Enumerable.Empty<Armament>();
+
+ 			// Get target's owner; in case of terrain or invalid target there will be no problems
+ 			// with owner == null since forceFire will have to be true in this part of the method
+ 			// (short-circuiting in the logical expression below)
+ 			Player owner = null;
+-			if (t.Type == TargetType.FrozenActor)
+-				owner = t.FrozenActor.Owner;
+-			else if (t.Type == TargetType.Actor)
+-				owner = t.Actor.Owner;
++			if (target.Type == TargetType.FrozenActor)
++				owner = target.FrozenActor.Owner;
++			else if (target.Type == TargetType.Actor)
++				owner = target.Actor.Owner;
+
+ 			return Armaments.Where(a =>
+ 				!a.IsTraitDisabled
+ 				&& (owner == null || (forceAttack ? a.Info.ForceTargetRelationships : a.Info.TargetRelationships).HasRelationship(self.Owner.RelationshipWith(owner)))
+-				&& a.Weapon.IsValidAgainst(t, self.World, self));
++				&& a.Weapon.IsValidAgainst(target, self.World, self));
+ 		}
+
+ 		public void AttackTarget(in Target target, AttackSource source, bool queued, bool allowMove, bool forceAttack = false, Color? targetLineColor = null)
+@@ -512,7 +512,8 @@ public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget,
+ 					case TargetType.Actor:
+ 					case TargetType.FrozenActor:
+ 						return CanTargetActor(self, target, ref modifiers, ref cursor);
+-					case TargetType.Terrain:
++					case TargetType.TerrainCell:
++					case TargetType.TerrainCellPos:
+ 						return CanTargetLocation(self, self.World.Map.CellContaining(target.CenterPosition), othersAtTarget, modifiers, ref cursor);
+ 					default:
+ 						return false;
+diff --git a/OpenRA.Mods.Common/Traits/Attack/AttackFollow.cs b/OpenRA.Mods.Common/Traits/Attack/AttackFollow.cs
+index f2f8e6c7eb..4f93a9bcff 100644
+--- a/OpenRA.Mods.Common/Traits/Attack/AttackFollow.cs
++++ b/OpenRA.Mods.Common/Traits/Attack/AttackFollow.cs
+@@ -241,7 +241,7 @@ public AttackActivity(Actor self, in Target target, bool allowMove, bool forceAt
+ 				// The target may become hidden between the initial order request and the first tick (e.g. if queued)
+ 				// Moving to any position (even if quite stale) is still better than immediately giving up
+ 				if ((target.Type == TargetType.Actor && target.Actor.CanBeViewedByPlayer(self.Owner))
+-				    || target.Type == TargetType.FrozenActor || target.Type == TargetType.Terrain)
++				    || target.Type == TargetType.FrozenActor || target.SelfIsTerrainCellType())
+ 				{
+ 					lastVisibleTarget = Target.FromPos(target.CenterPosition);
+ 					lastVisibleMaximumRange = attack.GetMaximumRangeVersusTarget(target);
+diff --git a/OpenRA.Mods.Common/Traits/Buildings/RallyPoint.cs b/OpenRA.Mods.Common/Traits/Buildings/RallyPoint.cs
+index 37a0abf502..66caff4767 100644
+--- a/OpenRA.Mods.Common/Traits/Buildings/RallyPoint.cs
++++ b/OpenRA.Mods.Common/Traits/Buildings/RallyPoint.cs
+@@ -144,7 +144,7 @@ public RallyPointOrderTargeter(RallyPointInfo info)
+
+ 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (target.Type != TargetType.Terrain)
++				if (!target.SelfIsTerrainType())
+ 					return false;
+
+ 				IsQueued = modifiers.HasModifier(TargetModifiers.ForceQueue);
+diff --git a/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoAircraft.cs b/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoAircraft.cs
+index c60d1b6bd5..0d30b764e8 100644
+--- a/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoAircraft.cs
++++ b/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoAircraft.cs
+@@ -202,7 +202,7 @@ public AircraftMoveOrderTargeter(Actor self, TransformsIntoAircraft aircraft)
+
+ 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (target.Type != TargetType.Terrain || (aircraft.Info.RequiresForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
++				if (!target.SelfIsTerrainCellType() || (aircraft.Info.RequiresForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+ 					return false;
+
+ 				var location = self.World.Map.CellContaining(target.CenterPosition);
+diff --git a/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoMobile.cs b/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoMobile.cs
+index 9c63ca73a2..20a1980c08 100644
+--- a/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoMobile.cs
++++ b/OpenRA.Mods.Common/Traits/Buildings/TransformsIntoMobile.cs
+@@ -190,7 +190,7 @@ public MoveOrderTargeter(Actor self, TransformsIntoMobile mobile)
+
+ 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (rejectMove || target.Type != TargetType.Terrain || (mobile.Info.RequiresForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
++				if (rejectMove || target.Type != TargetType.TerrainCell || (mobile.Info.RequiresForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+ 					return false;
+
+ 				var location = self.World.Map.CellContaining(target.CenterPosition);
+diff --git a/OpenRA.Mods.Common/Traits/Conditions/GrantConditionOnAttack.cs b/OpenRA.Mods.Common/Traits/Conditions/GrantConditionOnAttack.cs
+index 79dfb729a4..7047dcac06 100644
+--- a/OpenRA.Mods.Common/Traits/Conditions/GrantConditionOnAttack.cs
++++ b/OpenRA.Mods.Common/Traits/Conditions/GrantConditionOnAttack.cs
+@@ -113,7 +113,7 @@ bool TargetChanged(in Target lastTarget, in Target target)
+ 				if (lastTarget.FrozenActor != target.FrozenActor)
+ 					return true;
+
+-			if (lastTarget.Type == TargetType.Terrain && target.Type == TargetType.Terrain)
++			if (lastTarget.SelfIsTerrainType() && target.SelfIsTerrainType())
+ 				if (lastTarget.CenterPosition != target.CenterPosition)
+ 					return true;
+
+diff --git a/OpenRA.Mods.Common/Traits/Harvester.cs b/OpenRA.Mods.Common/Traits/Harvester.cs
+index ae01dfe09d..a57ad5976f 100644
+--- a/OpenRA.Mods.Common/Traits/Harvester.cs
++++ b/OpenRA.Mods.Common/Traits/Harvester.cs
+@@ -393,7 +393,7 @@ class HarvestOrderTargeter : IOrderTargeter
+
+ 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (target.Type != TargetType.Terrain)
++				if (target.SelfIsTerrainType())
+ 					return false;
+
+ 				if (modifiers.HasModifier(TargetModifiers.ForceMove))
+diff --git a/OpenRA.Mods.Common/Traits/Mobile.cs b/OpenRA.Mods.Common/Traits/Mobile.cs
+index b1a6d5ac3f..6cd087f6dd 100644
+--- a/OpenRA.Mods.Common/Traits/Mobile.cs
++++ b/OpenRA.Mods.Common/Traits/Mobile.cs
+@@ -1002,7 +1002,7 @@ public MoveOrderTargeter(Actor self, Mobile unit)
+
+ 			public bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (rejectMove || target.Type != TargetType.Terrain || (mobile.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
++				if (rejectMove || target.SelfIsTerrainCellType() || (mobile.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+ 					return false;
+
+ 				var location = self.World.Map.CellContaining(target.CenterPosition);
+diff --git a/OpenRA.Mods.Common/Traits/MobileOffGrid.cs b/OpenRA.Mods.Common/Traits/MobileOffGrid.cs
+index dfba88a891..7f1a0e3877 100644
+--- a/OpenRA.Mods.Common/Traits/MobileOffGrid.cs
++++ b/OpenRA.Mods.Common/Traits/MobileOffGrid.cs
+@@ -469,10 +469,8 @@ protected override void Created(Actor self)
+ 			rearmable = self.TraitOrDefault<Rearmable>();
+ 			speedModifiers = self.TraitsImplementing<ISpeedModifier>().ToArray().Select(sm => sm.GetSpeedModifier());
+ 			cachedPosition = self.CenterPosition;
+-			notifyMoving = self.TraitsImplementing<INotifyMoving>().ToArray();
+ 			positionOffsets = self.TraitsImplementing<IAircraftCenterPositionOffset>().ToArray();
+ 			overrideAircraftLanding = self.TraitOrDefault<IOverrideAircraftLanding>();
+-			notifyCenterPositionChanged = self.TraitsImplementing<INotifyCenterPositionChanged>().ToArray();
+
+ 			base.Created(self);
+ 		}
+@@ -527,6 +525,10 @@ protected virtual void Tick(Actor self)
+ 				if (Info.Pitch != WAngle.Zero && Pitch != WAngle.Zero)
+ 					Pitch = Util.TickFacing(Pitch, WAngle.Zero, Info.PitchSpeed);
+ 			}
++
++			// Update unit's cell as it moves
++			var cell = self.World.Map.CellContaining(CenterPosition);
++			SetLocation(cell, SubCell.FullCell, cell, SubCell.FullCell);
+ 		}
+
+ 		void INotifyAddedToWorld.AddedToWorld(Actor self)
+@@ -612,17 +614,6 @@ static bool IsMovable(Actor otherActor)
+ 			return true;
+ 		}
+
+-		public bool IsLeaving()
+-		{
+-			if (CurrentMovementTypes.HasMovementType(MovementType.Horizontal))
+-				return true;
+-
+-			if (CurrentMovementTypes.HasMovementType(MovementType.Turn))
+-				return TurnToMove;
+-
+-			return false;
+-		}
+-
+ 		public bool CanInteractWithGroundLayer(Actor self)
+ 		{
+ 			// TODO: Think about extending this to support arbitrary layer-layer checks
+@@ -1198,15 +1189,6 @@ public IEnumerable<IOrderTargeter> Orders
+ 			}
+ 		}
+
+-		// Note: Returns a valid order even if the unit can't move to the target
+-		/*Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
+-		{
+-			if (order is MoveOrderTargeter)
+-				return new Order("Move", self, target, queued);
+-
+-			return null;
+-		}*/
+-
+ 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
+ 		{
+ 			if (!IsTraitDisabled &&
+@@ -1216,33 +1198,6 @@ public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool
+ 			return null;
+ 		}
+
+-		/*void IResolveOrder.ResolveOrder(Actor self, Order order)
+-		{
+-			System.Console.WriteLine("ResolveOrder called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
+-			if (IsTraitDisabled)
+-				return;
+-
+-			if (order.OrderString == "Move")
+-			{
+-				var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
+-				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
+-					return;
+-
+-				//if (!order.Queued)
+-				//	UnReserve();
+-
+-				var target = Target.FromCell(self.World, cell);
+-
+-				self.QueueActivity(order.Queued, new MoveOffGrid(self, target, WDist.FromCells(8), targetLineColor: Info.TargetLineColor));
+-				self.ShowTargetLines();
+-			}
+-
+-			// TODO: This should only cancel activities queued by this trait
+-			else if (order.OrderString == "Stop")
+-				self.CancelActivity();
+-			else if (order.OrderString == "Scatter")
+-				Nudge(self);
+-		}*/
+ 		public void ResolveOrder(Actor self, Order order)
+ 		{
+ 			if (IsTraitDisabled)
+@@ -1251,18 +1206,18 @@ public void ResolveOrder(Actor self, Order order)
+ 			var orderString = order.OrderString;
+ 			if (orderString == "Move")
+ 			{
+-				var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
+-				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
++				/*var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));*/
++				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(order.Target.CenterPosition))
+ 					return;
+
+ 				/*if (!order.Queued)
+ 					UnReserve();*/
+
+-				var target = Target.FromCell(self.World, cell);
++				var target = Target.FromPos(order.Target.CenterPosition);
+
+ 				// TODO: this should scale with unit selection group size.
+ 				self.QueueActivity(order.Queued, new MoveOffGrid(self, target, WDist.FromCells(8), targetLineColor: Info.TargetLineColor));
+-				System.Console.WriteLine("ResolveOrder() with 'Move' called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
++				System.Console.WriteLine("ResolveOrder() with 'Move' to (" + order.Target.CenterPosition.X.ToString() + "," + order.Target.CenterPosition.Y.ToString() + ") called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
+ 				self.ShowTargetLines();
+ 			}
+ 			else if (orderString == "Land")
+@@ -1443,7 +1398,7 @@ public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> a
+
+ 			public virtual bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+ 			{
+-				if (target.Type != TargetType.Terrain || (mobileOffGrid.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
++				if (!target.SelfIsTerrainType() || (mobileOffGrid.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+ 					return false;
+
+ 				var location = self.World.Map.CellContaining(target.CenterPosition);
+diff --git a/OpenRA.Mods.Common/Traits/World/OrderEffects.cs b/OpenRA.Mods.Common/Traits/World/OrderEffects.cs
+index 3992a08d53..759585d009 100644
+--- a/OpenRA.Mods.Common/Traits/World/OrderEffects.cs
++++ b/OpenRA.Mods.Common/Traits/World/OrderEffects.cs
+@@ -93,7 +93,9 @@ bool INotifyOrderIssued.OrderIssued(World world, Target target)
+ 					return true;
+ 				}
+
+-				case TargetType.Terrain:
++				case TargetType.TerrainCell:
++				case TargetType.TerrainCellPos:
++				case TargetType.TerrainPos:
+ 				{
+ 					world.AddFrameEndTask(w => w.Add(new SpriteAnnotation(target.CenterPosition, world, info.TerrainFlashImage, info.TerrainFlashSequence, info.TerrainFlashPalette)));
+ 					return true;
+diff --git a/devdocs/PathCreation_TimeDeltaCalculator_newnewnetcode.xlsx b/devdocs/PathCreation_TimeDeltaCalculator_newnewnetcode.xlsx
+index 77fd044c3d702b52d49691f047675a347152adf8..27dbe58ba15a60021f82dc0ec8ccab04f30a0597 100644
+GIT binary patch
+delta 26829
+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
+
+delta 27046
+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
+
+diff --git a/mods/ra/rules/defaults.yaml b/mods/ra/rules/defaults.yaml
+index acf32896b4..46513e05eb 100644
+--- a/mods/ra/rules/defaults.yaml
++++ b/mods/ra/rules/defaults.yaml
+@@ -244,8 +244,6 @@
+ 	OwnerLostAction:
+ 		Action: Kill
+ 	UpdatesPlayerStatistics:
+-    MobileOffGrid:
+-        Locomotor: wheeled
+ 	Mobile:
+ 		PauseOnCondition: being-captured
+ 		Locomotor: wheeled
+diff --git a/mods/ra/rules/vehicles.yaml b/mods/ra/rules/vehicles.yaml
+index d60479677d..b11bc7ea21 100644
+--- a/mods/ra/rules/vehicles.yaml
++++ b/mods/ra/rules/vehicles.yaml
+@@ -365,6 +365,7 @@ MCV:
+ 	Armor:
+ 		Type: Light
+     MobileOffGrid:
++        Locomotor: wheeled
+ 		CanHover: True
+ 		CruiseAltitude: 0
+ 		TurnSpeed: 80
+@@ -378,8 +379,9 @@ MCV:
+ 	-Mobile:
+ 		Speed: 60
+ 		Locomotor: heavywheeled
+-	RevealsShroud:
++	RevealsShroud@GAPGEN:
+ 		Range: 4c0
++		Type: GroundPosition
+ 	Transforms:
+ 		IntoActor: fact
+ 		Offset: -1,-1
+--
+2.32.0.windows.2
+
