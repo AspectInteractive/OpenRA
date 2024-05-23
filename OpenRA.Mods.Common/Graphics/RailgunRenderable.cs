@@ -22,16 +22,18 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly WDist helixRadius;
 		readonly int alpha;
 		readonly int ticks;
+		readonly int layer;
 
 		WAngle angle;
 
-		public RailgunHelixRenderable(WPos pos, int zOffset, Railgun railgun, RailgunInfo railgunInfo, int ticks)
+		public RailgunHelixRenderable(WPos pos, int zOffset, Railgun railgun, RailgunInfo railgunInfo, int ticks, int layer = 0)
 		{
 			Pos = pos;
 			ZOffset = zOffset;
 			this.railgun = railgun;
 			info = railgunInfo;
 			this.ticks = ticks;
+			this.layer = layer;
 
 			helixRadius = info.HelixRadius + new WDist(ticks * info.HelixRadiusDeltaPerTick);
 			alpha = (railgun.HelixColor.A + ticks * info.HelixAlphaDeltaPerTick).Clamp(0, 255);
@@ -40,10 +42,11 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public WPos Pos { get; }
 		public int ZOffset { get; }
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new RailgunHelixRenderable(Pos, newOffset, railgun, info, ticks); }
-		public IRenderable OffsetBy(in WVec vec) { return new RailgunHelixRenderable(Pos + vec, ZOffset, railgun, info, ticks); }
+		public IRenderable WithZOffset(int newOffset) { return new RailgunHelixRenderable(pos, newOffset, railgun, info, ticks, layer); }
+		public IRenderable OffsetBy(in WVec vec) { return new RailgunHelixRenderable(pos + vec, zOffset, railgun, info, ticks, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

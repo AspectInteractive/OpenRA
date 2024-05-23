@@ -18,24 +18,26 @@ namespace OpenRA.Mods.Common.Graphics
 	{
 		readonly Rectangle decorationBounds;
 		readonly Color color;
+		readonly int layer;
+		public SelectionBoxAnnotationRenderable(Actor actor, Rectangle decorationBounds, Color color, int layer = 0)
+			: this(actor.CenterPosition, decorationBounds, color, layer) { }
 
-		public SelectionBoxAnnotationRenderable(Actor actor, Rectangle decorationBounds, Color color)
-			: this(actor.CenterPosition, decorationBounds, color) { }
-
-		public SelectionBoxAnnotationRenderable(WPos pos, Rectangle decorationBounds, Color color)
+		public SelectionBoxAnnotationRenderable(WPos pos, Rectangle decorationBounds, Color color, int layer = 0)
 		{
 			Pos = pos;
 			this.decorationBounds = decorationBounds;
 			this.color = color;
+			this.layer = layer;
 		}
 
 		public WPos Pos { get; }
 
 		public int ZOffset => 0;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }
-		public IRenderable OffsetBy(in WVec vec) { return new SelectionBoxAnnotationRenderable(Pos + vec, decorationBounds, color); }
+		public IRenderable OffsetBy(in WVec vec) { return new SelectionBoxAnnotationRenderable(pos + vec, decorationBounds, color, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

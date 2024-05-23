@@ -24,9 +24,10 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly float width;
 		readonly Color borderColor;
 		readonly float borderWidth;
+		readonly int layer;
 
 		public DetectionCircleAnnotationRenderable(WPos centerPosition, WDist radius, int zOffset,
-			int lineTrails, WAngle trailSeparation, WAngle trailAngle, Color color, float width, Color borderColor, float borderWidth)
+			int lineTrails, WAngle trailSeparation, WAngle trailAngle, Color color, float width, Color borderColor, float borderWidth, int layer = 0)
 		{
 			Pos = centerPosition;
 			this.radius = radius;
@@ -38,22 +39,24 @@ namespace OpenRA.Mods.Common.Graphics
 			this.width = width;
 			this.borderColor = borderColor;
 			this.borderWidth = borderWidth;
+			this.layer = layer;
 		}
 
 		public WPos Pos { get; }
 		public int ZOffset { get; }
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset)
 		{
-			return new DetectionCircleAnnotationRenderable(Pos, radius, newOffset,
-				trailCount, trailSeparation, trailAngle, color, width, borderColor, borderWidth);
+			return new DetectionCircleAnnotationRenderable(centerPosition, radius, newOffset,
+				trailCount, trailSeparation, trailAngle, color, width, borderColor, borderWidth, layer);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
-			return new DetectionCircleAnnotationRenderable(Pos + vec, radius, ZOffset,
-				trailCount, trailSeparation, trailAngle, color, width, borderColor, borderWidth);
+			return new DetectionCircleAnnotationRenderable(centerPosition + vec, radius, zOffset,
+				trailCount, trailSeparation, trailAngle, color, width, borderColor, borderWidth, layer);
 		}
 
 		public IRenderable AsDecoration() { return this; }

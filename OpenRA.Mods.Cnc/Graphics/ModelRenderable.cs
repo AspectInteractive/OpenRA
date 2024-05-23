@@ -29,22 +29,24 @@ namespace OpenRA.Mods.Cnc.Graphics
 		readonly PaletteReference normalsPalette;
 		readonly PaletteReference shadowPalette;
 		readonly float scale;
-
+		readonly float alpha;
+		readonly float3 tint;
+		readonly TintModifiers tintModifiers;
+		readonly int layer;
 		public ModelRenderable(
 			ModelRenderer renderer, IEnumerable<ModelAnimation> models, WPos pos, int zOffset, in WRot camera, float scale,
 			in WRot lightSource, float[] lightAmbientColor, float[] lightDiffuseColor,
-			PaletteReference color, PaletteReference normals, PaletteReference shadow)
-			: this(renderer, models, pos, zOffset, camera, scale,
+			PaletteReference color, PaletteReference normals, PaletteReference shadow, int layer = 0)
+			: this(models, pos, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
 				color, normals, shadow, 1f,
-				float3.Ones, TintModifiers.None)
-		{ }
+				float3.Ones, TintModifiers.None, layer) { }
 
 		public ModelRenderable(
 			ModelRenderer renderer, IEnumerable<ModelAnimation> models, WPos pos, int zOffset, in WRot camera, float scale,
 			in WRot lightSource, float[] lightAmbientColor, float[] lightDiffuseColor,
 			PaletteReference color, PaletteReference normals, PaletteReference shadow,
-			float alpha, in float3 tint, TintModifiers tintModifiers)
+			float alpha, in float3 tint, TintModifiers tintModifiers, int layer = 0)
 		{
 			this.renderer = renderer;
 			this.models = models;
@@ -58,14 +60,16 @@ namespace OpenRA.Mods.Cnc.Graphics
 			Palette = color;
 			normalsPalette = normals;
 			shadowPalette = shadow;
-			Alpha = alpha;
-			Tint = tint;
-			TintModifiers = tintModifiers;
+			this.alpha = alpha;
+			this.tint = tint;
+			this.tintModifiers = tintModifiers;
+			this.layer = layer;
 		}
 
-		public WPos Pos { get; }
-		public PaletteReference Palette { get; }
-		public int ZOffset { get; }
+		public WPos Pos => pos;
+		public PaletteReference Palette => palette;
+		public int ZOffset => zOffset;
+		public int Layer => layer;
 		public bool IsDecoration => false;
 
 		public float Alpha { get; }
@@ -77,7 +81,7 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				newPalette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers);
+				newPalette, normalsPalette, shadowPalette, alpha, tint, tintModifiers, layer);
 		}
 
 		public IRenderable WithZOffset(int newOffset)
@@ -85,7 +89,7 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, newOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers);
+				palette, normalsPalette, shadowPalette, alpha, tint, tintModifiers, layer);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
@@ -93,7 +97,7 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos + vec, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers);
+				palette, normalsPalette, shadowPalette, alpha, tint, tintModifiers, layer);
 		}
 
 		public IRenderable AsDecoration() { return this; }
@@ -103,7 +107,7 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, newAlpha, Tint, TintModifiers);
+				palette, normalsPalette, shadowPalette, newAlpha, tint, tintModifiers, layer);
 		}
 
 		public IModifyableRenderable WithTint(in float3 newTint, TintModifiers newTintModifiers)
@@ -111,7 +115,7 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, newTint, newTintModifiers);
+				palette, normalsPalette, shadowPalette, alpha, newTint, newTintModifiers, layer);
 		}
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr)

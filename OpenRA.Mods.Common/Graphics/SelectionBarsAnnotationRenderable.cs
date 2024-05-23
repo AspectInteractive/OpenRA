@@ -19,19 +19,20 @@ namespace OpenRA.Mods.Common.Graphics
 	{
 		readonly Actor actor;
 		readonly Rectangle decorationBounds;
-
-		public SelectionBarsAnnotationRenderable(Actor actor, Rectangle decorationBounds, bool displayHealth, bool displayExtra)
-			: this(actor.CenterPosition, actor, decorationBounds)
+		readonly int layer;
+		public SelectionBarsAnnotationRenderable(Actor actor, Rectangle decorationBounds, bool displayHealth, bool displayExtra, int layer = 0)
+			: this(actor.CenterPosition, actor, decorationBounds, layer)
 		{
 			DisplayHealth = displayHealth;
 			DisplayExtra = displayExtra;
 		}
 
-		public SelectionBarsAnnotationRenderable(WPos pos, Actor actor, Rectangle decorationBounds)
+		public SelectionBarsAnnotationRenderable(WPos pos, Actor actor, Rectangle decorationBounds, int layer = 0)
 		{
 			Pos = pos;
 			this.actor = actor;
 			this.decorationBounds = decorationBounds;
+			this.layer = layer;
 		}
 
 		public WPos Pos { get; }
@@ -39,10 +40,11 @@ namespace OpenRA.Mods.Common.Graphics
 		public bool DisplayExtra { get; }
 
 		public int ZOffset => 0;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }
-		public IRenderable OffsetBy(in WVec vec) { return new SelectionBarsAnnotationRenderable(Pos + vec, actor, decorationBounds); }
+		public IRenderable OffsetBy(in WVec vec) { return new SelectionBarsAnnotationRenderable(pos + vec, actor, decorationBounds, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		void DrawExtraBars(float2 start, float2 end)

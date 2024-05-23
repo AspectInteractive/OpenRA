@@ -19,9 +19,9 @@ namespace OpenRA.Graphics
 		readonly int2 screenPos;
 		readonly float scale;
 		readonly float alpha;
-		readonly float rotation = 0f;
+		readonly int layer;
 
-		public UISpriteRenderable(Sprite sprite, WPos effectiveWorldPos, int2 screenPos, int zOffset, PaletteReference palette, float scale = 1f, float alpha = 1f, float rotation = 0f)
+		public UISpriteRenderable(Sprite sprite, WPos effectiveWorldPos, int2 screenPos, int zOffset, PaletteReference palette, float scale = 1f, float alpha = 1f, int layer = 0, float rotation = 0f)
 		{
 			this.sprite = sprite;
 			Pos = effectiveWorldPos;
@@ -31,6 +31,7 @@ namespace OpenRA.Graphics
 			this.scale = scale;
 			this.alpha = alpha;
 			this.rotation = rotation;
+			this.layer = layer;
 
 			// PERF: Remove useless palette assignments for RGBA sprites
 			// HACK: This is working around the fact that palettes are defined on traits rather than sequences
@@ -42,12 +43,14 @@ namespace OpenRA.Graphics
 		// Does not exist in the world, so a world positions don't make sense
 		public WPos Pos { get; }
 		public WVec Offset => WVec.Zero;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public PaletteReference Palette { get; }
 		public int ZOffset { get; }
 
-		public IPalettedRenderable WithPalette(PaletteReference newPalette) { return new UISpriteRenderable(sprite, Pos, screenPos, ZOffset, newPalette, scale, alpha, rotation); }
+		public IPalettedRenderable WithPalette(PaletteReference newPalette)
+		{ return new UISpriteRenderable(sprite, effectiveWorldPos, screenPos, zOffset, newPalette, scale, alpha, layer, rotation); }
 		public IRenderable WithZOffset(int newOffset) { return this; }
 		public IRenderable OffsetBy(in WVec vec) { return this; }
 		public IRenderable AsDecoration() { return this; }
