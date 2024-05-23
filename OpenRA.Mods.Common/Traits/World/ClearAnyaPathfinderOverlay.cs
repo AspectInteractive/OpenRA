@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
@@ -16,33 +17,25 @@ using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Traits;
+using static OpenRA.Mods.Common.Pathfinder.AnyaPathSearch;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	[TraitLocation(SystemActors.World)]
-	[Desc("Displays the CPos coordinates for each cell.")]
-	class CPosCoordsDebugOverlayInfo : TraitInfo
-	{
-		public readonly string Font = "TinyBold";
+	[TraitLocation(SystemActors.World | SystemActors.EditorWorld)]
+	[Desc("Renders a debug overlay of the Anya Pathfinder intervals and paths. Attach this to the world actor.")]
+	public class ClearAnyaPathfinderOverlayInfo : TraitInfo<ClearAnyaPathfinderOverlay> { }
 
-		public override object Create(ActorInitializer init) { return new CPosCoordsDebugOverlay(init.Self, this); }
-	}
-
-	class CPosCoordsDebugOverlay : IWorldLoaded, IChatCommand, IRenderAnnotations
+	public class ClearAnyaPathfinderOverlay : IWorldLoaded, IChatCommand
 	{
 		public readonly List<Command> Comms;
-
+		public Action ClearFunc;
 		public bool Enabled;
 
-		readonly SpriteFont font;
-
-		public CPosCoordsDebugOverlay(Actor self, CPosCoordsDebugOverlayInfo info)
+		public ClearAnyaPathfinderOverlay()
 		{
-			font = Game.Renderer.Fonts[info.Font];
 			Comms = new List<Command>()
 			{
-				new Command("cpos-coords", "toggles the cpos coordinates debug overlay.", true),
-				new Command("anyall", "toggles all anya pathfinder overlays.", false)
+				new Command("clr", "clears any existing anya pathfinder overlay intervals.", true)
 			};
 		}
 
@@ -60,32 +53,14 @@ namespace OpenRA.Mods.Common.Traits
 				if (comm.InHelp)
 					help.RegisterHelp(comm.Name, comm.Desc);
 			}
+
+			ClearFunc = () => w.WorldActor.TraitsImplementing<AnyaPathfinderOverlay>().FirstEnabledTraitOrDefault().ClearIntervals();
 		}
 
 		void IChatCommand.InvokeCommand(string name, string arg)
 		{
 			if (Comms.Where(comm => comm.Name == name).Any())
-				Enabled ^= true;
+				ClearFunc();
 		}
-
-		IEnumerable<IRenderable> IRenderAnnotations.RenderAnnotations(Actor self, WorldRenderer wr)
-		{
-			if (!Enabled)
-				yield break;
-
-			foreach (var uv in wr.Viewport.VisibleCellsInsideBounds.CandidateMapCoords)
-			{
-				if (self.World.ShroudObscures(uv))
-					continue;
-
-				var cell = uv.ToCPos(wr.World.Map);
-				var center = wr.World.Map.CenterOfCell(cell);
-				var color = Color.White;
-
-				yield return new TextAnnotationRenderable(font, center, 0, color, $"({cell.X},{cell.Y})");
-			}
-		}
-
-		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}
 }

@@ -156,7 +156,7 @@ namespace OpenRA.Mods.Common.Commands
 			world.IssueOrder(giveCashOrder);
 		}
 
-		static void Visibility(string arg, World world)
+		public static void Visibility(string arg, World world)
 		{
 			IssueDevCommand(world, "DevVisibility");
 		}

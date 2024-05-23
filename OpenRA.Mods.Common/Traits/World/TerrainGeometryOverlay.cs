@@ -25,12 +25,21 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TerrainGeometryOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
 	{
-		const string CommandName = "terrain-geometry";
+		public readonly List<Command> Comms;
 
 		[TranslationReference]
 		const string CommandDescription = "description-terrain-geometry-overlay";
 
 		public bool Enabled;
+
+		public TerrainGeometryOverlay()
+		{
+			Comms = new List<Command>()
+			{
+				new Command("terrain-geometry", "toggles the terrain geometry overlay.", true),
+				new Command("anyall", "toggles all anya pathfinder overlays.", false)
+			};
+		}
 
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
@@ -40,13 +49,17 @@ namespace OpenRA.Mods.Common.Traits
 			if (console == null || help == null)
 				return;
 
-			console.RegisterCommand(CommandName, this);
-			help.RegisterHelp(CommandName, CommandDescription);
+			foreach (var comm in Comms)
+			{
+				console.RegisterCommand(comm.Name, this);
+				if (comm.InHelp)
+					help.RegisterHelp(comm.Name, comm.Desc);
+			}
 		}
 
 		void IChatCommand.InvokeCommand(string name, string arg)
 		{
-			if (name == CommandName)
+			if (Comms.Where(comm => comm.Name == name).Any())
 				Enabled ^= true;
 		}
 
