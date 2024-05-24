@@ -550,9 +550,12 @@ namespace OpenRA.Mods.Common.Traits
 
 		public bool ActorIsAiming(Actor actor)
 		{
-			var actorAttacks = actor.TraitsImplementing<AttackFrontal>().ToArray().Where(Exts.IsTraitEnabled);
-			if (actorAttacks.Any())
-				return actorAttacks.FirstOrDefault().IsAiming;
+			if (!actor.IsDead)
+			{
+				var actorAttacks = actor.TraitsImplementing<AttackFrontal>().ToArray().Where(Exts.IsTraitEnabled);
+				if (actorAttacks.Any())
+					return actorAttacks.FirstOrDefault().IsAiming;
+			}
 			return false;
 		}
 
@@ -563,7 +566,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			foreach (var actor in nearbyActors)
 			{
-				if (actor != self)
+				if (!actor.IsDead && actor != self)
 				{
 					var actorMobileOGs = actor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
 					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
@@ -722,7 +725,7 @@ namespace OpenRA.Mods.Common.Traits
 				foreach (var destActor in destActorsWithinRange)
 				{
 					var destActorCenterPos = destActor.CenterPosition.XYToInt2();
-					if ((destActor.TraitsImplementing<Building>().Any() || destActor.TraitsImplementing<Mobile>().Any())
+					if (!destActor.IsDead && (destActor.TraitsImplementing<Building>().Any() || destActor.TraitsImplementing<Mobile>().Any())
 						 && !(self.CurrentActivity is ReturnToCellActivity))
 					{
 						var destShapes = destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
@@ -1067,6 +1070,7 @@ namespace OpenRA.Mods.Common.Traits
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
 			var groupedActors = self.World.Selection.Actors
+									.Where(a => !a.IsDead)
 									.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
 			return new MoveOffGrid(self, groupedActors, target, WDist.Zero, range, initialTargetPosition, targetLineColor);
 		}
@@ -1075,6 +1079,7 @@ namespace OpenRA.Mods.Common.Traits
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
 			var groupedActors = self.World.Selection.Actors
+									.Where(a => !a.IsDead)
 									.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
 			return new MoveOffGrid(self, groupedActors, target, minRange, maxRange, initialTargetPosition, targetLineColor);
 		}
@@ -1388,6 +1393,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				var target = Target.FromPos(order.Target.CenterPosition);
 				var groupedActors = self.World.Selection.Actors
+										.Where(a => !a.IsDead)
 										.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
 				self.QueueActivity(order.Queued, new MoveOffGrid(self, groupedActors, target, targetLineColor: Info.TargetLineColor));
 				#if DEBUG

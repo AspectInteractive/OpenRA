@@ -73,6 +73,7 @@ namespace OpenRA.Mods.Common.Activities
 		int maxThetaIters = 3;
 		WPos currPathTarget;
 		WPos lastPathTarget;
+		WPos FinalPathTarget => pathRemaining.Count > 0 ? pathRemaining.Last() : currPathTarget;
 
 		private void RequeueTargetAndSetCurrTo(WPos target)
 		{
@@ -280,7 +281,7 @@ namespace OpenRA.Mods.Common.Activities
 			var nearbyActorsSharingMove = GetNearbyActorsSharingMove(self, false);
 			var sharedMoveAvgDelta = WVec.Zero;
 			if (nearbyActorsSharingMove.Count >= 1)
-				sharedMoveAvgDelta = AvgOfVectors(GetNearbyActorsSharingMove(self, false)
+				sharedMoveAvgDelta = AvgOfVectors(GetNearbyActorsSharingMove(self, false).Where(a => !a.IsDead)
 										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
 										.Select(a => a.Delta).ToList());
 			else sharedMoveAvgDelta = Delta;
@@ -330,8 +331,8 @@ namespace OpenRA.Mods.Common.Activities
 			// For Attack Move, we stop when we are within firing range of the target
 			if (minRange != WDist.Zero || maxRange != WDist.Zero)
 			{
-				var insideMinRange = minRange.Length > 0 && PosInRange(currPathTarget, pos, minRange);
-				var insideMaxRange = maxRange.Length > 0 && PosInRange(currPathTarget, pos, maxRange);
+				var insideMinRange = minRange.Length > 0 && PosInRange(FinalPathTarget, pos, minRange);
+				var insideMaxRange = maxRange.Length > 0 && PosInRange(FinalPathTarget, pos, maxRange);
 				if (insideMaxRange && !insideMinRange)
 				{
 					EndingActions();
@@ -489,7 +490,7 @@ namespace OpenRA.Mods.Common.Activities
 			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, MaxRangeToTarget());
 			var actorsSharingMoveNearMe = new List<Actor>();
 			foreach (var actor in nearbyActors)
-				if ((actor != self || !excludeSelf) && actor.Owner == self.Owner && actorsSharingMove.Contains(actor) &&
+				if (!actor.IsDead && (actor != self || !excludeSelf) && actor.Owner == self.Owner && actorsSharingMove.Contains(actor) &&
 					!(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
 					actorsSharingMoveNearMe.Add(actor); // No need to check if MobileOffGrid exists since all actors in actorsSharingMove
 														// are moving
@@ -498,7 +499,8 @@ namespace OpenRA.Mods.Common.Activities
 
 		public List<WPos> CompletedTargetsOfActors(List<Actor> actorList)
 		{
-			var actorListMobileOGs = actorList.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault());
+			var actorListMobileOGs = actorList.Where(a => !a.IsDead)
+										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault());
 			var completedTargs = actorListMobileOGs.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
 			completedTargs = completedTargs.Union(actorListMobileOGs.Select(m => m.LastCompletedTarget)).ToList();
 			return completedTargs;
