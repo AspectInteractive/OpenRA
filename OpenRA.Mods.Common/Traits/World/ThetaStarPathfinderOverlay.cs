@@ -17,19 +17,19 @@ using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Traits;
-using static OpenRA.Mods.Common.Pathfinder.AnyaPathSearch;
+using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
 
 namespace OpenRA.Mods.Common.Traits
 {
 	[TraitLocation(SystemActors.World | SystemActors.EditorWorld)]
 	[Desc("Renders a debug overlay of the Anya Pathfinder intervals and paths. Attach this to the world actor.")]
-	public class AnyaPathfinderOverlayInfo : TraitInfo<AnyaPathfinderOverlay> { }
+	public class ThetaStarPathfinderOverlayInfo : TraitInfo<ThetaStarPathfinderOverlay> { }
 
-	public class AnyaPathfinderOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
+	public class ThetaStarPathfinderOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
 	{
 		public readonly List<Command> Comms;
 
-		private List<(Interval, Color)> intervalsWithColors = new List<(Interval, Color)>();
+		private List<(CCPos, Color)> pointsWithColors = new List<(CCPos, Color)>();
 		private List<List<WPos>> paths = new List<List<WPos>>();
 
 		public bool Enabled;
@@ -40,12 +40,12 @@ namespace OpenRA.Mods.Common.Traits
 		private float lineColorIncrement = 0.05F;
 		public Action<string> ToggleVisibility;
 
-		public AnyaPathfinderOverlay()
+		public ThetaStarPathfinderOverlay()
 		{
 			Comms = new List<Command>()
 			{
-				new Command("anya", "toggles the anya pathfinder overlay.", true),
-				new Command("anyall", "toggles all anya pathfinder overlays.", false)
+				new Command("theta", "toggles the theta star pathfinder overlay.", true),
+				new Command("thetall", "toggles all theta star pathfinder overlays.", true)
 			};
 		}
 
@@ -107,75 +107,47 @@ namespace OpenRA.Mods.Common.Traits
 			return linesToRender;
 		}
 
-		public static List<LineAnnotationRenderable> GetIntervalRenderableSet(Interval interval, int lineThickness, Color lineColor, int endPointRadius,
-																	int endPointThickness, Color endPointColor, World world)
-		{
-			var linesToRender = new List<LineAnnotationRenderable>();
-			Func<CCPos, WPos> pointUnpacker = cc => world.Map.WPosFromCCPos(cc);
-			Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderable(wpos1, wpos2,
-																			lineThickness, lineColor, lineColor,
-																			(endPointRadius, endPointThickness, endPointColor), 2));
-			GenericLinkedPointsFunc(interval.CCs, interval.CCs.Count, pointUnpacker, funcOnLinkedPoints);
-			return linesToRender;
-		}
-
-		/*public static List<LineAnnotationRenderable> GetIntervalRenderableSet(Interval interval, int lineThickness, Color lineColor, int endPointRadius,
-																	int endPointThickness, Color endPointColor, World world)
-		{
-			var linesToRender = new List<LineAnnotationRenderable>();
-			for (var i = 0; i < (interval.CCs.Count - 1); i++)
-			{
-				var iWPos = world.Map.WPosFromCCPos(interval.CCs[i]);
-				var iNextWPos = world.Map.WPosFromCCPos(interval.CCs[i + 1]);
-				linesToRender.Add(new LineAnnotationRenderable(iWPos, iNextWPos, lineThickness,
-														  lineColor, lineColor, (endPointRadius, endPointThickness, endPointColor), 2));
-			}
-
-			return linesToRender;
-		}*/
-
 		IEnumerable<IRenderable> IRenderAnnotations.RenderAnnotations(Actor self, WorldRenderer wr)
 		{
 			if (!Enabled)
 				yield break;
 
+			var pointRadius = 100;
+			var pointThickness = 3;
 			var lineThickness = 3;
 			var endPointRadius = 100;
-			var endPointThickness = lineThickness;
+			var endPointThickness = 3;
 
-			// Render Intervals
-			foreach (var (interval, color) in intervalsWithColors)
-			{
-				var linesToRender = GetIntervalRenderableSet(interval, lineThickness, color,
-															endPointRadius, endPointThickness, color, wr.World);
-				foreach (var line in linesToRender)
-					yield return line;
-			}
+			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
+				{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true, 2); };
+
+			// Render Points
+			foreach (var (point, color) in pointsWithColors)
+				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(point), color);
 
 			// Render Paths
 			var lineColor = Color.FromAhsv(pathHue, currSat, currLight);
 			foreach (var path in paths)
 			{
-				var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor,
-														endPointRadius, endPointThickness, lineColor);
+				var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
 				foreach (var line in linesToRender)
 					yield return line;
 			}
 		}
 
-		public void AddInterval(Interval interval)
+		public void AddPoint(CCPos cc)
 		{
 			currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon); // each interval has a new colour to show recency
-			// System.Console.WriteLine($"Writing Color: {currHue}, {currSat}, {currLight}");
-			intervalsWithColors.Add((interval, Color.FromAhsv(currHue, currSat, currLight)));
+			/* System.Console.WriteLine($"Writing Color: {currHue}, {currSat}, {currLight}"); */
+			pointsWithColors.Add((cc, Color.FromAhsv(currHue, currSat, currLight)));
 		}
 
-		public void RemoveInterval(Interval interval)
+		public void RemovePoint(CCPos cc)
 		{
-			foreach (var (currInterval, currColor) in intervalsWithColors)
+			foreach (var (currCC, currColor) in pointsWithColors)
 			{
-				if (currInterval == interval)
-					intervalsWithColors.Remove((currInterval, currColor));
+				if (currCC == cc)
+					pointsWithColors.Remove((currCC, currColor));
 			}
 		}
 
@@ -187,7 +159,7 @@ namespace OpenRA.Mods.Common.Traits
 					paths.Remove(currPath);
 		}
 
-		public void ClearIntervals() { intervalsWithColors.Clear(); }
+		public void ClearIntervals() { pointsWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
 
 		bool IRenderAnnotations.SpatiallyPartitionable => false;
