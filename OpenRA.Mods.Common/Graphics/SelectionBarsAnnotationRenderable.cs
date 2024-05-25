@@ -41,8 +41,6 @@ namespace OpenRA.Mods.Common.Graphics
 		public int ZOffset => 0;
 		public bool IsDecoration => true;
 
-		public int Layer { get; }
-
 		public IRenderable WithZOffset(int newOffset) { return this; }
 		public IRenderable OffsetBy(in WVec vec) { return new SelectionBarsAnnotationRenderable(Pos + vec, actor, decorationBounds); }
 		public IRenderable AsDecoration() { return this; }

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright (c) The OpenRA Developers and Contributors
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -15,51 +15,55 @@ using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Graphics
 {
-	public class UITextRenderable : IRenderable, IFinalizedRenderable
+	public class TextAnnotationRenderableWithZIndex : IRenderable, IFinalizedRenderable
 	{
 		readonly SpriteFont font;
-		readonly int2 screenPos;
+		readonly WPos pos;
+		readonly int zOffset;
 		readonly Color color;
 		readonly Color bgDark;
 		readonly Color bgLight;
 		readonly string text;
-
-		public UITextRenderable(SpriteFont font, WPos effectiveWorldPos, int2 screenPos, int zOffset, Color color, Color bgDark, Color bgLight, string text)
+		readonly int layer;
+		public TextAnnotationRenderableWithZIndex(SpriteFont font, WPos pos, int zOffset, Color color, Color bgDark, Color bgLight, string text, int layer = 0)
 		{
 			this.font = font;
-			Pos = effectiveWorldPos;
-			this.screenPos = screenPos;
-			ZOffset = zOffset;
+			this.pos = pos;
+			this.zOffset = zOffset;
 			this.color = color;
 			this.bgDark = bgDark;
 			this.bgLight = bgLight;
 			this.text = text;
+			this.layer = layer;
 		}
 
-		public UITextRenderable(SpriteFont font, WPos effectiveWorldPos, int2 screenPos, int zOffset, Color color, string text)
-			: this(font, effectiveWorldPos, screenPos, zOffset, color,
+		public TextAnnotationRenderableWithZIndex(SpriteFont font, WPos pos, int zOffset, Color color, string text, int layer = 0)
+			: this(font, pos, zOffset, color,
 				ChromeMetrics.Get<Color>("TextContrastColorDark"),
 				ChromeMetrics.Get<Color>("TextContrastColorLight"),
-				text)
+				text, layer)
 		{ }
 
-		public WPos Pos { get; }
-		public int ZOffset { get; }
+		public WPos Pos => pos;
+		public int ZOffset => zOffset;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new UITextRenderable(font, Pos, screenPos, ZOffset, color, text); }
-		public IRenderable OffsetBy(in WVec vec) { return new UITextRenderable(font, Pos + vec, screenPos, ZOffset, color, text); }
+		public IRenderable WithZOffset(int newOffset) { return new TextAnnotationRenderableWithZIndex(font, pos, zOffset, color, text, layer); }
+		public IRenderable OffsetBy(in WVec vec) { return new TextAnnotationRenderableWithZIndex(font, pos + vec, zOffset, color, text, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
+			var screenPos = wr.Viewport.WorldToViewPx(wr.ScreenPosition(pos)) - 0.5f * font.Measure(text).ToFloat2();
 			font.DrawTextWithContrast(text, screenPos, color, bgDark, bgLight, 1);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)
 		{
 			var size = font.Measure(text).ToFloat2();
+			var screenPos = wr.Viewport.WorldToViewPx(wr.ScreenPosition(pos));
 			Game.Renderer.RgbaColorRenderer.DrawRect(screenPos - 0.5f * size, screenPos + 0.5f * size, 1, Color.Red);
 		}
 

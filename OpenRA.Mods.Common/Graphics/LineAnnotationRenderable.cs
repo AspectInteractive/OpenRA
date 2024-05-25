@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
+ * Copyright (c) The OpenRA Developers and Contributors
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,7 +16,6 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class LineAnnotationRenderable : IRenderable, IFinalizedRenderable
 	{
-		readonly WPos start;
 		readonly WPos end;
 		readonly float width;
 		readonly Color startColor;
@@ -32,7 +31,7 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public LineAnnotationRenderable(WPos start, WPos end, float width, Color startColor, Color endColor)
 		{
-			this.start = start;
+			Pos = start;
 			this.end = end;
 			this.width = width;
 			this.startColor = startColor;
@@ -51,7 +50,7 @@ namespace OpenRA.Mods.Common.Graphics
 		public void Render(WorldRenderer wr)
 		{
 			Game.Renderer.RgbaColorRenderer.DrawLine(
-				wr.Viewport.WorldToViewPx(wr.ScreenPosition(start)),
+				wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos)),
 				wr.Viewport.WorldToViewPx(wr.Screen3DPosition(end)),
 				width, startColor, endColor);
 		}

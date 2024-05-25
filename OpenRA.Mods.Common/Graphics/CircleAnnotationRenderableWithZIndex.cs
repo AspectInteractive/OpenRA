@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright (c) The OpenRA Developers and Contributors
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -14,30 +14,35 @@ using OpenRA.Primitives;
 
 namespace OpenRA.Mods.Common.Graphics
 {
-	public class CircleAnnotationRenderable : IRenderable, IFinalizedRenderable
+	public class CircleAnnotationRenderableWithZIndex : IRenderable, IFinalizedRenderable
 	{
 		const int CircleSegments = 32;
 		static readonly WVec[] FacingOffsets = Exts.MakeArray(CircleSegments, i => new WVec(1024, 0, 0).Rotate(WRot.FromFacing(i * 256 / CircleSegments)));
+
+		readonly WPos centerPosition;
 		readonly WDist radius;
 		readonly int width;
 		readonly Color color;
 		readonly bool filled;
+		readonly int layer;
 
-		public CircleAnnotationRenderable(WPos centerPosition, WDist radius, int width, Color color, bool filled = false)
+		public CircleAnnotationRenderableWithZIndex(WPos centerPosition, WDist radius, int width, Color color, bool filled = false, int layer = 0)
 		{
-			Pos = centerPosition;
+			this.centerPosition = centerPosition;
 			this.radius = radius;
 			this.width = width;
 			this.color = color;
 			this.filled = filled;
+			this.layer = layer;
 		}
 
-		public WPos Pos { get; }
+		public WPos Pos => centerPosition;
 		public int ZOffset => 0;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new CircleAnnotationRenderable(Pos, radius, width, color, filled); }
-		public IRenderable OffsetBy(in WVec vec) { return new CircleAnnotationRenderable(Pos + vec, radius, width, color, filled); }
+		public IRenderable WithZOffset(int newOffset) { return new CircleAnnotationRenderableWithZIndex(centerPosition, radius, width, color, filled, layer); }
+		public IRenderable OffsetBy(in WVec vec) { return new CircleAnnotationRenderableWithZIndex(centerPosition + vec, radius, width, color, filled, layer); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
@@ -47,18 +52,18 @@ namespace OpenRA.Mods.Common.Graphics
 			if (filled)
 			{
 				var offset = new WVec(radius.Length, radius.Length, 0);
-				var tl = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos - offset));
-				var br = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos + offset));
+				var tl = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition - offset));
+				var br = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition + offset));
 
 				cr.FillEllipse(tl, br, color);
 			}
 			else
 			{
 				var r = radius.Length;
-				var a = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos + r * FacingOffsets[CircleSegments - 1] / 1024));
+				var a = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition + r * FacingOffsets[CircleSegments - 1] / 1024));
 				for (var i = 0; i < CircleSegments; i++)
 				{
-					var b = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos + r * FacingOffsets[i] / 1024));
+					var b = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition + r * FacingOffsets[i] / 1024));
 					cr.DrawLine(a, b, width, color);
 					a = b;
 				}
