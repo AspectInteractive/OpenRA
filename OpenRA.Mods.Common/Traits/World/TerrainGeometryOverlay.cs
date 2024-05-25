@@ -100,10 +100,10 @@ namespace OpenRA.Mods.Common.Traits
 						var end = pos + p[j];
 						var startColor = colors[height + p[i].Z / 512];
 						var endColor = colors[height + p[j].Z / 512];
-						if (locomotor.MovementCostToEnterCell(default, uv.ToCPos(map), BlockedByActor.Immovable, null) == short.MaxValue)
-							yield return new LineAnnotationRenderable(start, end, thickness, blockedColor, blockedColor, 2);
-						else
-							yield return new LineAnnotationRenderable(start, end, thickness, startColor, endColor);
+						//if (locomotor.MovementCostToEnterCell(default, uv.ToCPos(map), BlockedByActor.Immovable, null) == short.MaxValue)
+							//yield return new LineAnnotationRenderable(start, end, thickness, blockedColor, blockedColor, 2);
+						//else
+						//	yield return new LineAnnotationRenderable(start, end, thickness, startColor, endColor);
 					}
 				}
 
@@ -121,8 +121,8 @@ namespace OpenRA.Mods.Common.Traits
 							yield return new LineAnnotationRenderable(be.ElementAt(0), be.ElementAt(1), 3, Color.Blue, Color.Blue);
 							yield return new LineAnnotationRenderable(le.ElementAt(0), le.ElementAt(1), 3, Color.Orange, Color.Orange);
 							yield return new LineAnnotationRenderable(re.ElementAt(0), re.ElementAt(1), 3, Color.Pink, Color.Pink);*/
-							yield return new LineAnnotationRenderable(start, end, thickness,
-																	  blockedColor, blockedColor, (100, 3, endPointColor), 2);
+							//yield return new LineAnnotationRenderable(start, end, thickness,
+							//										  blockedColor, blockedColor, (100, 3, endPointColor), 2);
 							#else
 							#endif
 						}

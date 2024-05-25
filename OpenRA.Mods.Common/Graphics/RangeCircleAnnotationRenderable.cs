@@ -27,9 +27,8 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly float width;
 		readonly Color borderColor;
 		readonly float borderWidth;
-		readonly int layer;
-		public RangeCircleAnnotationRenderable(WPos centerPosition, WDist radius, int zOffset, Color color, float width, Color borderColor,
-												float borderWidth, int layer = 0)
+
+		public RangeCircleAnnotationRenderable(WPos centerPosition, WDist radius, int zOffset, Color color, float width, Color borderColor, float borderWidth)
 		{
 			this.centerPosition = centerPosition;
 			this.radius = radius;
@@ -38,18 +37,14 @@ namespace OpenRA.Mods.Common.Graphics
 			this.width = width;
 			this.borderColor = borderColor;
 			this.borderWidth = borderWidth;
-			this.layer = layer;
 		}
 
-		public WPos Pos => centerPosition;
-		public int ZOffset => zOffset;
-		public int Layer => layer;
+		public WPos Pos { get; }
+		public int ZOffset { get; }
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset)
-		{ return new RangeCircleAnnotationRenderable(centerPosition, radius, newOffset, color, width, borderColor, borderWidth, layer); }
-		public IRenderable OffsetBy(in WVec vec)
-		{ return new RangeCircleAnnotationRenderable(centerPosition + vec, radius, zOffset, color, width, borderColor, borderWidth, layer); }
+		public IRenderable WithZOffset(int newOffset) { return new RangeCircleAnnotationRenderable(Pos, radius, newOffset, color, width, borderColor, borderWidth); }
+		public IRenderable OffsetBy(in WVec vec) { return new RangeCircleAnnotationRenderable(Pos + vec, radius, ZOffset, color, width, borderColor, borderWidth); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

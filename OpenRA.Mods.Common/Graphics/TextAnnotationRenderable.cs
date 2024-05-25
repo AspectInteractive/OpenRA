@@ -24,8 +24,8 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly Color bgDark;
 		readonly Color bgLight;
 		readonly string text;
-		readonly int layer;
-		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, Color bgDark, Color bgLight, string text, int layer = 0)
+
+		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, Color bgDark, Color bgLight, string text)
 		{
 			this.font = font;
 			this.pos = pos;
@@ -34,22 +34,21 @@ namespace OpenRA.Mods.Common.Graphics
 			this.bgDark = bgDark;
 			this.bgLight = bgLight;
 			this.text = text;
-			this.layer = layer;
 		}
 
-		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, string text, int layer = 0)
+		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, string text)
 			: this(font, pos, zOffset, color,
 				ChromeMetrics.Get<Color>("TextContrastColorDark"),
 				ChromeMetrics.Get<Color>("TextContrastColorLight"),
-				text, layer) { }
+				text)
+		{ }
 
-		public WPos Pos => pos;
-		public int ZOffset => zOffset;
-		public int Layer => layer;
+		public WPos Pos { get; }
+		public int ZOffset { get; }
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new TextAnnotationRenderable(font, pos, zOffset, color, text, layer); }
-		public IRenderable OffsetBy(in WVec vec) { return new TextAnnotationRenderable(font, pos + vec, zOffset, color, text, layer); }
+		public IRenderable WithZOffset(int newOffset) { return new TextAnnotationRenderable(font, Pos, ZOffset, color, text); }
+		public IRenderable OffsetBy(in WVec vec) { return new TextAnnotationRenderable(font, Pos + vec, ZOffset, color, text); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

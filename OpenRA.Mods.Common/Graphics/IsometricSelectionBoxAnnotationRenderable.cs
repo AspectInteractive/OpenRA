@@ -33,32 +33,28 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly WPos pos;
 		readonly Polygon bounds;
 		readonly Color color;
-		readonly int layer;
 
-		public IsometricSelectionBoxAnnotationRenderable(Actor actor, in Polygon bounds, Color color, int layer = 0)
+		public IsometricSelectionBoxAnnotationRenderable(Actor actor, in Polygon bounds, Color color)
 		{
 			pos = actor.CenterPosition;
 			this.bounds = bounds;
 			this.color = color;
-			this.layer = layer;
 		}
 
-		public IsometricSelectionBoxAnnotationRenderable(WPos pos, in Polygon bounds, Color color, int layer = 0)
+		public IsometricSelectionBoxAnnotationRenderable(WPos pos, in Polygon bounds, Color color)
 		{
 			this.pos = pos;
 			this.bounds = bounds;
 			this.color = color;
-			this.layer = layer;
 		}
 
 		public WPos Pos => pos;
 
 		public int ZOffset => 0;
-		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }
-		public IRenderable OffsetBy(in WVec vec) { return new IsometricSelectionBoxAnnotationRenderable(pos + vec, bounds, color, layer); }
+		public IRenderable OffsetBy(in WVec vec) { return new IsometricSelectionBoxAnnotationRenderable(Pos + vec, bounds, color); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

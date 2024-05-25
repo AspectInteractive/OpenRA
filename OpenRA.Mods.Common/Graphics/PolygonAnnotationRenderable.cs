@@ -21,29 +21,26 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly WPos effectivePos;
 		readonly int width;
 		readonly Color color;
-		readonly int layer;
 
-		public PolygonAnnotationRenderable(WPos[] vertices, WPos effectivePos, int width, Color color, int layer = 0)
+		public PolygonAnnotationRenderable(WPos[] vertices, WPos effectivePos, int width, Color color)
 		{
 			this.vertices = vertices;
 			this.effectivePos = effectivePos;
 			this.width = width;
 			this.color = color;
-			this.layer = layer;
 		}
 
 		public WPos Pos => effectivePos;
 		public int ZOffset => 0;
-		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new PolygonAnnotationRenderable(vertices, effectivePos, width, color, layer); }
+		public IRenderable WithZOffset(int newOffset) { return new PolygonAnnotationRenderable(vertices, Pos, width, color); }
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
 			// Lambdas can't use 'in' variables, so capture a copy for later
 			var offset = vec;
-			return new PolygonAnnotationRenderable(vertices.Select(v => v + offset).ToArray(), effectivePos + vec, width, color, layer);
+			return new PolygonAnnotationRenderable(vertices.Select(v => v + offset).ToArray(), Pos + vec, width, color);
 		}
 
 		public IRenderable AsDecoration() { return this; }

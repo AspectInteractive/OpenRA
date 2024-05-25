@@ -18,8 +18,6 @@ namespace OpenRA.Graphics
 	{
 		WPos Pos { get; }
 		int ZOffset { get; }
-		int Layer { get; }
-
 		bool IsDecoration { get; }
 
 		IRenderable WithZOffset(int newOffset);

@@ -108,10 +108,10 @@ namespace OpenRA.Mods.Common.Traits
 																	int endPointThickness, Color endPointColor)
 		{
 			var linesToRender = new List<LineAnnotationRenderable>();
-			Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderable(wpos1, wpos2,
-																			lineThickness, lineColor, lineColor,
-																			(endPointRadius, endPointThickness, endPointColor), 3));
-			GenericLinkedPointsFunc(path, path.Count, funcOnLinkedPoints);
+			//Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderable(wpos1, wpos2,
+			//																lineThickness, lineColor, lineColor,
+			//																(endPointRadius, endPointThickness, endPointColor), 3));
+			//GenericLinkedPointsFunc(path, path.Count, funcOnLinkedPoints);
 			return linesToRender;
 		}
 
@@ -129,27 +129,27 @@ namespace OpenRA.Mods.Common.Traits
 			var font = Game.Renderer.Fonts[fontName];
 			Color lineColor;
 
-			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
-				{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true, 2); };
-			Func<(WPos, WDist), Color, CircleAnnotationRenderable> circleRenderFunc = (c, color) =>
-			{ return new CircleAnnotationRenderable(c.Item1, c.Item2, pointThickness, color, false, 2); };
+			//Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
+			//	{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true, 2); };
+			//Func<(WPos, WDist), Color, CircleAnnotationRenderable> circleRenderFunc = (c, color) =>
+			//{ return new CircleAnnotationRenderable(c.Item1, c.Item2, pointThickness, color, false, 2); };
 
 			// Render States
 			foreach (var (ccState, color) in statesWithColors)
 			{
-				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
-				if (showCosts)
-					yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
-															color, $"({ccState.Gval})", 4);
+				//yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
+				//if (showCosts)
+				//	yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
+				//											color, $"({ccState.Gval})", 4);
 			}
 
 			// Render Points
-			foreach (var (point, color) in pointsWithColors)
-				yield return pointRenderFunc(point, color);
+			//foreach (var (point, color) in pointsWithColors)
+			//	yield return pointRenderFunc(point, color);
 
 			// Render Circles
-			foreach (var (circle, color) in circlesWithColors)
-				yield return circleRenderFunc(circle, color);
+			//foreach (var (circle, color) in circlesWithColors)
+			//	yield return circleRenderFunc(circle, color);
 
 			// Render Paths
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);

@@ -20,12 +20,11 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly Actor actor;
 		readonly Rectangle decorationBounds;
 
-		public SelectionBarsAnnotationRenderable(Actor actor, Rectangle decorationBounds, bool displayHealth, bool displayExtra, int layer = 0)
+		public SelectionBarsAnnotationRenderable(Actor actor, Rectangle decorationBounds, bool displayHealth, bool displayExtra)
 			: this(actor.CenterPosition, actor, decorationBounds)
 		{
 			DisplayHealth = displayHealth;
 			DisplayExtra = displayExtra;
-			Layer = layer;
 		}
 
 		public SelectionBarsAnnotationRenderable(WPos pos, Actor actor, Rectangle decorationBounds)

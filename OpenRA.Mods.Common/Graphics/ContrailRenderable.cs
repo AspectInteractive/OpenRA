@@ -35,12 +35,11 @@ namespace OpenRA.Mods.Common.Graphics
 		int next;
 		int length;
 		readonly int skip;
-		readonly int layer;
 
-		public ContrailRenderable(World world, Actor owner, Color startcolor, bool usePlayerStartColor, Color endcolor, bool usePlayerEndColor, WDist startWidth, WDist endWidth, int length, int skip, int zOffset, int layer = 0)
-			: this(world, owner, new WPos[length], startWidth, endWidth, 0, 0, skip, startcolor, usePlayerStartColor, endcolor, usePlayerEndColor, zOffset, layer) { }
+		public ContrailRenderable(World world, Actor owner, Color startcolor, bool usePlayerStartColor, Color endcolor, bool usePlayerEndColor, WDist startWidth, WDist endWidth, int length, int skip, int zOffset)
+			: this(world, owner, new WPos[length], startWidth, endWidth, 0, 0, skip, startcolor, usePlayerStartColor, endcolor, usePlayerEndColor, zOffset) { }
 
-		ContrailRenderable(World world, Actor owner, WPos[] trail, WDist startWidth, WDist endWidth, int next, int length, int skip, Color startColor, bool usePlayerStartColor, Color endColor, bool usePlayerEndColor, int zOffset, int layer = 0)
+		ContrailRenderable(World world, Actor owner, WPos[] trail, WDist startWidth, WDist endWidth, int next, int length, int skip, Color startColor, bool usePlayerStartColor, Color endColor, bool usePlayerEndColor, int zOffset)
 		{
 			this.world = world;
 			this.owner = owner;
@@ -54,14 +53,11 @@ namespace OpenRA.Mods.Common.Graphics
 			this.usePlayerStartColor = usePlayerStartColor;
 			this.usePlayerEndColor = usePlayerEndColor;
 			this.endColor = endColor;
-			this.layer = layer;
 			ZOffset = zOffset;
 		}
 
 		public WPos Pos => trail[Index(next - 1)];
 		public int ZOffset { get; }
-
-		public int Layer { get; }
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return new ContrailRenderable(world, owner, (WPos[])trail.Clone(), startWidth, endWidth, next, length, skip, startColor, usePlayerStartColor, endColor, usePlayerEndColor, newOffset); }

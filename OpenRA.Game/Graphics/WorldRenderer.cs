@@ -21,12 +21,7 @@ namespace OpenRA.Graphics
 	public sealed class WorldRenderer : IDisposable
 	{
 		public static readonly Func<IRenderable, int> RenderableZPositionComparisonKey =
-			r =>
-			{
-				return r.Pos.Y + r.Pos.Z + r.ZOffset;
-			};
-
-		public static readonly Func<IRenderable, int> RenderableLayer = r => r.Layer;
+			r => r.Pos.Y + r.Pos.Z + r.ZOffset;
 
 		public readonly Size TileSize;
 		public readonly int TileScale;
@@ -162,10 +157,8 @@ namespace OpenRA.Graphics
 				renderablesBuffer.AddRange(e.Render(this));
 
 			// Renderables must be ordered using a stable sorting algorithm to avoid flickering artefacts
-			foreach (var renderable in renderablesBuffer.OrderBy(RenderableLayer).ThenBy(RenderableZPositionComparisonKey))
-			{
+			foreach (var renderable in renderablesBuffer.OrderBy(RenderableZPositionComparisonKey))
 				preparedRenderables.Add(renderable.PrepareRender(this));
-			}
 
 			// PERF: Reuse collection to avoid allocations.
 			renderablesBuffer.Clear();
@@ -220,9 +213,7 @@ namespace OpenRA.Graphics
 				if (!actor.IsInWorld || actor.Disposed || (trait.SpatiallyPartitionable && !onScreenActors.Contains(actor)))
 					return;
 
-				foreach (var renderAnnotation in trait.RenderAnnotations(actor, this)
-															.OrderBy(RenderableLayer)
-															.ThenBy(RenderableZPositionComparisonKey))
+				foreach (var renderAnnotation in trait.RenderAnnotations(actor, this))
 					preparedAnnotationRenderables.Add(renderAnnotation.PrepareRender(this));
 			});
 

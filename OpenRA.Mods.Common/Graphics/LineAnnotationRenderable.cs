@@ -9,8 +9,6 @@
  */
 #endregion
 
-using System;
-using System.Collections.Generic;
 using OpenRA.Graphics;
 using OpenRA.Primitives;
 
@@ -23,59 +21,30 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly float width;
 		readonly Color startColor;
 		readonly Color endColor;
-		readonly int layer;
-		readonly (int, int, Color) endPointCircleProps;
-		List<CircleAnnotationRenderable> endPointCircles = new List<CircleAnnotationRenderable>();
 
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color startColor, Color endColor,
-										(int, int, Color) endPointCircleProps, int layer = 0)
+		public LineAnnotationRenderable(WPos start, WPos end, float width, Color color)
+		{
+			Pos = start;
+			this.end = end;
+			this.width = width;
+			startColor = endColor = color;
+		}
+
+		public LineAnnotationRenderable(WPos start, WPos end, float width, Color startColor, Color endColor)
 		{
 			this.start = start;
 			this.end = end;
 			this.width = width;
 			this.startColor = startColor;
 			this.endColor = endColor;
-			this.layer = layer;
-			this.endPointCircleProps = endPointCircleProps;
-			Func<WPos, CircleAnnotationRenderable> makeCircleAnno = (WPos pos) =>
-																				{
-																					return new CircleAnnotationRenderable(pos,
-																						new WDist(endPointCircleProps.Item1),
-																						endPointCircleProps.Item2,
-																						endPointCircleProps.Item3, true);
-																				};
-			if (endPointCircleProps.Item1 != -1)
-			{
-				endPointCircles.Add(makeCircleAnno(start));
-				endPointCircles.Add(makeCircleAnno(end));
-			}
 		}
 
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps, int layer)
-			: this(start, end, width, color, color, endPointCircleProps, layer) { }
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps)
-			: this(start, end, width, color, color, endPointCircleProps, 0) { }
-
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color color, int layer)
-			: this(start, end, width, color, (-1, -1, Color.Black), layer) { }
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color color)
-			: this(start, end, width, color, (-1, -1, Color.Black), 0) { }
-
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color startColor, Color endColor, int layer)
-			: this(start, end, width, startColor, endColor, (-1, -1, Color.Black), layer) { }
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color startColor, Color endColor)
-			: this(start, end, width, startColor, endColor, (-1, -1, Color.Black), 0) { }
-
-		public WPos Pos => start;
+		public WPos Pos { get; }
 		public int ZOffset => 0;
-		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset)
-		{ return new LineAnnotationRenderable(start, end, width, startColor, endColor, endPointCircleProps, layer); }
-		public IRenderable OffsetBy(in WVec vec)
-		{ return new LineAnnotationRenderable(start + vec, end + vec, width, startColor, endColor, endPointCircleProps, layer); }
-
+		public IRenderable WithZOffset(int newOffset) { return new LineAnnotationRenderable(Pos, end, width, startColor, endColor); }
+		public IRenderable OffsetBy(in WVec vec) { return new LineAnnotationRenderable(Pos + vec, end + vec, width, startColor, endColor); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
@@ -85,8 +54,6 @@ namespace OpenRA.Mods.Common.Graphics
 				wr.Viewport.WorldToViewPx(wr.ScreenPosition(start)),
 				wr.Viewport.WorldToViewPx(wr.Screen3DPosition(end)),
 				width, startColor, endColor);
-			foreach (var circle in endPointCircles)
-				circle.Render(wr);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }

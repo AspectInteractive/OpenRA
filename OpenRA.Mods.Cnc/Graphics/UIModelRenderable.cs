@@ -30,11 +30,11 @@ namespace OpenRA.Mods.Cnc.Graphics
 		readonly PaletteReference normalsPalette;
 		readonly PaletteReference shadowPalette;
 		readonly float scale;
-		readonly int layer;
+
 		public UIModelRenderable(
 			ModelRenderer renderer, IEnumerable<ModelAnimation> models, WPos effectiveWorldPos, int2 screenPos, int zOffset,
 			in WRot camera, float scale, in WRot lightSource, float[] lightAmbientColor, float[] lightDiffuseColor,
-			PaletteReference color, PaletteReference normals, PaletteReference shadow, int layer = 0)
+			PaletteReference color, PaletteReference normals, PaletteReference shadow)
 		{
 			this.renderer = renderer;
 			this.models = models;
@@ -54,7 +54,6 @@ namespace OpenRA.Mods.Cnc.Graphics
 		public WPos Pos { get; }
 		public PaletteReference Palette { get; }
 		public int ZOffset { get; }
-		public int Layer => layer;
 		public bool IsDecoration => false;
 
 		public IPalettedRenderable WithPalette(PaletteReference newPalette)
@@ -62,7 +61,7 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new UIModelRenderable(
 				renderer, models, Pos, screenPos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				newPalette, normalsPalette, shadowPalette, layer);
+				newPalette, normalsPalette, shadowPalette);
 		}
 
 		public IRenderable WithZOffset(int newOffset) { return this; }

@@ -27,14 +27,12 @@ namespace OpenRA.Mods.Common.Graphics
 		static readonly Color LightenColor = Color.FromArgb(24, 255, 255, 255);
 		readonly Actor actor;
 		readonly Polygon bounds;
-		readonly int layer;
 
-		public IsometricSelectionBarsAnnotationRenderable(Actor actor, Polygon bounds, bool displayHealth, bool displayExtra, int layer = 0)
+		public IsometricSelectionBarsAnnotationRenderable(Actor actor, Polygon bounds, bool displayHealth, bool displayExtra)
 			: this(actor.CenterPosition, actor, bounds)
 		{
 			DisplayHealth = displayHealth;
 			DisplayExtra = displayExtra;
-			this.layer = layer;
 		}
 
 		public IsometricSelectionBarsAnnotationRenderable(WPos pos, Actor actor, Polygon bounds)
@@ -49,9 +47,6 @@ namespace OpenRA.Mods.Common.Graphics
 		public bool DisplayExtra { get; }
 
 		public int ZOffset => 0;
-
-		public int Layer => layer;
-
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }

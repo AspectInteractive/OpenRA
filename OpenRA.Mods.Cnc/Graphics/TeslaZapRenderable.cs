@@ -36,12 +36,12 @@ namespace OpenRA.Mods.Cnc.Graphics
 		readonly string dimSequence;
 		readonly string brightSequence;
 		readonly int brightZaps, dimZaps;
+
 		readonly WPos cachedPos;
 		readonly WVec cachedLength;
 		IEnumerable<IFinalizedRenderable> cache;
 
-		public TeslaZapRenderable(WPos pos, int zOffset, in WVec length, string image, string brightSequence, int brightZaps,
-								  string dimSequence, int dimZaps, string palette, int layer = 0)
+		public TeslaZapRenderable(WPos pos, int zOffset, in WVec length, string image, string brightSequence, int brightZaps, string dimSequence, int dimZaps, string palette)
 		{
 			Pos = pos;
 			ZOffset = zOffset;
@@ -52,7 +52,6 @@ namespace OpenRA.Mods.Cnc.Graphics
 			this.dimZaps = dimZaps;
 			this.dimSequence = dimSequence;
 			this.brightSequence = brightSequence;
-			Layer = layer;
 
 			cachedPos = WPos.Zero;
 			cachedLength = WVec.Zero;
@@ -62,15 +61,15 @@ namespace OpenRA.Mods.Cnc.Graphics
 		public WPos Pos { get; }
 		public PaletteReference Palette => null;
 		public int ZOffset { get; }
-		public int Layer { get; }
 		public bool IsDecoration => true;
 
 		public IPalettedRenderable WithPalette(PaletteReference newPalette)
-		{ return new TeslaZapRenderable(Pos, ZOffset, length, image, brightSequence, brightZaps, dimSequence, dimZaps, palette, Layer); }
-		public IRenderable WithZOffset(int newOffset)
-		{ return new TeslaZapRenderable(Pos, ZOffset, length, image, brightSequence, brightZaps, dimSequence, dimZaps, palette, Layer); }
-		public IRenderable OffsetBy(in WVec vec)
-		{ return new TeslaZapRenderable(Pos + vec, ZOffset, length, image, brightSequence, brightZaps, dimSequence, dimZaps, palette, Layer); }
+		{
+			return new TeslaZapRenderable(Pos, ZOffset, length, image, brightSequence, brightZaps, dimSequence, dimZaps, palette);
+		}
+
+		public IRenderable WithZOffset(int newOffset) { return new TeslaZapRenderable(Pos, ZOffset, length, image, brightSequence, brightZaps, dimSequence, dimZaps, palette); }
+		public IRenderable OffsetBy(in WVec vec) { return new TeslaZapRenderable(Pos + vec, ZOffset, length, image, brightSequence, brightZaps, dimSequence, dimZaps, palette); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
