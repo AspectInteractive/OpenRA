@@ -53,26 +53,58 @@ namespace OpenRA.Test
 			shape.Initialize();
 			var shapeCenter = new WPos(426, 0, 0);
 
-			var line1 = new List<WPos>() { new WPos(2428, 1359, 0), new WPos(428, 859, 0) };
-			var line2 = new List<WPos>() { new WPos(428, 1459, 0), new WPos(1500, 650, 0) };
+			var line1 = new List<WPos>() { new WPos(428, 859, 0), new WPos(2428, 1359, 0) };
+			var line2 = new List<WPos>() { new WPos(228, 1459, 0), new WPos(1500, 650, 0) };
 			var line3 = new List<WPos>() { new WPos(-1300, 0, 0), new WPos(-300, 1800, 0) };
 			var line4 = new List<WPos>() { new WPos(-300, 1800, 0), new WPos(428, 859, 0) };
+			var line5 = new List<WPos>() { new WPos(-2000, 3000, 0), new WPos(-700, 800, 0) };
+			var line6 = new List<WPos>() { new WPos(-3000, -500, 0), new WPos(3000, -500, 0) };
+			var line7 = new List<WPos>() { new WPos(0, -3000, 0), new WPos(0, 2000, 0) };
+			var line8 = new List<WPos>() { new WPos(-1200, -1200, 0), new WPos(1200, 1800, 0) };
+			var line9 = new List<WPos>() { new WPos(500, -800, 0), new WPos(200, -100, 0) };
 
 			Func<List<WPos>, WPos?> shapeIntersectsLine = l => shape.FirstIntersectingPosFromLine(shapeCenter, l.ElementAt(0), l.ElementAt(1));
+			Func<List<WPos>, List<WPos>> intersectingLinePoints = l => shape.IntersectingPosesFromLine(shapeCenter, l.ElementAt(0), l.ElementAt(1));
 
 			var line1IntersectingPoint = shapeIntersectsLine(line1);
 			var line2IntersectingPoint = shapeIntersectsLine(line2);
 			var line3IntersectingPoint = shapeIntersectsLine(line3);
 			var line4IntersectingPoint = shapeIntersectsLine(line4);
+			var line5IntersectingPoint = shapeIntersectsLine(line5);
+			var line6IntersectingPoint = shapeIntersectsLine(line6);
+			var line7IntersectingPoint = shapeIntersectsLine(line7);
+			var line8IntersectingPoint = shapeIntersectsLine(line8);
+			var line9IntersectingPoint = shapeIntersectsLine(line9);
+			var line1IntersectingPoints = intersectingLinePoints(line1);
+			var line2IntersectingPoints = intersectingLinePoints(line2);
+			var line3IntersectingPoints = intersectingLinePoints(line3);
+			var line4IntersectingPoints = intersectingLinePoints(line4);
+			var line5IntersectingPoints = intersectingLinePoints(line5);
+			var line6IntersectingPoints = intersectingLinePoints(line6);
+			var line7IntersectingPoints = intersectingLinePoints(line7);
+			var line8IntersectingPoints = intersectingLinePoints(line8);
+			var line9IntersectingPoints = intersectingLinePoints(line9);
 
-			Assert.That(line1IntersectingPoint != null);
-			Assert.That(line2IntersectingPoint != null);
-			Assert.That(line3IntersectingPoint == null);
-			Assert.That(line4IntersectingPoint != null);
-			System.Console.WriteLine($"line1 intersects at: {line1IntersectingPoint} " +
-									 $"\nline2 intersects at: {line2IntersectingPoint}" +
-									 $"\nline3 intersects at: {line3IntersectingPoint}" +
-									 $"\nline4 intersects at: {line4IntersectingPoint}");
+			Assert.That(line1IntersectingPoint != null); // intersects
+			Assert.That(line2IntersectingPoint != null); // intersects
+			Assert.That(line3IntersectingPoint == null); // does not intersect
+			Assert.That(line4IntersectingPoint != null); // intersects
+			Assert.That(line5IntersectingPoint == null); // does not intersect
+			Assert.That(line6IntersectingPoint != null); // intersects
+			Assert.That(line7IntersectingPoint != null); // intersects
+			Assert.That(line8IntersectingPoint != null); // intersects
+			Assert.That(line9IntersectingPoint == null); // intersects
+			System.Console.WriteLine(
+									   $"line1 intersects at: {line1IntersectingPoint} with pts {string.Join("; ", line1IntersectingPoints)}"
+									 + $"\nline2 intersects at: {line2IntersectingPoint} with pts {string.Join("; ", line2IntersectingPoints)}"
+									 + $"\nline3 intersects at: {line3IntersectingPoint} with pts {string.Join("; ", line3IntersectingPoints)}"
+									 + $"\nline4 intersects at: {line4IntersectingPoint} with pts {string.Join("; ", line4IntersectingPoints)}"
+									 + $"\nline5 intersects at: {line5IntersectingPoint} with pts {string.Join("; ", line5IntersectingPoints)}"
+									 + $"\nline6 intersects at: {line6IntersectingPoint} with pts {string.Join("; ", line6IntersectingPoints)}"
+									 + $"\nline7 intersects at: {line7IntersectingPoint} with pts {string.Join("; ", line7IntersectingPoints)}"
+									 + $"\nline8 intersects at: {line8IntersectingPoint} with pts {string.Join("; ", line8IntersectingPoints)}"
+									 + $"\nline8 intersects at: {line9IntersectingPoint} with pts {string.Join("; ", line9IntersectingPoints)}"
+									 );
 		}
 
 		[TestCase(TestName = "CapsuleShape report accurate distance")]
