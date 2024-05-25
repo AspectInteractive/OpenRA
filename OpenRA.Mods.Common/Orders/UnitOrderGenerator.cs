@@ -63,8 +63,8 @@ namespace OpenRA.Mods.Common.Orders
 
 			var actorList = world.Selection.Actors.ToList();
 
-			var actorsInvolved = orders.Select(o => o.Actor).Distinct();
-			if (!actorsInvolved.Any())
+			var actorsInvolved = orders.Select(o => o.Actor).Distinct().ToArray();
+			if (actorsInvolved.Length == 0)
 				yield break;
 
 			// HACK: This is required by the hacky player actions-per-minute calculation
