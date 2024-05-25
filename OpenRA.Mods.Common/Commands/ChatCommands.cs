@@ -40,8 +40,6 @@ namespace OpenRA.Mods.Common.Commands
 		const string InvalidCommand = "notification-invalid-command";
 		public Dictionary<string, List<IChatCommand>> Commands { get; private set; }
 
-		public Dictionary<string, IChatCommand> Commands { get; }
-
 		public ChatCommands()
 		{
 			Commands = new Dictionary<string, List<IChatCommand>>();

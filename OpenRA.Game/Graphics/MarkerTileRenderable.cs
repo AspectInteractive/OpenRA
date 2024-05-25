@@ -18,15 +18,19 @@ namespace OpenRA.Graphics
 	{
 		readonly CPos pos;
 		readonly Color color;
+		readonly int layer;
 
-		public MarkerTileRenderable(CPos pos, Color color)
+		public MarkerTileRenderable(CPos pos, Color color, int layer = 0)
 		{
 			this.pos = pos;
 			this.color = color;
+			this.layer = layer;
 		}
 
 		public WPos Pos => WPos.Zero;
 		public int ZOffset => 0;
+
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }

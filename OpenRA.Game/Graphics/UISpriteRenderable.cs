@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright (c) The OpenRA Developers and Contributors
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,41 +16,46 @@ namespace OpenRA.Graphics
 	public class UISpriteRenderable : IRenderable, IPalettedRenderable, IFinalizedRenderable
 	{
 		readonly Sprite sprite;
+		readonly WPos effectiveWorldPos;
 		readonly int2 screenPos;
+		readonly int zOffset;
+		readonly PaletteReference palette;
 		readonly float scale;
 		readonly float alpha;
 		readonly int layer;
+		readonly float rotation;
 
-		public UISpriteRenderable(Sprite sprite, WPos effectiveWorldPos, int2 screenPos, int zOffset, PaletteReference palette, float scale = 1f, float alpha = 1f, int layer = 0, float rotation = 0f)
+		public UISpriteRenderable(Sprite sprite, WPos effectiveWorldPos, int2 screenPos, int zOffset, PaletteReference palette,
+			float scale = 1f, float alpha = 1f, float rotation = 0F, int layer = 0)
 		{
 			this.sprite = sprite;
-			Pos = effectiveWorldPos;
+			this.effectiveWorldPos = effectiveWorldPos;
 			this.screenPos = screenPos;
-			ZOffset = zOffset;
-			Palette = palette;
+			this.zOffset = zOffset;
+			this.palette = palette;
 			this.scale = scale;
 			this.alpha = alpha;
-			this.rotation = rotation;
 			this.layer = layer;
+			this.rotation = rotation;
 
 			// PERF: Remove useless palette assignments for RGBA sprites
 			// HACK: This is working around the fact that palettes are defined on traits rather than sequences
 			// and can be removed once this has been fixed
 			if (sprite.Channel == TextureChannel.RGBA && !(palette?.HasColorShift ?? false))
-				Palette = null;
+				this.palette = null;
 		}
 
 		// Does not exist in the world, so a world positions don't make sense
-		public WPos Pos { get; }
+		public WPos Pos => effectiveWorldPos;
 		public WVec Offset => WVec.Zero;
 		public int Layer => layer;
 		public bool IsDecoration => true;
 
-		public PaletteReference Palette { get; }
-		public int ZOffset { get; }
+		public PaletteReference Palette => palette;
+		public int ZOffset => zOffset;
 
 		public IPalettedRenderable WithPalette(PaletteReference newPalette)
-		{ return new UISpriteRenderable(sprite, effectiveWorldPos, screenPos, zOffset, newPalette, scale, alpha, layer, rotation); }
+		{ return new UISpriteRenderable(sprite, effectiveWorldPos, screenPos, zOffset, newPalette, scale, alpha, layer); }
 		public IRenderable WithZOffset(int newOffset) { return this; }
 		public IRenderable OffsetBy(in WVec vec) { return this; }
 		public IRenderable AsDecoration() { return this; }
@@ -58,7 +63,7 @@ namespace OpenRA.Graphics
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
-			Game.Renderer.SpriteRenderer.DrawSprite(sprite, Palette, screenPos, scale, float3.Ones, alpha, rotation);
+			Game.Renderer.SpriteRenderer.DrawSprite(sprite, palette, screenPos, scale, float3.Ones, alpha, rotation);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)

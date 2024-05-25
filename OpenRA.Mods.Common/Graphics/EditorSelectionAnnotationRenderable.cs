@@ -23,6 +23,7 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly CellRegion bounds;
 		readonly int2 altPixelOffset;
 		readonly CPos? offset;
+		readonly int layer;
 
 		public EditorSelectionAnnotationRenderable(CellRegion bounds, Color color, int2 altPixelOffset, CPos? offset)
 		{
@@ -35,6 +36,7 @@ namespace OpenRA.Mods.Common.Graphics
 		public WPos Pos => WPos.Zero;
 
 		public int ZOffset => 0;
+		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset) { return this; }

@@ -54,8 +54,6 @@ namespace OpenRA.Graphics
 
 		public Sprite Image => CurrentSequence.GetSprite(CurrentFrame, facingFunc());
 
-		public Sprite Image => CurrentSequence.GetSprite(CurrentFrame, facingFunc(), out rotAngle);
-
 		public IRenderable[] Render(WPos pos, in WVec offset, int zOffset, PaletteReference palette)
 		{
 			var tintModifiers = CurrentSequence.IgnoreWorldTint ? TintModifiers.IgnoreWorldTint : TintModifiers.None;

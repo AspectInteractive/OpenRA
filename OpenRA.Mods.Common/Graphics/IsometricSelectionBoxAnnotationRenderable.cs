@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright (c) The OpenRA Developers and Contributors
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -17,9 +17,9 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class IsometricSelectionBoxAnnotationRenderable : IRenderable, IFinalizedRenderable
 	{
-		static readonly float2 TLOffset = new(-12, -6);
-		static readonly float2 TROffset = new(12, -6);
-		static readonly float2 TOffset = new(0, -13);
+		static readonly float2 TLOffset = new float2(-12, -6);
+		static readonly float2 TROffset = new float2(12, -6);
+		static readonly float2 TOffset = new float2(0, -13);
 		static readonly float2[] Offsets =
 		{
 			-TROffset, -TLOffset, -TOffset,
@@ -29,13 +29,15 @@ namespace OpenRA.Mods.Common.Graphics
 			-TROffset, TOffset, TLOffset,
 			TLOffset, -TOffset, -TROffset
 		};
+
+		readonly WPos pos;
 		readonly Polygon bounds;
 		readonly Color color;
 		readonly int layer;
 
 		public IsometricSelectionBoxAnnotationRenderable(Actor actor, in Polygon bounds, Color color, int layer = 0)
 		{
-			Pos = actor.CenterPosition;
+			pos = actor.CenterPosition;
 			this.bounds = bounds;
 			this.color = color;
 			this.layer = layer;
@@ -43,13 +45,13 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public IsometricSelectionBoxAnnotationRenderable(WPos pos, in Polygon bounds, Color color, int layer = 0)
 		{
-			Pos = pos;
+			this.pos = pos;
 			this.bounds = bounds;
 			this.color = color;
 			this.layer = layer;
 		}
 
-		public WPos Pos { get; }
+		public WPos Pos => pos;
 
 		public int ZOffset => 0;
 		public int Layer => layer;

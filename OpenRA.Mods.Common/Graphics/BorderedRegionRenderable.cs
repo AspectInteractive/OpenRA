@@ -33,19 +33,23 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly CPos[] region;
 		readonly Color color, contrastColor;
 		readonly float width, contrastWidth;
+		readonly int layer;
 
-		public BorderedRegionRenderable(CPos[] region, Color color, float width, Color contrastColor, float contrastWidth)
+		public BorderedRegionRenderable(CPos[] region, Color color, float width, Color contrastColor, float contrastWidth, int layer = 0)
 		{
 			this.region = region;
 			this.color = color;
 			this.contrastColor = contrastColor;
 			this.width = width;
 			this.contrastWidth = contrastWidth;
+			this.layer = layer;
 		}
 
 		readonly WPos IRenderable.Pos { get { return WPos.Zero; } }
 		readonly int IRenderable.ZOffset { get { return 0; } }
 		readonly bool IRenderable.IsDecoration { get { return true; } }
+
+		public int Layer => layer;
 
 		IRenderable IRenderable.WithZOffset(int newOffset) { return new BorderedRegionRenderable(region, color, width, contrastColor, contrastWidth); }
 		IRenderable IRenderable.OffsetBy(in WVec offset) { return new BorderedRegionRenderable(region, color, width, contrastColor, contrastWidth); }

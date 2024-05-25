@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright (c) The OpenRA Developers and Contributors
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -18,6 +18,8 @@ namespace OpenRA.Mods.Common.Graphics
 	{
 		const int CircleSegments = 32;
 		static readonly WVec[] FacingOffsets = Exts.MakeArray(CircleSegments, i => new WVec(1024, 0, 0).Rotate(WRot.FromFacing(i * 256 / CircleSegments)));
+
+		readonly WPos centerPosition;
 		readonly WDist radius;
 		readonly int width;
 		readonly Color color;
@@ -26,7 +28,7 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public CircleAnnotationRenderable(WPos centerPosition, WDist radius, int width, Color color, bool filled = false, int layer = 0)
 		{
-			Pos = centerPosition;
+			this.centerPosition = centerPosition;
 			this.radius = radius;
 			this.width = width;
 			this.color = color;
@@ -34,7 +36,7 @@ namespace OpenRA.Mods.Common.Graphics
 			this.layer = layer;
 		}
 
-		public WPos Pos { get; }
+		public WPos Pos => centerPosition;
 		public int ZOffset => 0;
 		public int Layer => layer;
 		public bool IsDecoration => true;
@@ -50,18 +52,18 @@ namespace OpenRA.Mods.Common.Graphics
 			if (filled)
 			{
 				var offset = new WVec(radius.Length, radius.Length, 0);
-				var tl = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos - offset));
-				var br = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos + offset));
+				var tl = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition - offset));
+				var br = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition + offset));
 
 				cr.FillEllipse(tl, br, color);
 			}
 			else
 			{
 				var r = radius.Length;
-				var a = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos + r * FacingOffsets[CircleSegments - 1] / 1024));
+				var a = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition + r * FacingOffsets[CircleSegments - 1] / 1024));
 				for (var i = 0; i < CircleSegments; i++)
 				{
-					var b = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos + r * FacingOffsets[i] / 1024));
+					var b = wr.Viewport.WorldToViewPx(wr.ScreenPosition(centerPosition + r * FacingOffsets[i] / 1024));
 					cr.DrawLine(a, b, width, color);
 					a = b;
 				}

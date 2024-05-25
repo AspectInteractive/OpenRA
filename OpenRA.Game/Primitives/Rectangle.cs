@@ -108,10 +108,9 @@ namespace OpenRA.Primitives
 		{
 			return Left < rect.Right && Right > rect.Left && Top < rect.Bottom && Bottom > rect.Top;
 		}
-        
+
 		public bool IntersectsWithRectangle(Rectangle rect) { return IntersectsWith(rect); }
 
-		readonly bool IntersectsWithInclusive(Rectangle r)
 		public bool IntersectsWithCircle(int2 circleCenter, int circleRadius)
 		{
 			var rectLeft = TopLeft.X;

@@ -286,6 +286,16 @@ namespace OpenRA.Graphics
 			};
 		}
 
+		// Using this method: https://stackoverflow.com/questions/2259476/rotating-a-point-about-another-point-2d
+		public static float3 RotatePoint(in float3 point, in float3 centerPoint, in float angleSin, in float angleCos)
+		{
+			var offsetPoint = point - centerPoint;
+			var rotatedPoint = new float3((offsetPoint.X * angleCos - offsetPoint.Y * angleSin) + centerPoint.X,
+										  (offsetPoint.X * angleSin + offsetPoint.Y * angleCos) + centerPoint.Y,
+										  offsetPoint.Z + centerPoint.Z);
+			return rotatedPoint;
+		}
+
 		/// <summary>
 		/// Returns the bounds of an object. Used for determining which objects need to be rendered on screen, and which do not.
 		/// </summary>

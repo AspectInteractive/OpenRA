@@ -347,9 +347,6 @@ namespace OpenRA.Graphics
 			return new WPos(worldRenderer.TileScale * view.X / worldRenderer.TileSize.Width, worldRenderer.TileScale * view.Y / worldRenderer.TileSize.Height, 0);
 		}
 
-		public int2 WorldToViewPx(int2 world) { return ((Zoom / graphicSettings.UIScale) * (world - TopLeft).ToFloat2()).ToInt2(); }
-		public int2 WorldToViewPx(in float3 world) { return ((Zoom / graphicSettings.UIScale) * (world - TopLeft).XY).ToInt2(); }
-
 		public void Center(IEnumerable<Actor> actors)
 		{
 			var actorsCollection = actors as IReadOnlyCollection<Actor>;

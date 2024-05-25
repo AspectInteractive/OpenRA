@@ -225,7 +225,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (locomotor.MovementCostForCell(cell) == short.MaxValue)
 				return false;
 
-			return locomotor.CanMoveFreelyInto(self, cell, subCell, check, ignoreActor);
+			return locomotor.CanMoveFreelyInto(self, cell, subCell, check, ignoreActor, true);
 		}
 
 		public bool CanStayInCell(World world, CPos cell)
@@ -1628,6 +1628,11 @@ namespace OpenRA.Mods.Common.Traits
 			return returnToCellOnCreation ? new ReturnToCellActivity(self, creationActivityDelay, returnToCellOnCreationRecalculateSubCell) : null;
 		}
 
+		public Activity MoveOntoTarget(Actor self, in Target target, in WVec offset, WAngle? facing, Color? targetLineColor = null)
+		{
+			throw new NotImplementedException();
+		}
+
 		public class MobileOffGridMoveOrderTargeter : IOrderTargeter
 		{
 			readonly MobileOffGrid mobileOffGrid;
@@ -1651,9 +1656,9 @@ namespace OpenRA.Mods.Common.Traits
 				return modifiers.HasModifier(TargetModifiers.ForceMove);
 			}
 
-			public virtual bool CanTarget(Actor self, in Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+			public virtual bool CanTarget(Actor self, in Target target, ref TargetModifiers modifiers, ref string cursor)
 			{
-				if ( target.Type != TargetType.Terrain || (mobileOffGrid.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+				if (target.Type != TargetType.Terrain || (mobileOffGrid.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
 					return false;
 
 				var location = self.World.Map.CellContaining(target.CenterPosition);

@@ -24,7 +24,9 @@ namespace OpenRA.Mods.Cnc.Graphics
 		public WPos Pos { get; }
 		readonly int frame;
 
-		public ChronoVortexRenderable(ChronoVortexRenderer renderer, WPos pos, int frame)
+		readonly int layer;
+
+		public ChronoVortexRenderable(ChronoVortexRenderer renderer, WPos pos, int frame, int layer = 0)
 		{
 			if (frame < 0 || frame >= 48)
 				throw new ArgumentException("frame must be in the range 0-47", nameof(frame));
@@ -32,9 +34,12 @@ namespace OpenRA.Mods.Cnc.Graphics
 			this.renderer = renderer;
 			Pos = pos;
 			this.frame = frame;
+			this.layer = layer;
 		}
 
 		public int ZOffset => 0;
+
+		public int Layer => layer;
 		public bool IsDecoration => false;
 
 		public IRenderable WithZOffset(int newOffset) => this;

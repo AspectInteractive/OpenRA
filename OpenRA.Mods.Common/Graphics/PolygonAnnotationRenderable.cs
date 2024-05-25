@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright (c) The OpenRA Developers and Contributors
+ * Copyright 2007-2022 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -18,6 +18,7 @@ namespace OpenRA.Mods.Common.Graphics
 	public class PolygonAnnotationRenderable : IRenderable, IFinalizedRenderable
 	{
 		readonly WPos[] vertices;
+		readonly WPos effectivePos;
 		readonly int width;
 		readonly Color color;
 		readonly int layer;
@@ -25,13 +26,13 @@ namespace OpenRA.Mods.Common.Graphics
 		public PolygonAnnotationRenderable(WPos[] vertices, WPos effectivePos, int width, Color color, int layer = 0)
 		{
 			this.vertices = vertices;
-			Pos = effectivePos;
+			this.effectivePos = effectivePos;
 			this.width = width;
 			this.color = color;
 			this.layer = layer;
 		}
 
-		public WPos Pos { get; }
+		public WPos Pos => effectivePos;
 		public int ZOffset => 0;
 		public int Layer => layer;
 		public bool IsDecoration => true;

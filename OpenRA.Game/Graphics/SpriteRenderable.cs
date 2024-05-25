@@ -54,6 +54,9 @@ namespace OpenRA.Graphics
 		public WVec Offset { get; }
 		public PaletteReference Palette { get; }
 		public int ZOffset { get; }
+
+		public int Layer { get; }
+
 		public bool IsDecoration { get; }
 
 		public float Alpha { get; }

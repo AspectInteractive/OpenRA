@@ -229,7 +229,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// Determines whether the actor is blocked by other Actors
-		bool CanMoveFreelyInto(Actor actor, CPos cell, SubCell subCell, BlockedByActor check, Actor ignoreActor, bool ignoreSelf)
+		public bool CanMoveFreelyInto(Actor actor, CPos cell, SubCell subCell, BlockedByActor check, Actor ignoreActor, bool ignoreSelf)
 		{
 			// If the check allows: We are not blocked by other actors.
 			if (check == BlockedByActor.None)

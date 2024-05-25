@@ -69,7 +69,7 @@ namespace OpenRA.Traits
 			subCell = null;
 		}
 
-        Target(CPos c, SubCell subCell, WPos terrainCenterPosition)
+		Target(CPos c, SubCell subCell, WPos terrainCenterPosition)
 		{
 			type = TargetType.Terrain;
 			this.terrainCenterPosition = terrainCenterPosition;
@@ -77,32 +77,19 @@ namespace OpenRA.Traits
 			cell = c;
 			this.subCell = subCell;
 
-			actor = null;
-			frozen = null;
+			Actor = null;
+			FrozenActor = null;
 			generation = 0;
 		}
 
 		Target(Actor a, WPos terrainPos = default)
 		{
 			type = TargetType.Actor;
-			actor = a;
+			Actor = a;
 			generation = a.Generation;
 			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
 			terrainPositions = null;
-			frozen = null;
-			cell = null;
-			subCell = null;
-		}
-
-
-		Target(Actor a, WPos terrainPos = default)
-		{
-			type = TargetType.Actor;
-			actor = a;
-			generation = a.Generation;
-			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
-			terrainPositions = null;
-			frozen = null;
+			FrozenActor = null;
 			cell = null;
 			subCell = null;
 		}
@@ -123,17 +110,20 @@ namespace OpenRA.Traits
 		Target(FrozenActor fa, WPos terrainPos = default)
 		{
 			type = TargetType.FrozenActor;
-			frozen = fa;
+			FrozenActor = fa;
 
 			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
 			terrainPositions = null;
-			actor = null;
+			Actor = null;
 			cell = null;
 			subCell = null;
 			generation = 0;
 		}
 
 		public static Target FromPos(WPos p) { return new Target(p); }
+		public static Target FromCellWithTerrainPos(CPos c, SubCell subCell = SubCell.FullCell, WPos terrainPos = default) { return new Target(c, subCell, terrainPos); }
+		public static Target FromActorWithTerrainPos(Actor a, WPos terrainPos = default) { return a != null ? new Target(a, terrainPos) : Invalid; }
+
 		public static Target FromTargetPositions(in Target t) { return new Target(t.CenterPosition, t.Positions.ToArray()); }
 		public static Target FromCell(World w, CPos c, SubCell subCell = SubCell.FullCell) { return new Target(w, c, subCell); }
 		public static Target FromActor(Actor a) { return a != null ? new Target(a, a.Generation) : Invalid; }
