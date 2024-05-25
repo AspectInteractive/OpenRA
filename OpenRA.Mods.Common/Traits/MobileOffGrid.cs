@@ -758,11 +758,14 @@ namespace OpenRA.Mods.Common.Traits
 								var destActorCenter = (destActor.CenterPosition +
 														  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
 															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
-								MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
-								foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-									if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
-										posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
-										return false;
+								if (destActorCenter != WPos.Zero)
+								{
+									MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+									foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
+										if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
+											posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
+											return false;
+								}
 							}
 						}
 					}
@@ -1464,10 +1467,7 @@ namespace OpenRA.Mods.Common.Traits
 					return;
 
 				var target = Target.FromPos(order.Target.CenterPosition);
-				var groupedActors = self.World.Selection.Actors
-										.Where(a => !a.IsDead)
-										.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
-				self.QueueActivity(order.Queued, new MoveOffGrid(self, groupedActors, target, targetLineColor: Info.TargetLineColor));
+				self.QueueActivity(order.Queued, new MoveOffGrid(self, order.GroupedActors.ToList(), target, targetLineColor: Info.TargetLineColor));
 				#if DEBUG
 				System.Console.WriteLine("ResolveOrder() with 'Move' to (" + order.Target.CenterPosition.X.ToString() + "," + order.Target.CenterPosition.Y.ToString() + ") called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
 				#endif

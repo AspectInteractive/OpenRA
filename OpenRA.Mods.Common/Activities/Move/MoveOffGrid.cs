@@ -444,53 +444,54 @@ namespace OpenRA.Mods.Common.Activities
 			//}
 
 			// Only update the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
-			if (!(useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true)) && !searchingForNextTarget)
-				mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
-			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			else if (useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true))
-			{
-				var revisedMoveVec = moveVec;
-				int localAvoidanceAngleOffset;
-				var i = 0;
-				do
-				{
-					localAvoidanceAngleOffset = localAvoidanceAngleOffsets.ElementAt(i);
-					// Do not go back in the same direction that you went forward, unless this is the last available local avoidance angle offset
-					if (!mobileOffGrid.ChangedAngleOffsetsBuffer.Where(a => a == localAvoidanceAngleOffset).Any() ||
-						i == localAvoidanceAngleOffsets.Count - 1)
-					{
-						var newAngle = new WAngle(moveVec.Yaw.Angle + localAvoidanceAngleOffset);
-						System.Console.WriteLine($"existing deg: {moveVec.Yaw.Angle}, new deg: {newAngle.Angle}, offset: {localAvoidanceAngleOffset}");
-						revisedMoveVec = new WVec(new WDist(moveVec.Length), WRot.FromYaw(newAngle));
-						// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
-					}
-					i++;
-				}
-				while (!mobileOffGrid.HasNotCollided(self, revisedMoveVec, 4, locomotor, skipLookAheadAmt: 2) && i < localAvoidanceAngleOffsets.Count);
+			//if (!(useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true)) && !searchingForNextTarget)
+			//	mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
+			//// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
+			//else if (useLocalAvoidance && !mobileOffGrid.HasNotCollided(self, moveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true))
+			//{
+			//	var revisedMoveVec = moveVec;
+			//	int localAvoidanceAngleOffset;
+			//	var i = 0;
+			//	do
+			//	{
+			//		localAvoidanceAngleOffset = localAvoidanceAngleOffsets.ElementAt(i);
+			//		// Do not go back in the same direction that you went forward, unless this is the last available local avoidance angle offset
+			//		if (!mobileOffGrid.ChangedAngleOffsetsBuffer.Where(a => a == localAvoidanceAngleOffset).Any() ||
+			//			i == localAvoidanceAngleOffsets.Count - 1)
+			//		{
+			//			var newAngle = new WAngle(moveVec.Yaw.Angle + localAvoidanceAngleOffset);
+			//			System.Console.WriteLine($"existing deg: {moveVec.Yaw.Angle}, new deg: {newAngle.Angle}, offset: {localAvoidanceAngleOffset}");
+			//			revisedMoveVec = new WVec(new WDist(moveVec.Length), WRot.FromYaw(newAngle));
+			//			// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
+			//		}
+			//		i++;
+			//	}
+			//	while (!mobileOffGrid.HasNotCollided(self, revisedMoveVec, 4, locomotor, skipLookAheadAmt: 2) && i < localAvoidanceAngleOffsets.Count);
 
-				if (mobileOffGrid.HasNotCollided(self, revisedMoveVec, 4, locomotor, skipLookAheadAmt: 2))
-				{
-					#if DEBUGWITHOVERLAY
-					System.Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
-					/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
-					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
-					#endif
-					mobileOffGrid.AddToChangedAngleBuffer(localAvoidanceAngleOffset);
-					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
-					pastMoveVec = moveVec;
-					mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(revisedMoveVec) };
-					moveVec = revisedMoveVec;
-					searchingForNextTarget = true;
-				}
-			}
-			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget &&
-					 mobileOffGrid.HasNotCollided(self, pastMoveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true))
-			{
-				pastMoveVec = new WVec(0, 0, 0);
-				currLocalAvoidanceAngleOffset = 0;
-				searchingForNextTarget = false;
-			}
+			//	if (mobileOffGrid.HasNotCollided(self, revisedMoveVec, 4, locomotor, skipLookAheadAmt: 2))
+			//	{
+			//		#if DEBUGWITHOVERLAY
+			//		System.Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
+			//		/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
+			//		RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
+			//		#endif
+			//		mobileOffGrid.AddToChangedAngleBuffer(localAvoidanceAngleOffset);
+			//		currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
+			//		pastMoveVec = moveVec;
+			//		mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(revisedMoveVec) };
+			//		moveVec = revisedMoveVec;
+			//		searchingForNextTarget = true;
+			//	}
+			//}
+			//else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget &&
+			//		 mobileOffGrid.HasNotCollided(self, pastMoveVec, 4, locomotor, skipLookAheadAmt: 2, attackingUnitsOnly: true))
+			//{
+			//	pastMoveVec = new WVec(0, 0, 0);
+			//	currLocalAvoidanceAngleOffset = 0;
+			//	searchingForNextTarget = false;
+			//}
 
+			mobileOffGrid.SeekVectors = new List<MvVec>() { new MvVec(moveVec) };
 			var move = mobileOffGrid.GenFinalWVec();
 
 			if (mobileOffGrid.PositionBuffer.Count >= 100)
