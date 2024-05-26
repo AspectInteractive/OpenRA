@@ -23,58 +23,49 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly float width;
 		readonly Color startColor;
 		readonly Color endColor;
-		readonly int layer;
 		readonly (int, int, Color) endPointCircleProps;
-		List<CircleAnnotationRenderableWithZIndex> endPointCircles = new List<CircleAnnotationRenderableWithZIndex>();
+		List<CircleAnnotationRenderable> endPointCircles = new List<CircleAnnotationRenderable>();
 
 		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color startColor, Color endColor,
-										(int, int, Color) endPointCircleProps, int layer = 0)
+										(int, int, Color) endPointCircleProps)
 		{
 			this.start = start;
 			this.end = end;
 			this.width = width;
 			this.startColor = startColor;
 			this.endColor = endColor;
-			this.layer = layer;
 			this.endPointCircleProps = endPointCircleProps;
-			Func<WPos, CircleAnnotationRenderableWithZIndex> makeCircleAnno = (WPos pos) =>
+			CircleAnnotationRenderable MakeCircleAnno(WPos pos)
 			{
-				return new CircleAnnotationRenderableWithZIndex(pos,
+				return new CircleAnnotationRenderable(pos,
 					new WDist(endPointCircleProps.Item1),
 					endPointCircleProps.Item2,
 					endPointCircleProps.Item3, true);
-			};
+			}
 			if (endPointCircleProps.Item1 != -1)
 			{
-				endPointCircles.Add(makeCircleAnno(start));
-				endPointCircles.Add(makeCircleAnno(end));
+				endPointCircles.Add(MakeCircleAnno(start));
+				endPointCircles.Add(MakeCircleAnno(end));
 			}
 		}
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps, int layer)
-			: this(start, end, width, color, color, endPointCircleProps, layer) { }
 		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps)
-			: this(start, end, width, color, color, endPointCircleProps, 0) { }
+			: this(start, end, width, color, color, endPointCircleProps) { }
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color, int layer)
-			: this(start, end, width, color, (-1, -1, Color.Black), layer) { }
 		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color)
-			: this(start, end, width, color, (-1, -1, Color.Black), 0) { }
+			: this(start, end, width, color, (-1, -1, Color.Black)) { }
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color startColor, Color endColor, int layer)
-			: this(start, end, width, startColor, endColor, (-1, -1, Color.Black), layer) { }
 		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color startColor, Color endColor)
-			: this(start, end, width, startColor, endColor, (-1, -1, Color.Black), 0) { }
+			: this(start, end, width, startColor, endColor, (-1, -1, Color.Black)) { }
 
 		public WPos Pos => start;
 		public int ZOffset => 0;
-		public int Layer => layer;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset)
-		{ return new LineAnnotationRenderableWithZIndex(start, end, width, startColor, endColor, endPointCircleProps, layer); }
+		{ return new LineAnnotationRenderableWithZIndex(start, end, width, startColor, endColor, endPointCircleProps); }
 		public IRenderable OffsetBy(in WVec vec)
-		{ return new LineAnnotationRenderableWithZIndex(start + vec, end + vec, width, startColor, endColor, endPointCircleProps, layer); }
+		{ return new LineAnnotationRenderableWithZIndex(start + vec, end + vec, width, startColor, endColor, endPointCircleProps); }
 
 		public IRenderable AsDecoration() { return this; }
 

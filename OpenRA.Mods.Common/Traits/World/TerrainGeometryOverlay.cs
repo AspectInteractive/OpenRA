@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Pathfinder;
@@ -84,7 +85,22 @@ namespace OpenRA.Mods.Common.Traits
 				yield return new CircleAnnotationRenderable(self.World.Map.CenterOfCell(cell), new WDist(500),
 															5, Color.Yellow, true, 2);*/
 
-			foreach (var uv in wr.Viewport.AllVisibleCells.CandidateMapCoords)
+
+			// Define Blocked and Open Cell Lists
+			var blockedVisibleCells = new List<MPos>();
+			var openVisibleCells = new List<MPos>();
+			var locomotor = wr.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
+			foreach (var cell in wr.Viewport.AllVisibleCells.CandidateMapCoords)
+			{
+				if (locomotor.MovementCostToEnterCell(default, cell.ToCPos(map), BlockedByActor.Immovable, null) == short.MaxValue)
+					blockedVisibleCells.Add(cell);
+				else
+					openVisibleCells.Add(cell);
+			}
+
+
+			// Go through Open Cell List second so that it overlays on top of the blocked list
+			foreach (var uv in openVisibleCells)
 			{
 				if (!map.Height.Contains(uv) || self.World.ShroudObscures(uv))
 					continue;
@@ -98,7 +114,6 @@ namespace OpenRA.Mods.Common.Traits
 				var re = map.RightEdgeOfCell(uv.ToCPos(map)).Select(p => p - new WVec(0, 0, r.CenterHeightOffset));
 				var thickness = uv == mouseCell ? 3 : 1;
 
-				var locomotor = wr.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 				var blockedColor = Color.LightYellow;
 				var endPointColor = blockedColor;
 
@@ -112,32 +127,45 @@ namespace OpenRA.Mods.Common.Traits
 						var end = pos + p[j];
 						var startColor = colors[height + p[i].Z / 512];
 						var endColor = colors[height + p[j].Z / 512];
-						if (locomotor.MovementCostToEnterCell(default, uv.ToCPos(map), BlockedByActor.Immovable, null) == short.MaxValue)
-							yield return new LineAnnotationRenderableWithZIndex(start, end, thickness, blockedColor, blockedColor, 2);
-						else
-							yield return new LineAnnotationRenderableWithZIndex(start, end, thickness, startColor, endColor);
+						yield return new LineAnnotationRenderableWithZIndex(start, end, thickness, startColor, endColor);
 					}
 				}
+			}
+
+			// Go through Blocked Cell List first
+			foreach (var uv in blockedVisibleCells)
+			{
+				if (!map.Height.Contains(uv) || self.World.ShroudObscures(uv))
+					continue;
+
+				var height = (int)map.Height[uv];
+				var r = map.Grid.Ramps[map.Ramp[uv]];
+				var pos = map.CenterOfCell(uv.ToCPos(map)) - new WVec(0, 0, r.CenterHeightOffset);
+				var te = map.TopEdgeOfCell(uv.ToCPos(map)).Select(p => p - new WVec(0, 0, r.CenterHeightOffset));
+				var be = map.BottomEdgeOfCell(uv.ToCPos(map)).Select(p => p - new WVec(0, 0, r.CenterHeightOffset));
+				var le = map.LeftEdgeOfCell(uv.ToCPos(map)).Select(p => p - new WVec(0, 0, r.CenterHeightOffset));
+				var re = map.RightEdgeOfCell(uv.ToCPos(map)).Select(p => p - new WVec(0, 0, r.CenterHeightOffset));
+				var thickness = uv == mouseCell ? 3 : 1;
+
+				var blockedColor = Color.LightYellow;
+				var endPointColor = blockedColor;
 
 				foreach (var p in r.Polygons)
 				{
 					for (var i = 0; i < p.Length; i++)
 					{
-						if (locomotor.MovementCostToEnterCell(default, uv.ToCPos(map), BlockedByActor.Immovable, null) == short.MaxValue)
-						{
-							var j = (i + 1) % p.Length;
-							var start = pos + p[i];
-							var end = pos + p[j];
-#if DEBUG
-							/*yield return new LineAnnotationRenderableWithZIndex(te.ElementAt(0), te.ElementAt(1), 3, Color.Red, Color.Red);
-							yield return new LineAnnotationRenderableWithZIndex(be.ElementAt(0), be.ElementAt(1), 3, Color.Blue, Color.Blue);
-							yield return new LineAnnotationRenderableWithZIndex(le.ElementAt(0), le.ElementAt(1), 3, Color.Orange, Color.Orange);
-							yield return new LineAnnotationRenderableWithZIndex(re.ElementAt(0), re.ElementAt(1), 3, Color.Pink, Color.Pink);*/
-							yield return new LineAnnotationRenderableWithZIndex(start, end, thickness,
-																	  blockedColor, blockedColor, (100, 3, endPointColor), 2);
+						var j = (i + 1) % p.Length;
+						var start = pos + p[i];
+						var end = pos + p[j];
+#if DEBUG || DEBUGWITHOVERLAY
+						//yield return new LineAnnotationRenderableWithZIndex(te.ElementAt(0), te.ElementAt(1), 3, Color.Red, Color.Red);
+						//yield return new LineAnnotationRenderableWithZIndex(be.ElementAt(0), be.ElementAt(1), 3, Color.Blue, Color.Blue);
+						//yield return new LineAnnotationRenderableWithZIndex(le.ElementAt(0), le.ElementAt(1), 3, Color.Orange, Color.Orange);
+						//yield return new LineAnnotationRenderableWithZIndex(re.ElementAt(0), re.ElementAt(1), 3, Color.Pink, Color.Pink);
+						yield return new LineAnnotationRenderableWithZIndex(start, end, thickness,
+																	blockedColor, blockedColor, (100, 3, endPointColor));
 #else
 #endif
-						}
 					}
 				}
 			}

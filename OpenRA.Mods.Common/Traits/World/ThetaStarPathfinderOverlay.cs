@@ -111,7 +111,7 @@ namespace OpenRA.Mods.Common.Traits
 			var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
 			Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderableWithZIndex(wpos1, wpos2,
 																			lineThickness, lineColor, lineColor,
-																			(endPointRadius, endPointThickness, endPointColor), 3));
+																			(endPointRadius, endPointThickness, endPointColor)));
 			GenericLinkedPointsFunc(path, path.Count, funcOnLinkedPoints);
 			return linesToRender;
 		}
@@ -130,18 +130,18 @@ namespace OpenRA.Mods.Common.Traits
 			var font = Game.Renderer.Fonts[fontName];
 			Color lineColor;
 
-			Func<WPos, Color, CircleAnnotationRenderableWithZIndex> pointRenderFunc = (p, color) =>
-			{ return new CircleAnnotationRenderableWithZIndex(p, new WDist(pointRadius), pointThickness, color, true, 2); };
-			Func<(WPos, WDist), Color, CircleAnnotationRenderableWithZIndex> circleRenderFunc = (c, color) =>
-			{ return new CircleAnnotationRenderableWithZIndex(c.Item1, c.Item2, pointThickness, color, false, 2); };
+			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
+			{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true); };
+			Func<(WPos, WDist), Color, CircleAnnotationRenderable> circleRenderFunc = (c, color) =>
+			{ return new CircleAnnotationRenderable(c.Item1, c.Item2, pointThickness, color, false); };
 
 			// Render States
 			foreach (var (ccState, color) in statesWithColors)
 			{
 				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
 				if (showCosts)
-					yield return new TextAnnotationRenderableWithZIndex(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
-															color, $"({ccState.Gval})", 4);
+					yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
+															color, $"({ccState.Gval})");
 			}
 
 			// Render Points

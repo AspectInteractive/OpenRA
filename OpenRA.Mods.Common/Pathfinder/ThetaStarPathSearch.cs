@@ -616,9 +616,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 					// and add your own. This will let you re-use costs found earlier.
 					var succState = GetState(minStateNeighbours.ElementAt(i));
 
-					/*#if DEBUGWITHOVERLAY
+					#if DEBUGWITHOVERLAY
 					succState.RenderInIfOverlay(thisWorld);
-					#endif*/
+					#endif
 
 					if (!ClosedList.Any(state => state.CC == succState.CC))
 					{
