@@ -116,6 +116,13 @@ namespace OpenRA.Mods.Common.HitShapes
 		public static int GetSliceCount(int angleToCutCircleSlices)
 		{ return angleToCutCircleSlices != 0 ? (int)((Fix64)360 / (Fix64)angleToCutCircleSlices) : -1; }
 
+		public Fix64 GetSliceAngle(int sliceIndex, int angleToCutCircleSlices)
+		{
+			var nSlices = GetSliceCount(angleToCutCircleSlices);
+			var oneSliceAngle = (Fix64)2.0 * Fix64.Pi / (Fix64)nSlices;
+			return oneSliceAngle * (Fix64)sliceIndex;
+		}
+
 		public int CircleSliceIndex(WPos circleCenter, WPos checkPos, int angleToCutCircleSlices)
 		{ return CircleSliceIndex(circleCenter, Radius.Length, checkPos, angleToCutCircleSlices); }
 		public static int CircleSliceIndex(WPos circleCenter, int radius, WPos checkPos, int angleToCutCircleSlices)

@@ -202,16 +202,6 @@ namespace OpenRA.Mods.Common.Traits
 
 			return terrainInfos[index].Speed;
 		}
-		public short MovementCostToEnterCell(Actor actor, CPos destNode, BlockedByActor check, Actor ignoreActor)
-		{
-			var cellCost = MovementCostForCell(destNode);
-
-			if (cellCost == PathGraph.MovementCostForUnreachableCell ||
-				!CanMoveFreelyInto(actor, destNode, check, ignoreActor))
-				return PathGraph.MovementCostForUnreachableCell;
-
-			return cellCost;
-		}
 
 		public short MovementCostToEnterCell(Actor actor, CPos destNode, BlockedByActor check, Actor ignoreActor, bool ignoreSelf = false, SubCell subCell = SubCell.FullCell)
 		{

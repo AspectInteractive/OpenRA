@@ -313,6 +313,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public WPos CurrPathTarget;
 		public WPos LastCompletedTarget;
+		public ThetaStarPathSearch thetaStarSearch;
 
 		public WVec Delta => CurrPathTarget - CenterPosition;
 		public List<WPos> PathComplete = new List<WPos>();
@@ -747,7 +748,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public WPos? GetFirstCollision(WPos checkPos, WVec move, WDist lookAheadDist, Locomotor locomotor,
-									   bool attackingUnitsOnly = false, bool includeCellCollision = false)
+									   bool attackingUnitsOnly = false, bool includeCellCollision = false, bool includeActorCollision = true)
 		{
 			var intersections = new List<WPos>();
 			var selfCenter = checkPos;
@@ -768,34 +769,37 @@ namespace OpenRA.Mods.Common.Traits
 				}
 
 			// Ray cast to actor collisions
-			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (calcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
-																	lookAheadDist)
-												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
+			if (includeActorCollision)
 			{
-				if (!destActor.IsDead && ValidCollisionActor(destActor))
+				foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (calcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
+																		lookAheadDist)
+													.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 				{
-					var destActorCenter = (destActor.CenterPosition +
-											  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
-												.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
-					if (destActorCenter != WPos.Zero)
+					if (!destActor.IsDead && ValidCollisionActor(destActor))
 					{
-						//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
-						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-							if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
-								foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
-								{
-									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
-									if (intersection != null)
+						var destActorCenter = (destActor.CenterPosition +
+												  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
+													.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
+						if (destActorCenter != WPos.Zero)
+						{
+							//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+							foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
+								if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
+									foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
 									{
-										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
-										intersections.Add((WPos)intersection);
+										var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
+										if (intersection != null)
+										{
+											//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
+											intersections.Add((WPos)intersection);
+										}
+										else
+										{
+											//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
+											continue;
+										}
 									}
-									else
-									{
-										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
-										continue;
-									}
-								}
+						}
 					}
 				}
 			}
@@ -910,7 +914,7 @@ namespace OpenRA.Mods.Common.Traits
 															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
 								if (destActorCenter != WPos.Zero)
 								{
-									MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+									//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 									foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 										if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
 											posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
@@ -959,7 +963,7 @@ namespace OpenRA.Mods.Common.Traits
 								var destActorCenter = (destActor.CenterPosition +
 														  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
 															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
-								MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+								//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 								foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 									if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
 										posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))

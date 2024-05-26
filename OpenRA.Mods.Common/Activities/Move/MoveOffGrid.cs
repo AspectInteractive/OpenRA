@@ -103,11 +103,10 @@ namespace OpenRA.Mods.Common.Activities
 		int maxTicksBeforeLOScheck = 3;
 		readonly Locomotor locomotor;
 
-		ThetaStarPathSearch thetaStarSearch;
 		ThetaPathfinderExecutionManager thetaPFexecManager;
-		bool runningTheta = false;
 		bool secondThetaRun = false;
 		List<Actor> actorsSharingMove = new List<Actor>();
+		bool pathFound = false;
 		List<WPos> pathRemaining = new List<WPos>();
 		bool reachedMaxExpansions = false;
 		int thetaIters = 0;
@@ -228,6 +227,8 @@ namespace OpenRA.Mods.Common.Activities
 		}
 		public static void RemoveCircle(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
+		public static void RemoveCircle(World world, WPos pos, WDist radius)
+		{ world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
 
 		public static void RenderPoint(Actor self, WPos pos)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
@@ -301,10 +302,13 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (usePathFinder)
 			{
-				thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition
-														  , actorsSharingMove);
-				thetaPFexecManager.AddPF(self, thetaStarSearch);
-				runningTheta = true;
+				// mobileOffGrid.thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, target.CenterPosition
+				//										  , actorsSharingMove);
+				// IMPORTANT: This AddMoveOrder call relies on _all_ MoveOffGrid Activities
+				// being called _before_ any traits are called. This is because all of the actors
+				// must be processed collectively in order for the grouped pathfinding to work.
+				// Otherwise pathfinding will be inefficient and slow.
+				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, actorsSharingMove);
 				thetaIters++;
 			}
 
@@ -346,48 +350,48 @@ namespace OpenRA.Mods.Common.Activities
 		{ return pp.ccPos != CCPos.Zero ? ThetaStarPathSearch.PadCC(self.World, self, locomotor, mobileOffGrid, pp.ccPos) : pp.wPos; }
 
 		public List<WPos> GetThetaPathAndConvert(Actor self)
-		{ return thetaStarSearch.path.Select(pp => PadCCifCC(self, pp)).ToList(); }
+		{ return mobileOffGrid.thetaStarSearch.path.Select(pp => PadCCifCC(self, pp)).ToList(); }
 
 		public override bool Tick(Actor self)
 		{
-			if (runningTheta)
+			// NOTE: Do not check if the pathfinder is running, as it will automatically turn off after the path is found
+			if (mobileOffGrid.thetaStarSearch != null && mobileOffGrid.thetaStarSearch.pathFound
+				&& !pathFound)
 			{
 				// -- Expansion now managed by execution manager
 				//using (new Support.PerfTimer("ThetaStar"))
 				//	thetaStarSearch.Expand();
 
-				if (thetaStarSearch.pathFound)
-				{
-					pathRemaining = GetThetaPathAndConvert(self);
-					reachedMaxExpansions = thetaStarSearch.HitTotalExpansionLimit;
-					if (pathRemaining.Count == 0)
-						pathRemaining = new List<WPos>() { target.CenterPosition };
+				pathRemaining = GetThetaPathAndConvert(self);
+				reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
+				if (pathRemaining.Count == 0)
+					pathRemaining = new List<WPos>() { target.CenterPosition };
 
-					if (!secondThetaRun)
-						GetNextTargetOrComplete();
-					else
+				if (!secondThetaRun)
+					GetNextTargetOrComplete();
+				else
+				{
+					List<WPos> thetaToNextTarg;
+					thetaToNextTarg = GetThetaPathAndConvert(self);
+					reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
+					thetaIters++;
+					if (thetaToNextTarg.Count > 1)
 					{
-						List<WPos> thetaToNextTarg;
-						thetaToNextTarg = GetThetaPathAndConvert(self);
-						reachedMaxExpansions = thetaStarSearch.HitTotalExpansionLimit;
-						thetaIters++;
-						if (thetaToNextTarg.Count > 1)
-						{
-							pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
-							GetNextTargetOrComplete(false);
-							EndingActions();
-							mobileOffGrid.PositionBuffer.Clear();
-							isBlocked = false; // only unblock if we have found a better path
-						}
-						searchingForNextTarget = false;
+						pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
+						GetNextTargetOrComplete(false);
+						EndingActions();
+						mobileOffGrid.PositionBuffer.Clear();
+						isBlocked = false; // only unblock if we have found a better path
 					}
-					runningTheta = false;
-					secondThetaRun = false;
+					searchingForNextTarget = false;
 				}
+				mobileOffGrid.thetaStarSearch = null;
+				pathFound = true;
+				secondThetaRun = false;
 			}
 
 			// Will not move unless there is a path to move on
-			if (!thetaStarSearch.pathFound)
+			if (pathRemaining.Count == 0 && currPathTarget == WPos.Zero)
 				return false;
 
 			var nearbyActorsSharingMove = GetNearbyActorsSharingMove(self, false);
@@ -537,11 +541,15 @@ namespace OpenRA.Mods.Common.Activities
 						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
 							searchingForNextTarget = true;
-							thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget
-																	  , actorsSharingMove);
-							thetaPFexecManager.AddPF(self, thetaStarSearch);
-							runningTheta = true;
+							// mobileOffGrid.thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget
+							//										  , actorsSharingMove);
+							// IMPORTANT: This AddMoveOrder call relies on _all_ MoveOffGrid Activities
+							// being called _before_ any traits are called. This is because all of the actors
+							// must be processed collectively in order for the grouped pathfinding to work.
+							// Otherwise pathfinding will be inefficient and slow.
+							thetaPFexecManager.AddMoveOrder(self, currPathTarget, actorsSharingMove, secondThetaRun: true);
 							secondThetaRun = true;
+							pathFound = false;
 							thetaIters++;
 						}
 						else if (mobileOffGrid.PositionBuffer.Count >= 180) // 3 seconds

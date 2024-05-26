@@ -202,63 +202,6 @@ namespace OpenRA.Mods.Common.Orders
 			return null;
 		}
 
-		/// <summary>
-		/// Returns the most appropriate order for a given actor and target.
-		/// First priority is given to orders that interact with the given actors.
-		/// Second priority is given to actors in the given cell.
-		/// </summary>
-		/*static UnitGroupOrderResult OrderForUnitGroup(List<Actor> selves, Target target, List<Actor> actorsAt, CPos xy, MouseInput mi)
-		{
-			if (mi.Button != Game.Settings.Game.MouseButtonPreference.Action)
-				return null;
-
-			if (selves.All(s => s.Owner != s.World.LocalPlayer))
-				return null;
-
-			if (selves.All(s => s.World.IsGameOver))
-				return null;
-
-			if (selves.All(s => s.Disposed) || selves.All(s => !target.IsValidFor(s)))
-				return null;
-
-			var modifiers = TargetModifiers.None;
-			if (mi.Modifiers.HasModifier(Modifiers.Ctrl))
-				modifiers |= TargetModifiers.ForceAttack;
-			if (mi.Modifiers.HasModifier(Modifiers.Shift))
-				modifiers |= TargetModifiers.ForceQueue;
-			if (mi.Modifiers.HasModifier(Modifiers.Alt))
-				modifiers |= TargetModifiers.ForceMove;
-
-			// The Select(x => x) is required to work around an issue on mono 5.0
-			// where calling OrderBy* on SelectManySingleSelectorIterator can in some
-			// circumstances (which we were unable to identify) replace entries in the
-			// enumeration with duplicates of other entries.
-			// Other action that replace the SelectManySingleSelectorIterator with a
-			// different enumerator type (e.g. .Where(true) or .ToList()) also work.
-			var orders = selves.SelectMany(s => s.TraitsImplementing<IIssueGroupOrder>()
-											 .SelectMany(trait => trait.GroupOrders.Select(x => new { Trait = trait, Order = x }))
-											 .Select(x => x))
-								.OrderByDescending(x => x.Order.OrderPriority).Distinct();
-
-			for (var i = 0; i < 2; i++)
-			{
-				foreach (var o in orders)
-				{
-					var localModifiers = modifiers;
-					string cursor = null;
-					if (selves.Where(s => o.Order.CanTarget(s, target, actorsAt, ref localModifiers, ref cursor)).Any())
-					{
-						return new UnitGroupOrderResult(selves, o.Order, o.Trait, cursor, target);
-					}
-				}
-
-				// No valid orders, so check for orders against the cell
-				target = Target.FromCell(selves.FirstOrDefault().World, xy);
-			}
-
-			return null;
-		}*/
-
 		static Order CheckSameOrder(IOrderTargeter iot, Order order)
 		{
 			if (order == null && iot.OrderID != null)

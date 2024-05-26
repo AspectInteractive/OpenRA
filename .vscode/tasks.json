@@ -11,8 +11,7 @@
 			"command": "make",
 			"args": [
 				"all",
-				"CONFIGURATION=Debug",
-				"/p:DefineConstants=DEBUG"
+				"CONFIGURATION=DebugWithOverlay"
 			],
 			"windows": {
 				"command": "make.cmd"
