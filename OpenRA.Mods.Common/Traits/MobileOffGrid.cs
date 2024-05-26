@@ -1022,11 +1022,10 @@ namespace OpenRA.Mods.Common.Traits
 			// This would then allow us to e.g. have units attack other units inside tunnels.
 			if (ToCell.Layer == 0)
 				return true;
-			
+
 			var layer = self.World.GetCustomMovementLayers()[ToCell.Layer];
 			return layer == null || layer.InteractsWithDefaultLayer;
 		}
-
 		#endregion
 
 		#region IPositionable

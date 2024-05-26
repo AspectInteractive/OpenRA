@@ -18,7 +18,7 @@
     },
     "Red Alert - Test Map": {
       "commandName": "Project",
-      "commandLineArgs": "Engine.EngineDir=\"..\" Game.Mod=ra Launch.Map=\"G:\\Jire\\mods\\ra\\maps\\warwind3.oramap\""
+      "commandLineArgs": "Engine.EngineDir=\"..\" Game.Mod=ra Launch.Map=\"warwind3.oramap\""
     },
     "WSL 2": {
       "commandName": "WSL2",
