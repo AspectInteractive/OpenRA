@@ -382,14 +382,21 @@ namespace OpenRA
 						switch (targetState.Type)
 						{
 							case TargetType.Actor:
+							{
 								w.Write(UIntFromActor(targetState.Actor));
 								w.Write(targetState.Generation);
 								break;
+							}
+
 							case TargetType.FrozenActor:
+							{
 								w.Write(Target.FrozenActor.Viewer.PlayerActor.ActorID);
 								w.Write(Target.FrozenActor.ID);
 								break;
+							}
+
 							case TargetType.Terrain:
+							{
 								if (fields.HasField(OrderFields.TargetIsCell))
 								{
 									w.Write(targetState.Cell.Value.Bits);
@@ -418,6 +425,7 @@ namespace OpenRA
 								}
 
 								break;
+							}
 						}
 					}
 

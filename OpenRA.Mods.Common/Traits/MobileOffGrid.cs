@@ -829,8 +829,8 @@ namespace OpenRA.Mods.Common.Traits
 			if (includeCellCollision)
 				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
 				{
-					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
-					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
+					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item1, Color.LightGreen);
+					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item2, Color.LightGreen);
 					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
 					foreach (var cell in cellsToCheck)
 						if (CellIsBlocked(self, locomotor, cell))
@@ -850,7 +850,7 @@ namespace OpenRA.Mods.Common.Traits
 					var destActorCenter = (destActor.CenterPosition + destActorMobileOffGrids.FirstOrDefault().GenFinalWVec());
 					if (destActorCenter != WPos.Zero)
 					{
-						//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
+						//MoveOffGrid.RenderPointCollDebug(self, destActorCenter, Color.LightGreen);
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 							if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
 								foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
@@ -858,7 +858,7 @@ namespace OpenRA.Mods.Common.Traits
 									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
 									if (intersection != null)
 									{
-										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
+										//MoveOffGrid.RenderLineWithColorCollDebug(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
 										intersections.Add((WPos)intersection);
 									}
 									else

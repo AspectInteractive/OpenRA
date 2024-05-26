@@ -27,7 +27,6 @@ namespace OpenRA.Graphics
 		readonly Func<bool> paused;
 
 		int frame;
-		int rotAngle = 0;
 		bool backwards;
 		bool tickAlways;
 		int timeUntilNextFrame;

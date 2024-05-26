@@ -271,9 +271,9 @@ namespace OpenRA.Traits
 			switch (me.type)
 			{
 				case TargetType.Terrain:
-					return me.terrainCenterPosition == other.terrainCenterPosition
-						&& me.terrainPositions == other.terrainPositions
-						&& me.cell == other.cell && me.subCell == other.subCell;
+					return me.cell == other.cell && me.subCell == other.subCell
+						&& me.CenterPosition == other.CenterPosition
+						&& me.terrainPositions == other.terrainPositions;
 
 				case TargetType.Actor:
 					return me.Actor == other.Actor && me.generation == other.generation;
