@@ -1532,3 +1532,11 @@ scoutant:
 		ZOffset: -511
 	icon:
 		Filename: anticon.shp
+
+assn:
+	stand:
+		Facings: 1
+	run: 
+		Start: 1
+		Length: 10
+	icon: 2tnkicon
