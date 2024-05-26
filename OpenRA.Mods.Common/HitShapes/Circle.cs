@@ -110,7 +110,8 @@ namespace OpenRA.Mods.Common.HitShapes
 		{
 			var xDelta = circleCenter.X - checkPos.X;
 			var yDelta = circleCenter.Y - checkPos.Y;
-			return Sqrt(Sq(xDelta) + Sq(yDelta)) < radius;
+			var delta = (long)Sq(xDelta) + Sq(yDelta);
+			return Sqrt(delta) < radius;
 		}
 
 		public static int GetSliceCount(int angleToCutCircleSlices)

@@ -398,8 +398,8 @@ namespace OpenRA.Mods.Common.Activities
 			var sharedMoveAvgDelta = WVec.Zero;
 			if (nearbyActorsSharingMove.Count >= 1)
 				sharedMoveAvgDelta = AvgOfVectors(GetNearbyActorsSharingMove(self, false).Where(a => !a.IsDead)
-										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
-										.Select(a => a.Delta).ToList());
+										.Select(a => a.TraitsImplementing<MobileOffGrid>()).FirstEnabledTraitOrDefault()
+										.Where(a => a != null).Select(a => a.Delta).ToList());
 			else sharedMoveAvgDelta = Delta;
 
 			var dat = self.World.Map.DistanceAboveTerrain(mobileOffGrid.CenterPosition);
