@@ -14,7 +14,7 @@
     ThetaPathfinderExecutionManager:
 	CPosCoordsDebugOverlay:
 	DebugVisualizations:
-    ThetaStarCache:
+	ThetaStarCache:
 	Locomotor@FOOT:
 		Name: foot
 		Crushes: mine, crate

@@ -1534,11 +1534,21 @@ scoutant:
 		Filename: anticon.shp
 
 assn:
-	stand:
+	stand: assn.png
 		Facings: 1
 		InterpolatedFacings: 1024
-	run: 
+		AddExtension: False
+		Tick: 80
+	shoot: assn_attack.png
+		Facings: 1
+		InterpolatedFacings: 1024
+		Length: 3
+		AddExtension: False
+		Tick: 80
+	run: assn.png
 		Start: 1
 		Length: 10
 		InterpolatedFacings: 1024
+		AddExtension: False
+		Tick: 80
 	icon: 2tnkicon

@@ -238,7 +238,7 @@ SupportsMapsFrom: ra
 
 SoundFormats: Aud, Wav
 
-SpriteFormats: ShpD2, ShpTD, TmpRA, TmpTD, ShpTS
+SpriteFormats: PngSheet, ShpD2, ShpTD, TmpRA, TmpTD, ShpTS
 
 VideoFormats: Vqa, Wsa
 
@@ -252,8 +252,12 @@ AssetBrowser:
 	VideoExtensions: .vqa, .wsa
 
 GameSpeeds:
-	DefaultSpeed: default
+	DefaultSpeed: classic
 	Speeds:
+		classic:
+			Name: Classic
+			Timestep: 40
+			OrderLatency: 3
 		default:
 			Name: Normal
 			Timestep: 16

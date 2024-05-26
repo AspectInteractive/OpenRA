@@ -18,7 +18,7 @@
     },
     "Red Alert - Test Map": {
       "commandName": "Project",
-      "commandLineArgs": "Engine.EngineDir=\"..\" Game.Mod=ra Launch.Map=\"warwind3.oramap\""
+      "commandLineArgs": "Engine.EngineDir=\"..\" Game.Mod=ra Launch.Map=\"a-nuclear-winter\""
     },
     "WSL 2": {
       "commandName": "WSL2",
