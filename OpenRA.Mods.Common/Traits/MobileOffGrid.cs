@@ -308,6 +308,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		IEnumerable<int> speedModifiers;
 
+		public Color debugColor = Color.RandomColor();
 		WPos cachedPosition;
 		WAngle cachedFacing;
 
@@ -619,7 +620,9 @@ namespace OpenRA.Mods.Common.Traits
 
 			var oldFacing = Facing;
 			var turnSpeed = GetTurnSpeed(false);
-			Facing = Util.TickFacing(Facing, (DesiredFacing == WAngle.Zero ? move.Yaw : DesiredFacing), turnSpeed);
+			//DesiredFacing = -WAngle.ArcTan(CenterPosition.Y - CurrPathTarget.Y, CenterPosition.X - CurrPathTarget.X) + new WAngle(256);
+			Facing = Util.TickFacing(Facing, DesiredFacing == WAngle.Zero ? move.Yaw : DesiredFacing, turnSpeed);
+			//Console.WriteLine($"DesiredFacing: {DesiredFacing}, Facing: {Facing}, move.Yaw: {move.Yaw}");
 
 			if (Info.Roll != WAngle.Zero)
 			{
