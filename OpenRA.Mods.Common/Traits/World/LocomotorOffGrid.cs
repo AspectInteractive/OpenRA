@@ -271,6 +271,8 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				if (otherActor.OccupiesSpace is Mobile mobile && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable)
 					return false;
+				if (otherActor.OccupiesSpace is MobileOffGrid mobileOG && !mobileOG.IsTraitDisabled && !mobileOG.IsTraitPaused && !mobileOG.IsImmovable)
+					return false;
 			}
 
 			// If the check allows: we are not blocked by moving units.
@@ -422,7 +424,10 @@ namespace OpenRA.Mods.Common.Traits
 
 					var crushables = actor.TraitsImplementing<ICrushable>();
 					var mobile = actor.OccupiesSpace as Mobile;
-					var isMovable = mobile != null && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable;
+					var mobileIsMovable = mobile != null && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable;
+					var mobileOffGridIsMovable = actor.OccupiesSpace is MobileOffGrid mobileOffGrid && !mobileOffGrid.IsTraitDisabled &&
+						!mobileOffGrid.IsTraitPaused && !mobileOffGrid.IsImmovable;
+					var isMovable = mobileIsMovable || mobileOffGridIsMovable;
 					var isMoving = isMovable && mobile.CurrentMovementTypes.HasMovementType(MovementType.Horizontal);
 
 					var isTransitOnly = actor.OccupiesSpace is Building building && building.TransitOnlyCells().Contains(cell);

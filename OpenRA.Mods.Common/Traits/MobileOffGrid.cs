@@ -594,6 +594,7 @@ namespace OpenRA.Mods.Common.Traits
 						var repulsionMvVec = new MvVec(RepulsionVecFunc(actorMobileOG, CenterPosition, actorMobileOG.CenterPosition), 1);
 						var proposedActorMove = GenFinalWVec(actorMobileOG.SeekVectors,
 															 actorMobileOG.FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
+						// Do not repel actors into blocked cells
 						if (!CellsCollidingWithPosBool(actor, actor.CenterPosition, proposedActorMove, 3, Locomotor) &&
 							!ActorIsAiming(actor)) // we do not repel Attacking actors, we repel against them
 							actorMobileOG.FleeVectors.Add(repulsionMvVec);
@@ -675,9 +676,9 @@ namespace OpenRA.Mods.Common.Traits
 			return calcSourceDestPairs;
 		}
 
-		public static bool CellIsBlocked(Actor self, Locomotor locomotor, CPos cell)
+		public static bool CellIsBlocked(Actor self, Locomotor locomotor, CPos cell, BlockedByActor check = BlockedByActor.Immovable)
 		{
-			return locomotor.MovementCostToEnterCell(default, cell, BlockedByActor.None, self) == short.MaxValue ||
+			return locomotor.MovementCostToEnterCell(self, cell, check, self, true) == short.MaxValue ||
 				CellBlockedByBuilding(self, cell) || !CPosinMap(self, cell);
 		}
 
@@ -689,6 +690,8 @@ namespace OpenRA.Mods.Common.Traits
 			return false;
 		}
 
+		// This is a look ahead repel from cells that the unit is about to move into - hence the 'lookAhead' parameter
+		// It returns the list of cells that collide with the actor, for use with repulsion
 		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{ return CellsCollidingWithPos(self, self.CenterPosition, move, lookAhead, locomotor, incOrigin, skipLookAheadAmt); }
@@ -710,15 +713,18 @@ namespace OpenRA.Mods.Common.Traits
 					for (var i = startI; i < lookAhead; i++)
 					{
 						var cellToTest = self.World.Map.CellContaining(corner + move * i);
-						if (CellIsBlocked(self, locomotor, cellToTest) && !cellsColliding.Contains(cellToTest))
+						if (CellIsBlocked(self, locomotor, cellToTest, BlockedByActor.Immovable) && !cellsColliding.Contains(cellToTest))
 							cellsColliding.Add(cellToTest);
 					}
-					if (incOrigin && CellIsBlocked(self, locomotor, cell) && !cellsColliding.Contains(cell))
+					if (incOrigin && CellIsBlocked(self, locomotor, cell, BlockedByActor.Immovable) && !cellsColliding.Contains(cell))
 						cellsColliding.Add(cell);
 				}
 			}
 			return cellsColliding;
 		}
+
+		// This is used for detecting if any cell has collided
+		// Unlike CellsCollidingWithPos, it does not need to keep a list of cells and can exit early
 		public bool CellsCollidingWithPosBool(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
@@ -750,6 +756,7 @@ namespace OpenRA.Mods.Common.Traits
 				   actor.TraitsImplementing<MobileOffGrid>().Any();
 		}
 
+		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
 		public WPos? GetFirstCollision(WPos checkPos, WVec move, WDist lookAheadDist, Locomotor locomotor,
 									   bool attackingUnitsOnly = false, bool includeCellCollision = false, bool includeActorCollision = true)
 		{
@@ -765,10 +772,10 @@ namespace OpenRA.Mods.Common.Traits
 					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
 					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
 					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell))
-							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
-														 .ToList();
+					//foreach (var cell in cellsToCheck)
+						//if (CellIsBlocked(self, locomotor, cell))
+						//	intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+						//								 .ToList();
 				}
 
 			// Ray cast to actor collisions
@@ -817,6 +824,7 @@ namespace OpenRA.Mods.Common.Traits
 				return null;
 		}
 
+		// Main collision detection against units
 		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
 										   bool attackingUnitsOnly = false, bool includeCellCollision = false)
 		{
@@ -835,10 +843,10 @@ namespace OpenRA.Mods.Common.Traits
 					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item1, Color.LightGreen);
 					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item2, Color.LightGreen);
 					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell))
-							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
-														 .ToList();
+					//foreach (var cell in cellsToCheck)
+					//	if (CellIsBlocked(self, locomotor, cell))
+					//		intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+					//									 .ToList();
 				}
 
 			// Ray cast to actor collisions

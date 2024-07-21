@@ -908,11 +908,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 		CCPos GetNearestCCPos(WPos pos) { return GetNearestCCPos(pos, thisWorld); }
 
 		bool IsCellBlocked(CPos? cell) { return IsCellBlocked(self, locomotor, cell); }
-		static bool IsCellBlocked(Actor self, Locomotor locomotor, CPos? cell)
+		static bool IsCellBlocked(Actor self, Locomotor locomotor, CPos? cell, BlockedByActor check = BlockedByActor.None)
 		{
 			if (cell == null)
 				return true; // All invalid cells are blocked
-			return MobileOffGrid.CellIsBlocked(self, locomotor, (CPos)cell);
+			return MobileOffGrid.CellIsBlocked(self, locomotor, (CPos)cell, check);
 		}
 
 		bool CellSurroundingCCPosIsBlocked(CCPos ccPos, CellSurroundingCorner cellSurroundingCorner)
@@ -923,13 +923,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 			switch (cellSurroundingCorner)
 			{
 				case CellSurroundingCorner.TopLeft:
-					return IsCellBlocked(self, locomotor, world.Map.CellTopLeftOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellTopLeftOfCCPos(ccPos), BlockedByActor.Immovable);
 				case CellSurroundingCorner.TopRight:
-					return IsCellBlocked(self, locomotor, world.Map.CellTopRightOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellTopRightOfCCPos(ccPos), BlockedByActor.Immovable);
 				case CellSurroundingCorner.BottomLeft:
-					return IsCellBlocked(self, locomotor, world.Map.CellBottomLeftOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellBottomLeftOfCCPos(ccPos), BlockedByActor.Immovable);
 				case CellSurroundingCorner.BottomRight:
-					return IsCellBlocked(self, locomotor, world.Map.CellBottomRightOfCCPos(ccPos));
+					return IsCellBlocked(self, locomotor, world.Map.CellBottomRightOfCCPos(ccPos), BlockedByActor.Immovable);
 				default:
 					return false;
 			}

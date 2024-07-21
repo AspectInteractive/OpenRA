@@ -87,10 +87,10 @@ namespace OpenRA.Mods.Common.Traits
 				if (locomotorActor != null)
 					locomotor = locomotorActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault().Locomotor;
 				string cellText;
-				if (locomotor != null)
-					cellText = $"({locomotor.MovementCostToEnterCell(locomotorActor, cell, BlockedByActor.All, null, false, SubCell.FullCell)})";
-				else
-					cellText = $"({cell.X},{cell.Y})";
+				//if (locomotor != null)
+				//	cellText = $"({locomotor.MovementCostToEnterCell(locomotorActor, cell, BlockedByActor.All, null, false, SubCell.FullCell)})";
+				//else
+				cellText = $"({cell.X},{cell.Y})";
 
 				yield return new TextAnnotationRenderable(font, center, 0, color, cellText);
 			}

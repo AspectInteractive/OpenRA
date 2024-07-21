@@ -344,8 +344,13 @@ namespace OpenRA.Mods.Common.Traits
 				return false;
 
 			var otherMobile = otherActor.OccupiesSpace as Mobile;
-			var otherIsMovable = otherMobile != null && !otherMobile.IsTraitDisabled && !otherMobile.IsTraitPaused && !otherMobile.IsImmovable;
-			var otherIsMoving = otherIsMovable && otherMobile.CurrentMovementTypes.HasMovementType(MovementType.Horizontal);
+			var otherMobileOffGrid = otherActor.OccupiesSpace as MobileOffGrid;
+			var otherMobileIsMovable = otherMobile != null && !otherMobile.IsTraitDisabled && !otherMobile.IsTraitPaused && !otherMobile.IsImmovable;
+			var otherMobileOffGridIsMovable = otherMobileOffGrid != null && !otherMobileOffGrid.IsTraitDisabled &&
+				!otherMobileOffGrid.IsTraitPaused && !otherMobileOffGrid.IsImmovable;
+			var otherIsMovable = otherMobileIsMovable || otherMobileOffGridIsMovable;
+			var otherIsMoving = (otherMobileIsMovable && otherMobile.CurrentMovementTypes.HasMovementType(MovementType.Horizontal)) ||
+				(otherMobileOffGridIsMovable && otherMobileOffGrid.CurrentMovementTypes.HasMovementType(MovementType.Horizontal));
 
 			// If the check allows: We are not blocked by allied units that we can force to move out of the way.
 			if (check <= BlockedByActor.Immovable && cellFlag.HasCellFlag(CellFlag.HasMovableActor) && otherIsMovable &&
@@ -492,8 +497,13 @@ namespace OpenRA.Mods.Common.Traits
 
 					var crushables = actor.Crushables;
 					var mobile = actor.OccupiesSpace as Mobile;
-					var isMovable = mobile != null && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable;
-					var isMoving = isMovable && mobile.CurrentMovementTypes.HasMovementType(MovementType.Horizontal);
+					var mobileOffGrid = actor.OccupiesSpace as MobileOffGrid;
+					var mobileIsMovable = mobile != null && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable;
+					var mobileOffGridIsMovable = mobileOffGrid != null && !mobileOffGrid.IsTraitDisabled &&	!mobileOffGrid.IsTraitPaused &&
+						!mobileOffGrid.IsImmovable;
+					var isMovable = mobileIsMovable || mobileOffGridIsMovable;
+					var isMoving = (mobileIsMovable && mobile.CurrentMovementTypes.HasMovementType(MovementType.Horizontal)) ||
+						(mobileOffGridIsMovable && mobileOffGrid.CurrentMovementTypes.HasMovementType(MovementType.Horizontal));
 
 					var isTransitOnly = actor.OccupiesSpace is Building building && building.TransitOnlyCells().Contains(cell);
 
