@@ -119,6 +119,7 @@ namespace OpenRA.Mods.Common.Activities
 		WPos currPathTarget;
 		WPos lastPathTarget;
 		bool isBlocked = false;
+		bool firstMove = false;
 
 		WPos FinalPathTarget => pathRemaining.Count > 0 ? pathRemaining.Last() : currPathTarget;
 
@@ -147,7 +148,7 @@ namespace OpenRA.Mods.Common.Activities
 			return nextTarget;
 		}
 
-		private bool GetNextTargetOrComplete(Actor self, bool completeCurrTarg = true)
+		bool GetNextTargetOrComplete(Actor self, bool completeCurrTarg = true)
 		{
 			if (completeCurrTarg)
 			{
@@ -157,7 +158,13 @@ namespace OpenRA.Mods.Common.Activities
 			if (pathRemaining.Count > 0)
 			{
 				lastPathTarget = currPathTarget; // for validation purposes
-				currPathTarget = AdjustedCurrPathTarget(self, PopNextTarget());
+				if (firstMove)
+				{
+					currPathTarget = AdjustedCurrPathTarget(self, PopNextTarget());
+					firstMove = false;
+				}
+				else
+					currPathTarget = PopNextTarget();
 				Console.WriteLine($"currPathTarget: {currPathTarget}");
 				mobileOffGrid.CurrPathTarget = currPathTarget;
 			}
@@ -246,6 +253,10 @@ namespace OpenRA.Mods.Common.Activities
 
 		public static void RenderCircle(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
+
+		public static void RenderCircleCollDebug(Actor self, WPos pos, WDist radius)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
+
 		public static void RenderCircleWithColor(Actor self, WPos pos, WDist radius, Color color)
 		{
 			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>()
@@ -283,6 +294,7 @@ namespace OpenRA.Mods.Common.Activities
 		public MoveOffGrid(Actor self, in List<Actor> groupedActors, in Target t, WPos? initialTargetPosition = null,
 							Color? targetLineColor = null)
 		{
+			firstMove = true;
 			mobileOffGrid = self.Trait<MobileOffGrid>();
 			localAvoidanceDist = mobileOffGrid.UnitRadius * 2;
 			target = t;
@@ -452,7 +464,7 @@ namespace OpenRA.Mods.Common.Activities
 			.Select(am2 =>
 			{
 				am2.OffsetTarget = currPathTarget - am2.OffsetToCenterOfActors;
-				am2.IsOffsetCloseEnough = am2.OffsetToCenterOfActors.HorizontalLengthSquared < 1024 * 1024 * 30;
+				am2.IsOffsetCloseEnough = am2.OffsetToCenterOfActors.HorizontalLengthSquared < 1024 * 1024 * 40;
 				am2.IsOffsetTargetObservable = IsPathObservable(am2.Act.World, am2.Act, am2.MobOffGrid.Locomotor,
 					currPathTarget - am2.OffsetToCenterOfActors, mobileOffGrid.CenterPosition);
 				return am2;

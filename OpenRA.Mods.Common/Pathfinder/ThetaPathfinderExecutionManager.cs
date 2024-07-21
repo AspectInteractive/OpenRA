@@ -82,6 +82,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
+		// The number of expansions allowed across all Theta pathfinders
 		int maxCurrExpansions = 200;
 		int radiusForSharedThetas = 1024 * 10;
 		int minDistanceForCircles = 1024 * 28;

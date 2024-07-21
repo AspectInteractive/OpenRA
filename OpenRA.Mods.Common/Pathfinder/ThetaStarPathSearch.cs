@@ -19,6 +19,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
@@ -76,10 +77,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 		public bool pathFound = false;
 		public bool running = false;
 		public int currDelayToRun = -1; // This is the number of ticks required to elapse before this PF runs
-		public int numCurrExpansions;
 		public int numTotalExpansions;
+		// Total number of expansions for each lazy expand call per tick. Does not affect total number of allowed expansions (see maxTotalExpansions)
 		public int maxCurrExpansions = -1;
-		public int maxTotalExpansions;
+		// Total number of expansions that Theta is allowed to make before returning the path.
+		public int maxTotalExpansions = 2000;
 		public bool HitTotalExpansionLimit => numTotalExpansions >= maxTotalExpansions;
 
 		public class CCState : IComparable<CCState>, IEquatable<CCState>
@@ -512,8 +514,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 							newCellCandidates.Add(nc);
 				}
 
+				foreach (var c in newCandidates)
+					MoveOffGrid.RenderCircleCollDebug(self, thisWorld.Map.WPosFromCCPos(c), new WDist(1024));
+
 				var distFromDest = int.MaxValue;
-				var bestCandidate = newCandidates.ElementAt(0);
+				var bestCandidate = newCandidates[0];
 
 				foreach (var c in newCellCandidates)
 				{
@@ -527,6 +532,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 				destCCPos = bestCandidate;
 				destPos = thisWorld.Map.WPosFromCCPos(bestCandidate);
+				//Dest = destPos;
 			}
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
@@ -549,7 +555,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 			AddStateToOpen(startState);
 
 			numTotalExpansions = 0;
-			maxTotalExpansions = 6000;
 			minState = startState;
 		}
 
@@ -586,8 +591,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		public void Expand(int inMaxCurrExpansions)
 		{
+			var numCurrExpansions = 0;
 			maxCurrExpansions = inMaxCurrExpansions;
-			numCurrExpansions = 0;
 			while (OpenList.Count > 0 && numCurrExpansions < maxCurrExpansions && numTotalExpansions < maxTotalExpansions)
 			{
 				minState = PopFirstFromOpen();
@@ -900,19 +905,19 @@ namespace OpenRA.Mods.Common.Pathfinder
 				return ClosestCCPosInMap(nearestCC, world);
 		}
 
-		private CCPos GetNearestCCPos(WPos pos) { return GetNearestCCPos(pos, thisWorld); }
+		CCPos GetNearestCCPos(WPos pos) { return GetNearestCCPos(pos, thisWorld); }
 
-		private bool IsCellBlocked(CPos? cell) { return IsCellBlocked(self, locomotor, cell);	}
-		private static bool IsCellBlocked(Actor self, Locomotor locomotor, CPos? cell)
+		bool IsCellBlocked(CPos? cell) { return IsCellBlocked(self, locomotor, cell); }
+		static bool IsCellBlocked(Actor self, Locomotor locomotor, CPos? cell)
 		{
 			if (cell == null)
 				return true; // All invalid cells are blocked
 			return MobileOffGrid.CellIsBlocked(self, locomotor, (CPos)cell);
 		}
 
-		private bool CellSurroundingCCPosIsBlocked(CCPos ccPos, CellSurroundingCorner cellSurroundingCorner)
+		bool CellSurroundingCCPosIsBlocked(CCPos ccPos, CellSurroundingCorner cellSurroundingCorner)
 		{ return CellSurroundingCCPosIsBlocked(thisWorld, self, locomotor, ccPos, cellSurroundingCorner); }
-		private static bool CellSurroundingCCPosIsBlocked(World world, Actor self, Locomotor locomotor,
+		static bool CellSurroundingCCPosIsBlocked(World world, Actor self, Locomotor locomotor,
 														  CCPos ccPos, CellSurroundingCorner cellSurroundingCorner)
 		{
 			switch (cellSurroundingCorner)

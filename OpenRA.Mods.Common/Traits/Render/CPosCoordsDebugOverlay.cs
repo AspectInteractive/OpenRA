@@ -82,8 +82,17 @@ namespace OpenRA.Mods.Common.Traits
 				var cell = uv.ToCPos(wr.World.Map);
 				var center = wr.World.Map.CenterOfCell(cell);
 				var color = Color.White;
+				var locomotorActor = wr.World.ActorsHavingTrait<MobileOffGrid>().FirstOrDefault();
+				Locomotor locomotor = null;
+				if (locomotorActor != null)
+					locomotor = locomotorActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault().Locomotor;
+				string cellText;
+				if (locomotor != null)
+					cellText = $"({locomotor.MovementCostToEnterCell(locomotorActor, cell, BlockedByActor.All, null, false, SubCell.FullCell)})";
+				else
+					cellText = $"({cell.X},{cell.Y})";
 
-				yield return new TextAnnotationRenderable(font, center, 0, color, $"({cell.X},{cell.Y})");
+				yield return new TextAnnotationRenderable(font, center, 0, color, cellText);
 			}
 		}
 

@@ -661,7 +661,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public static Func<WDist, List<(WPos, WPos)>> GenSDPairCalcFunc(WPos selfCenter, WVec move, WDist unitRadius)
 		{
-			var radiusVec = new WVec(unitRadius / 2, WRot.FromYaw(move.Yaw));
+			var radiusVec = new WVec(unitRadius, WRot.FromYaw(move.Yaw));
 			var rightVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(256)));
 			var leftVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(1024 - 256)));
 			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
