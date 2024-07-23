@@ -153,21 +153,20 @@ namespace OpenRA
 										if (world != null)
 											target = Target.FromCell(world, cell, subCell);
 									}
+
+									// We write the pos regardless of whether the target is a cell so that MoveOffGrid can use it
+									var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
+
+									var numberOfTerrainPositions = r.ReadInt16();
+									if (numberOfTerrainPositions == -1)
+										target = Target.FromPos(pos);
 									else
 									{
-										var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
+										var terrainPositions = new WPos[numberOfTerrainPositions];
+										for (var i = 0; i < numberOfTerrainPositions; i++)
+											terrainPositions[i] = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
 
-										var numberOfTerrainPositions = r.ReadInt16();
-										if (numberOfTerrainPositions == -1)
-											target = Target.FromPos(pos);
-										else
-										{
-											var terrainPositions = new WPos[numberOfTerrainPositions];
-											for (var i = 0; i < numberOfTerrainPositions; i++)
-												terrainPositions[i] = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
-
-											target = Target.FromSerializedTerrainPosition(pos, terrainPositions);
-										}
+										target = Target.FromSerializedTerrainPosition(pos, terrainPositions);
 									}
 
 									break;
@@ -368,6 +367,7 @@ namespace OpenRA
 					if (ExtraLocation != CPos.Zero)
 						fields |= OrderFields.ExtraLocation;
 
+					// this may need to be adjusted to not default to TargetIsCell
 					if (targetState.Cell != null)
 						fields |= OrderFields.TargetIsCell;
 
@@ -402,25 +402,24 @@ namespace OpenRA
 									w.Write(targetState.Cell.Value.Bits);
 									w.Write((byte)targetState.SubCell);
 								}
+
+								// We write the target pos regardless of whether the target is a cell so that MoveOffGrid can use it
+								w.Write(targetState.Pos.X);
+								w.Write(targetState.Pos.Y);
+								w.Write(targetState.Pos.Z);
+
+								// Don't send extra data over the network that will be restored by the Target ctor
+								var terrainPositions = targetState.TerrainPositions.Length;
+								if (terrainPositions == 1 && targetState.TerrainPositions[0] == targetState.Pos)
+									w.Write((short)-1);
 								else
 								{
-									w.Write(targetState.Pos.X);
-									w.Write(targetState.Pos.Y);
-									w.Write(targetState.Pos.Z);
-
-									// Don't send extra data over the network that will be restored by the Target ctor
-									var terrainPositions = targetState.TerrainPositions.Length;
-									if (terrainPositions == 1 && targetState.TerrainPositions[0] == targetState.Pos)
-										w.Write((short)-1);
-									else
+									w.Write((short)terrainPositions);
+									foreach (var position in targetState.TerrainPositions)
 									{
-										w.Write((short)terrainPositions);
-										foreach (var position in targetState.TerrainPositions)
-										{
-											w.Write(position.X);
-											w.Write(position.Y);
-											w.Write(position.Z);
-										}
+										w.Write(position.X);
+										w.Write(position.Y);
+										w.Write(position.Z);
 									}
 								}
 

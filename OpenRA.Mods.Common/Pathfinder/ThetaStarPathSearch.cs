@@ -531,8 +531,13 @@ namespace OpenRA.Mods.Common.Pathfinder
 				}
 
 				destCCPos = bestCandidate;
-				destPos = thisWorld.Map.WPosFromCCPos(bestCandidate);
-				//Dest = destPos;
+				Dest = thisWorld.Map.WPosFromCCPos(destCCPos);
+			}
+			else
+			{
+				// If CCPos can be traversed to, but the cell is blocked, we traverse to the CCPos instead of the CPos
+				if (IsCellBlocked(thisWorld.Map.CPosFromCCPos(destCCPos)))
+					Dest = thisWorld.Map.WPosFromCCPos(destCCPos);
 			}
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)

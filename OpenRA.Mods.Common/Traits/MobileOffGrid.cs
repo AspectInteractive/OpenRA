@@ -843,10 +843,10 @@ namespace OpenRA.Mods.Common.Traits
 					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item1, Color.LightGreen);
 					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item2, Color.LightGreen);
 					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
-					//foreach (var cell in cellsToCheck)
-					//	if (CellIsBlocked(self, locomotor, cell))
-					//		intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
-					//									 .ToList();
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell))
+							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+														 .ToList();
 				}
 
 			// Ray cast to actor collisions

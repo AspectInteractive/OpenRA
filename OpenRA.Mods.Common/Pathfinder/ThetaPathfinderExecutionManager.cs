@@ -105,7 +105,7 @@ namespace OpenRA.Mods.Common.Traits
 			var locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 			var move = new WVec(lookAheadDist, WRot.FromYaw(WAngle.FromDegrees(sliceAbsoluteAngle)));
 			if (self.Trait<MobileOffGrid>().GetFirstCollision(circleCenter, move, lookAheadDist, locomotor,
-														      includeCellCollision: true, includeActorCollision: false) != null)
+														includeCellCollision: true, includeActorCollision: false) != null)
 				return true;
 			return false;
 		}
@@ -173,7 +173,7 @@ namespace OpenRA.Mods.Common.Traits
 					var circleSliceIndex = CircleShape.CircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																		actor.CenterPosition, sliceAngle);
 					var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, circleSliceIndex);
-					MoveOffGrid.RenderLineWithColor(actor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
+					MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
 													Color.DarkBlue);
 					var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
 					if (!ActorOrdersInCircleSlices.ContainsKey(actorPFindex))
@@ -274,7 +274,7 @@ namespace OpenRA.Mods.Common.Traits
 						// Generate Average Theta PF for Slice Group if at least one actor order exists within it
 						if (actorOrdersInSliceGroup.Count > 0)
 						{
-							var firstActorOrder = actorOrdersInSliceGroup.First();
+							var firstActorOrder = actorOrdersInSliceGroup[0];
 							var avgSourcePosOfGroup = IEnumerableExtensions.Average(actorOrdersInSliceGroup
 																					   .Select(ao => ao.Actor.CenterPosition));
 							var newAvgThetaStarSearch = new ThetaStarPathSearch(firstActorOrder.Actor.World,
