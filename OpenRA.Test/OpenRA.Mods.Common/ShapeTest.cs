@@ -88,24 +88,24 @@ namespace OpenRA.Test
 			int angleToUseForSlices = 10;
 			var circleTestCases = new List<CircleSliceTestCase>()
 			{
-				  new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-530, 2000, 0), true) // p1
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-1400, 2000, 0), false) // p2
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-200, 1200, 0), true) // p3
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(-1100, 300, 0), false) // p4
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(0, 1600, 0), true) // p5
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(800, 1700, 0), true) // p6
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(700, 2400, 0), true) // p7
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(500, 2900, 0), false) // p8
-				, new CircleSliceTestCase(new WDist(1234), new WPos(0, 1600, 0), new WPos(200, 2300, 0), true) // p9
+				  new(new WDist(1234), new WPos(0, 1600, 0), new WPos(-530, 2000, 0), true) // p1
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(-1400, 2000, 0), false) // p2
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(-200, 1200, 0), true) // p3
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(-1100, 300, 0), false) // p4
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(0, 1600, 0), true) // p5
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(800, 1700, 0), true) // p6
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(700, 2400, 0), true) // p7
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(500, 2900, 0), false) // p8
+				, new(new WDist(1234), new WPos(0, 1600, 0), new WPos(200, 2300, 0), true) // p9
 			};
 
-			Func<CircleSliceTestCase, int> sliceOfPointInsideCircle = ctc =>
-			{ return CircleShape.CircleSliceIndex(ctc.CircleCenter, ctc.CircleRadius.Length, ctc.P, angleToUseForSlices); };
+			int SliceOfPointInsideCircle(CircleSliceTestCase ctc) => CircleShape.CalcCircleSliceIndex(ctc.CircleCenter,
+				ctc.CircleRadius.Length, ctc.P, angleToUseForSlices);
 
 			var circleSlicesOfPoints = new List<int>();
 			foreach (var (ctc, index) in circleTestCases.Select((item, index) => (item, index)))
 			{
-				var pointCircleSlice = sliceOfPointInsideCircle(ctc);
+				var pointCircleSlice = SliceOfPointInsideCircle(ctc);
 				circleSlicesOfPoints.Add(pointCircleSlice);
 				// Assert.That(pointCircleSlice >= 0 == ctc.IsInsideCircle); // if slice returned is -1, the point is not inside the circle
 				System.Console.WriteLine($"point {index + 1} is inside circle slice: {pointCircleSlice} ");

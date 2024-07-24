@@ -17,51 +17,51 @@ namespace OpenRA.Mods.Common.Traits
 	public class ThetaPathfinderExecutionManagerInfo : TraitInfo<ThetaPathfinderExecutionManager> { }
 	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder
 	{
-		public class CircleOfActors
+		public class ThetaCircle
 		{
 			public struct SliceGroup
 			{
-				public int First;
-				public int Last;
-				public SliceGroup(int first, int last)
+				public int StartIndex;
+				public int EndIndex;
+				public SliceGroup(int startIndex, int endIndex)
 				{
-					First = first;
-					Last = last;
+					StartIndex = startIndex;
+					EndIndex = endIndex;
 				}
 			}
 
 			public WPos CircleCenter;
 			public WDist CircleRadius;
-			public List<SliceGroup> SliceGroups = new List<SliceGroup>();
-			public bool SliceGroupsSet;
+			public List<SliceGroup> SliceGroups = new();
+			public bool SliceGroupsAreSet;
 
-			public CircleOfActors(WPos circleCenter, WDist circleRadius, bool sliceGroupsSet = false)
+			public ThetaCircle(WPos circleCenter, WDist circleRadius, bool sliceGroupsSet = false)
 			{
 				CircleCenter = circleCenter;
 				CircleRadius = circleRadius;
-				SliceGroupsSet = sliceGroupsSet;
+				SliceGroupsAreSet = sliceGroupsSet;
 			}
 		}
 
-		public struct ActorPFIndex
+		public struct CircleSliceIndex
 		{
-			public PlayerCircleIndex PlayerCI;
+			public PlayerCircleGroupIndex PlayerCI;
 			public int CircleIndex;
-			public int CircleSliceIndex;
+			public int SliceIndex;
 
-			public ActorPFIndex(PlayerCircleIndex playerCircleIndex, int circleIndex, int circleSliceIndex)
+			public CircleSliceIndex(PlayerCircleGroupIndex playerCircleIndex, int circleIndex, int sliceIndex)
 			{
 				PlayerCI = playerCircleIndex;
 				CircleIndex = circleIndex;
-				CircleSliceIndex = circleSliceIndex;
+				SliceIndex = sliceIndex;
 			}
 		}
-		public struct PlayerCircleIndex
+		public struct PlayerCircleGroupIndex
 		{
 			public Player PlayerOwner;
 			public WPos PFTarget;
 
-			public PlayerCircleIndex(Player playerOwner, WPos pfTarget)
+			public PlayerCircleGroupIndex(Player playerOwner, WPos pfTarget)
 			{
 				PlayerOwner = playerOwner;
 				PFTarget = pfTarget;
@@ -83,34 +83,31 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// The number of expansions allowed across all Theta pathfinders
-		int maxCurrExpansions = 200;
-		int radiusForSharedThetas = 1024 * 10;
-		int minDistanceForCircles = 1024 * 28;
-		int sliceAngle = 10;
-		int maxCircleSlices = 36;
-		Dictionary<PlayerCircleIndex, List<CircleOfActors>> playerCircles = new Dictionary<PlayerCircleIndex, List<CircleOfActors>>();
-		public Dictionary<ActorPFIndex, List<ActorWithOrder>> ActorOrdersInCircleSlices = new Dictionary<ActorPFIndex,
-																									  List<ActorWithOrder>>();
-		public List<ThetaStarPathSearch> ThetaPFsToRun = new List<ThetaStarPathSearch>();
+		readonly int maxCurrExpansions = 200;
+		readonly int radiusForSharedThetas = 1024 * 10;
+		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
+		readonly int sliceAngle = 10;
+		readonly int maxCircleSlices = 36;
+		readonly Dictionary<PlayerCircleGroupIndex, List<ThetaCircle>> playerCircleGroups = new();
+		public Dictionary<CircleSliceIndex, List<ActorWithOrder>> ActorOrdersInCircleSlices = new();
+		public List<ThetaStarPathSearch> ThetaPFsToRun = new();
 
 		public bool GreaterThanMinDistanceForCircles(Actor actor, WPos targetPos)
 		{ return (targetPos - actor.CenterPosition).LengthSquared > minDistanceForCircles * minDistanceForCircles; }
 
 		public int GetOppositeSlice(int slice) { return (int)(((Fix64)slice + (Fix64)maxCircleSlices / (Fix64)2) % (Fix64)maxCircleSlices); }
 
-		public bool SliceIsBlocked(Actor self, WPos circleCenter, int slice)
+		// Checks from the center of the circle outward to the end of the slice to see if any cell blocks it
+		public bool SliceIsBlockedByCell(Actor self, WPos circleCenter, int sliceIndex)
 		{
-			var sliceAbsoluteAngle = (int)(sliceAngle * (slice - 0.5)); // We subtract 0.5 as we want the middle of the slice
-			var lookAheadDist = new WDist(radiusForSharedThetas);
+			var sliceAbsoluteAngle = (int)(sliceAngle * (sliceIndex - 0.5)); // We subtract 0.5 as we want the middle of the slice
 			var locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
-			var move = new WVec(lookAheadDist, WRot.FromYaw(WAngle.FromDegrees(sliceAbsoluteAngle)));
-			if (self.Trait<MobileOffGrid>().GetFirstCollision(circleCenter, move, lookAheadDist, locomotor,
+			var move = new WVec(new WDist(radiusForSharedThetas), WRot.FromYaw(WAngle.FromDegrees(sliceAbsoluteAngle)));
+			if (self.Trait<MobileOffGrid>().GetFirstCollision(circleCenter, move, WDist.Zero, locomotor,
 														includeCellCollision: true, includeActorCollision: false) != null)
 				return true;
 			return false;
 		}
-
-		public ThetaPathfinderExecutionManager() { }
 
 		void ITick.Tick(Actor self) { Tick(self.World); }
 
@@ -128,37 +125,45 @@ namespace OpenRA.Mods.Common.Traits
 			if (!GreaterThanMinDistanceForCircles(actor, targetPos) || secondThetaRun)
 			{
 				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
-																 targetPos, sharedMoveActors);
-				rawThetaStarSearch.running = true;
+																 targetPos, sharedMoveActors)
+				{ running = true };
 				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
 				AddPF(rawThetaStarSearch);
 			}
 			else
 			{
-				// If no circle exists, generate one
-				var playerCircleIndex = new PlayerCircleIndex(actor.Owner, targetPos);
-				if (!playerCircles.ContainsKey(playerCircleIndex))
-					playerCircles[playerCircleIndex] = new List<CircleOfActors>();
-				if (playerCircles[playerCircleIndex].Count == 0)
-					playerCircles[playerCircleIndex].Add(new CircleOfActors(actor.CenterPosition, new WDist(radiusForSharedThetas)));
+				// If no circle group exists for the player, generate one
+				var playerCircleGroupIndex = new PlayerCircleGroupIndex(actor.Owner, targetPos);
+				if (!playerCircleGroups.ContainsKey(playerCircleGroupIndex))
+					playerCircleGroups[playerCircleGroupIndex] = new List<ThetaCircle>();
+				if (playerCircleGroups[playerCircleGroupIndex].Count == 0)
+					playerCircleGroups[playerCircleGroupIndex].Add(new ThetaCircle(actor.CenterPosition, new WDist(radiusForSharedThetas)));
 
-				// Loop through each circle, attempting to find one that contains the actor
+				// For the found Player Circle group, loop through each circle, attempting to find one that contains the actor
 				var circleFound = false;
-				for (var circleIndex = 0; circleIndex < playerCircles[playerCircleIndex].Count; circleIndex++)
+				for (var circleIndex = 0; circleIndex < playerCircleGroups[playerCircleGroupIndex].Count; circleIndex++)
 				{
-					var circle = playerCircles[playerCircleIndex].ElementAt(circleIndex);
+					var circle = playerCircleGroups[playerCircleGroupIndex].ElementAt(circleIndex);
 					if (CircleShape.PosIsInsideCircle(circle.CircleCenter, circle.CircleRadius.Length, actor.CenterPosition))
 					{
-						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
-						var circleSliceIndex = CircleShape.CircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
+#if DEBUGWITHOVERLAY
+						//MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
+#endif
+						// Create a slice in the circle at the position of the actor and return the index of this slice
+						var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																			actor.CenterPosition, sliceAngle);
-						var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, circleSliceIndex);
-						MoveOffGrid.RenderLineWithColor(actor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
-														Color.DarkBlue);
-						var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
-						if (!ActorOrdersInCircleSlices.ContainsKey(actorPFindex))
-							ActorOrdersInCircleSlices[actorPFindex] = new List<ActorWithOrder>();
-						ActorOrdersInCircleSlices[actorPFindex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
+
+#if DEBUGWITHOVERLAY
+						//Slice Line is the standard sliceAngle * index to get the slice
+						//var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
+						//MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
+						//								Color.DarkBlue);
+#endif
+
+						var circleSliceIndex = new CircleSliceIndex(playerCircleGroupIndex, circleIndex, sliceIndex);
+						if (!ActorOrdersInCircleSlices.ContainsKey(circleSliceIndex))
+							ActorOrdersInCircleSlices[circleSliceIndex] = new List<ActorWithOrder>();
+						ActorOrdersInCircleSlices[circleSliceIndex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
 						circleFound = true;
 					}
 				}
@@ -167,18 +172,21 @@ namespace OpenRA.Mods.Common.Traits
 				if (!circleFound)
 				{
 					// Create the circle
-					playerCircles[playerCircleIndex].Add(new CircleOfActors(actor.CenterPosition, new WDist(radiusForSharedThetas)));
-					var circle = playerCircles[playerCircleIndex].Last();
-					var circleIndex = playerCircles[playerCircleIndex].Count - 1;
-					var circleSliceIndex = CircleShape.CircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
+					playerCircleGroups[playerCircleGroupIndex].Add(new ThetaCircle(actor.CenterPosition, new WDist(radiusForSharedThetas)));
+					var circle = playerCircleGroups[playerCircleGroupIndex].Last();
+					var circleIndex = playerCircleGroups[playerCircleGroupIndex].Count - 1;
+					var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																		actor.CenterPosition, sliceAngle);
-					var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, circleSliceIndex);
+#if DEBUGWITHOVERLAY
+					//Slice Line is the standard sliceAngle * index to get the slice
+					var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
 					MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
 													Color.DarkBlue);
-					var actorPFindex = new ActorPFIndex(playerCircleIndex, circleIndex, circleSliceIndex);
-					if (!ActorOrdersInCircleSlices.ContainsKey(actorPFindex))
-						ActorOrdersInCircleSlices[actorPFindex] = new List<ActorWithOrder>();
-					ActorOrdersInCircleSlices[actorPFindex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
+#endif
+					var circleSliceIndex = new CircleSliceIndex(playerCircleGroupIndex, circleIndex, sliceIndex);
+					if (!ActorOrdersInCircleSlices.ContainsKey(circleSliceIndex))
+						ActorOrdersInCircleSlices[circleSliceIndex] = new List<ActorWithOrder>();
+					ActorOrdersInCircleSlices[circleSliceIndex].Add(new ActorWithOrder(actor, targetPos, sharedMoveActors));
 				}
 			}
 		}
@@ -196,41 +204,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void GenSharedMoveThetaPFs(World world)
 		{
-			/*// Where target distance exceeds the min distance for circles, add all actor PFs to their own circle and slice
-			sharedMoveActors.Where(a => GreaterThanMinDistanceForCircles(a, order)).ToList()
-							.ForEach(a => AddMoveOrder(a, order));
-
-			// Where target distance is below min distance for circles, add all actor PFs directly
-			sharedMoveActors.Where(a => !GreaterThanMinDistanceForCircles(a, order)).ToList()
-							.ForEach(a => ThetaPFsToRun.Add(new ThetaStarPathSearch(world, a, a.CenterPosition,
-																					order.Target.CenterPosition,
-																					order.GroupedActors.ToList())));*/
-
-			// Add slice groups to circles with no slice groups
-			/*foreach (var (_, playerCircle) in playerCircles)
-				foreach (var circle in playerCircle.Where(pc => pc.SliceGroupsSet == false))
-				{
-					var sliceGroupFirst = 0;
-					for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
-					{
-						if (ActorOrdersInCircleSlices.Count > 0)
-						{
-							var (_, aoList) = ActorOrdersInCircleSlices.First();
-							var actor = aoList.First().Actor;
-							if (SliceIsBlocked(actor, circle.CircleCenter, sliceIndex) ||
-								SliceIsBlocked(actor, circle.CircleCenter, GetOppositeSlice(sliceIndex)))
-							{
-								circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
-								sliceGroupFirst = sliceIndex + 1;
-							}
-						}
-					}
-				}*/
-
-			foreach (var (playerCircleIndex, circleList) in playerCircles)
+			foreach (var (playerCircleGroupIndex, playerCircleGroup) in playerCircleGroups)
 			{
-				var player = playerCircleIndex.PlayerOwner;
-				foreach (var (circle, circleIndex) in circleList.Select((value, index) => (value, index)))
+				var player = playerCircleGroupIndex.PlayerOwner;
+				foreach (var (circle, circleIndex) in playerCircleGroup.Select((value, index) => (value, index)))
 				{
 					// Disable this if you want to see the circles persist
 					// MoveOffGrid.RemoveCircle(world, circle.CircleCenter, circle.CircleRadius);
@@ -240,34 +217,39 @@ namespace OpenRA.Mods.Common.Traits
 					var blockTestActor = ActorOrdersInCircleSlices.FirstOrDefault().Value.FirstOrDefault().Actor;
 
 					// Generate slice groups (split at each collision)
-					if (!circle.SliceGroupsSet)
+					if (!circle.SliceGroupsAreSet)
 					{
-						var sliceGroupFirst = 0;
+						var firstSliceIndex = 0;
 						for (var sliceIndex = 0; sliceIndex < 360 / sliceAngle; sliceIndex++)
 						{
 							// var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
 							// MoveOffGrid.RenderLineWithColor(blockTestActor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
 							//							 	Color.DarkGreen);
-							if (SliceIsBlocked(blockTestActor, circle.CircleCenter, sliceIndex) ||
-								SliceIsBlocked(blockTestActor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
+							// If the slice is blocked by a cell in either direction, then we create a separate group of actors for this ThetaPF, since
+							// they are not going to be able to path through the cell.
+							if (SliceIsBlockedByCell(blockTestActor, circle.CircleCenter, sliceIndex) ||
+								SliceIsBlockedByCell(blockTestActor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
 								sliceIndex == 360 / sliceAngle - 1)
 							{
-								circle.SliceGroups.Add(new CircleOfActors.SliceGroup(sliceGroupFirst, sliceIndex));
-								sliceGroupFirst = sliceIndex + 1;
+								circle.SliceGroups.Add(new ThetaCircle.SliceGroup(firstSliceIndex, sliceIndex));
+								firstSliceIndex = sliceIndex + 1;
 							}
 						}
 					}
 
+					// Slice Groups are sets of one or more slices that are not blocked. Because they are not blocked,
+					// they can share the same pathfinder, since we can guarantee that the units are able to follow
+					// the same path
 					foreach (var sliceGroup in circle.SliceGroups)
 					{
 						// Get Actors Within Slice Group
 						var actorOrdersInSliceGroup = new List<ActorWithOrder>();
-						for (var sliceIndex = sliceGroup.First; sliceIndex <= sliceGroup.Last; sliceIndex++)
+						for (var sliceIndex = sliceGroup.StartIndex; sliceIndex <= sliceGroup.EndIndex; sliceIndex++)
 						{
-							if (ActorOrdersInCircleSlices.ContainsKey(new ActorPFIndex(playerCircleIndex,
+							if (ActorOrdersInCircleSlices.ContainsKey(new CircleSliceIndex(playerCircleGroupIndex,
 																					   circleIndex, sliceIndex)))
 								actorOrdersInSliceGroup = actorOrdersInSliceGroup
-															.Union(ActorOrdersInCircleSlices[new ActorPFIndex(playerCircleIndex,
+															.Union(ActorOrdersInCircleSlices[new CircleSliceIndex(playerCircleGroupIndex,
 																										  circleIndex, sliceIndex)]).ToList();
 						}
 
@@ -287,6 +269,7 @@ namespace OpenRA.Mods.Common.Traits
 							{
 								actor.Trait<MobileOffGrid>().thetaStarSearch = newAvgThetaStarSearch;
 							}
+
 							newAvgThetaStarSearch.running = true;
 							AddPF(newAvgThetaStarSearch);
 						}
@@ -296,19 +279,19 @@ namespace OpenRA.Mods.Common.Traits
 
 			// IMPORTANT: Need to clear circles once done to avoid re-using pathfinders.
 			// Since we have added all PFs to ThetaPFsToRun, the circle logic is no longer necessary.
-			playerCircles.Clear();
+			playerCircleGroups.Clear();
 			ActorOrdersInCircleSlices.Clear();
 		}
 
-		private void Tick(World world)
+		void Tick(World world)
 		{
 			// If there are new playerCircles to resolve, we resolve these first to populate ThetaPFsToRun.
-			if (playerCircles.Count > 0)
+			if (playerCircleGroups.Count > 0)
 				GenSharedMoveThetaPFs(world);
 
 			for (var i = ThetaPFsToRun.Count; i > 0; i--) // Iterate backwards since we may remove PFs that are no longer expanding
 			{
-				var thetaPF = ThetaPFsToRun.ElementAt(i - 1);
+				var thetaPF = ThetaPFsToRun[i - 1];
 				if (thetaPF.running && !thetaPF.pathFound)
 				{
 					if (thetaPF.currDelayToRun == 0)

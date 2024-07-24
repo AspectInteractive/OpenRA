@@ -124,9 +124,9 @@ namespace OpenRA.Mods.Common.HitShapes
 			return oneSliceAngle * (Fix64)sliceIndex;
 		}
 
-		public int CircleSliceIndex(WPos circleCenter, WPos checkPos, int angleToCutCircleSlices)
-		{ return CircleSliceIndex(circleCenter, Radius.Length, checkPos, angleToCutCircleSlices); }
-		public static int CircleSliceIndex(WPos circleCenter, int radius, WPos checkPos, int angleToCutCircleSlices)
+		public int CalcCircleSliceIndex(WPos circleCenter, WPos checkPos, int angleToCutCircleSlices)
+		{ return CalcCircleSliceIndex(circleCenter, Radius.Length, checkPos, angleToCutCircleSlices); }
+		public static int CalcCircleSliceIndex(WPos circleCenter, int radius, WPos checkPos, int angleToCutCircleSlices)
 		{
 			var nSlices = GetSliceCount(angleToCutCircleSlices);
 			if (nSlices > 0 && PosIsInsideCircle(circleCenter, radius, checkPos))

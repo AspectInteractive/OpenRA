@@ -762,39 +762,38 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var intersections = new List<WPos>();
 			var selfCenter = checkPos;
-			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
+			WPos CalcOffsetPos(WPos pos, WDist dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
 			// Ray cast to cell collisions
-			if (includeCellCollision && !(self.CurrentActivity is ReturnToCellActivity))
+			if (includeCellCollision && self.CurrentActivity is not ReturnToCellActivity)
 				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
 				{
 					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
 					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
 					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
-					//foreach (var cell in cellsToCheck)
-						//if (CellIsBlocked(self, locomotor, cell))
-						//	intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
-						//								 .ToList();
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell))
+							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+														 .ToList();
 				}
 
 			// Ray cast to actor collisions
 			if (includeActorCollision)
 			{
-				foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (calcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
+				foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (CalcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
 																		lookAheadDist)
 													.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 				{
 					if (!destActor.IsDead && ValidCollisionActor(destActor))
 					{
-						var destActorCenter = (destActor.CenterPosition +
-												  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
-													.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
+						var destActorCenter = destActor.CenterPosition + destActor.TraitsImplementing<MobileOffGrid>()
+												.FirstOrDefault(Exts.IsTraitEnabled).GenFinalWVec(); // adding move to use future pos
 						if (destActorCenter != WPos.Zero)
 						{
 							//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
 							foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-								if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
+								if (destShape.Info.Type is HitShapes.CircleShape)
 									foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
 									{
 										var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
