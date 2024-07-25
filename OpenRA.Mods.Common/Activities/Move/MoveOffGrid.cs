@@ -13,11 +13,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Activities;
-using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
-using static OpenRA.Mods.Common.Activities.MoveOffGrid;
 using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
 using static OpenRA.Mods.Common.Traits.MobileOffGrid;
 
@@ -29,22 +27,6 @@ using static OpenRA.Mods.Common.Traits.MobileOffGrid;
 
 namespace OpenRA.Mods.Common.Activities
 {
-	public class WVecRotComparer : IComparer<(WVec, int)>
-	{
-		public int Compare((WVec, int) x, (WVec, int) y)
-		{
-			var xRotOffset = x.Item2 > 180 ? 360 - x.Item2 : x.Item2;
-			var yRotOffset = y.Item2 > 180 ? 360 - y.Item2 : y.Item2;
-
-			if (xRotOffset == yRotOffset)
-				return 0;
-			else if (xRotOffset > yRotOffset)
-				return 1;
-			else // <
-				return -1;
-		}
-	}
-
 	public class MoveOffGrid : Activity
 	{
 		readonly MobileOffGrid mobileOffGrid;
@@ -52,9 +34,9 @@ namespace OpenRA.Mods.Common.Activities
 		readonly WDist maxRange;
 		readonly WDist minRange;
 		readonly Color? targetLineColor;
-		readonly WDist nearEnough;
 
 		Target target;
+		readonly WDist nearEnough;
 		Target lastVisibleTarget;
 		bool useLastVisibleTarget;
 		bool searchingForNextTarget = false;
@@ -78,7 +60,7 @@ namespace OpenRA.Mods.Common.Activities
 			512		   // +180 deg (same as -180 deg)
 		};*/
 #pragma warning disable SA1137 // Elements should have the same indentation
-		List<int> localAvoidanceAngleOffsets = new List<int>()
+		List<int> localAvoidanceAngleOffsets = new()
 		{
 			  64,  128,  192,
 			 -64, -128, -192,
@@ -108,6 +90,7 @@ namespace OpenRA.Mods.Common.Activities
 		readonly Locomotor locomotor;
 
 		ThetaPathfinderExecutionManager thetaPFexecManager;
+		bool secondThetaRun = false;
 		List<Actor> actorsSharingMove = new();
 		bool pathFound = false;
 		List<WPos> pathRemaining = new();
@@ -119,12 +102,6 @@ namespace OpenRA.Mods.Common.Activities
 		WPos FinalPathTarget => pathRemaining.Count > 0 ? pathRemaining.Last() : currPathTarget;
 
 		public enum MoveType { Undefined, Formation, NonFormation }
-
-		private void RequeueTargetAndSetCurrTo(WPos target)
-		{
-			pathRemaining.Insert(0, currPathTarget);
-			currPathTarget = target;
-		}
 
 		public WDist MaxRangeToTarget()
 		{
@@ -168,13 +145,11 @@ namespace OpenRA.Mods.Common.Activities
 				return Complete();
 			}
 
-			// System.Console.WriteLine("GetNextTargetOrComplete(): More targets available");
 			return false;
 		}
 
 		public bool Complete()
 		{
-			// System.Console.WriteLine("GetNextTargetOrComplete(): No more targets");
 			mobileOffGrid.PathComplete.Clear();
 			mobileOffGrid.PositionBuffer.Clear();
 			mobileOffGrid.CurrPathTarget = WPos.Zero;
@@ -186,34 +161,6 @@ namespace OpenRA.Mods.Common.Activities
 			return (pos - origin).HorizontalLengthSquared <= range.LengthSquared;
 		}
 
-		public static int Nearest90Deg(int deg)
-		{
-			var midPoint = 128; // Use this to avoid division to preserve fixed point math
-			var degMod = deg < 0 ? deg + 1024 : deg % 1024;
-			var angles = new List<int>() { 0, 256, 512, 768, 1024 };
-
-			for (var i = 0; i < angles.Count - 1; i++)
-				if (degMod >= angles[i] && degMod < angles[i + 1])
-					return degMod < angles[i] + midPoint ? angles[i] : angles[i + 1];
-
-			return -1; // Should never happen
-		}
-
-		public static WPos NearestPosInMap(Actor self, WPos pos)
-		{
-			var map = self.World.Map;
-			var topLeftPos = map.TopLeftOfCell(new CPos(0, 0));
-			var botRightPos = map.BottomRightOfCell(new CPos(map.MapSize.X - 1, map.MapSize.Y - 1));
-			return new WPos(Math.Max(topLeftPos.X, Math.Min(botRightPos.X, pos.X)),
-							Math.Max(topLeftPos.Y, Math.Min(botRightPos.Y, pos.Y)), pos.Z);
-		}
-		public static int MaxLengthInMap(Actor self)
-		{
-			var map = self.World.Map;
-			var topLeftPos = map.TopLeftOfCell(new CPos(0, 0));
-			var botRightPos = map.BottomRightOfCell(new CPos(map.MapSize.X - 1, map.MapSize.Y - 1));
-			return (botRightPos - topLeftPos).Length;
-		}
 		public static void RenderLine(Actor self, List<WPos> line)
 		{
 			var renderLine = new List<WPos>();
@@ -274,10 +221,6 @@ namespace OpenRA.Mods.Common.Activities
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color); }
 		public static void RenderPointCollDebug(Actor self, WPos pos, Color color, int thickness)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color, thickness); }
-
-		/* --- Not Working ---
-		 * public static WVec CombineDistAndYawVecWithRotation(WDist dist, WVec yawVec, WRot rotation)
-		{ return new WVec(dist, WRot.FromYaw(yawVec.Rotate(rotation).Yaw)); }*/
 
 		public MoveOffGrid(Actor self, in List<Actor> groupedActors, in Target t, WDist nearEnough, WPos? initialTargetPosition = null,
 							Color? targetLineColor = null)
@@ -359,34 +302,11 @@ namespace OpenRA.Mods.Common.Activities
 			mobileOffGrid.FleeVectors.Clear();
 		}
 
-		public WVec AvgOfVectors(List<WVec> wvecList)
-		{
-			if (wvecList.Count == 0)
-				return WVec.Zero;
-
-			var newWvec = WVec.Zero;
-			foreach (var wvec in wvecList)
-				newWvec += wvec;
-			return newWvec / wvecList.Count;
-		}
-
-		public WVec GenMovementSpeedVec()
-		{ return mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024; }
-
 		public WVec RepulsionVecFunc(WPos selfPos, WPos cellPos)
 		{
 			var repulsionDelta = cellPos - selfPos;
 			var distToMove = Math.Min(repulsionDelta.Length, mobileOffGrid.MovementSpeed);
 			return -new WVec(new WDist(distToMove), WRot.FromYaw(repulsionDelta.Yaw));
-		}
-		public WVec? LocalAvoidanceFunc(WVec? avoidanceVec)
-		{
-			if (avoidanceVec != null)
-			{
-				var distToMove = Math.Min(((WVec)avoidanceVec).Length, mobileOffGrid.MovementSpeed);
-				return -new WVec(new WDist(distToMove), WRot.FromYaw(((WVec)avoidanceVec).Yaw));
-			}
-			return null;
 		}
 
 		public WPos PadCCifCC(Actor self, PathPos pp)
@@ -398,19 +318,6 @@ namespace OpenRA.Mods.Common.Activities
 		public static WPos GetCenterOfUnits(List<Actor> actorsSharingMove)
 		{
 			return actorsSharingMove.Where(a => !a.IsDead).Select(a => a.TraitsImplementing<MobileOffGrid>().FirstOrDefault().CenterPosition).Average();
-		}
-
-		public WVec GetDistToCenterOfUnits(Actor self, List<Actor> actorsSharingMove, bool requireLineOfSight = true)
-		{
-			var centerOfActorsSharingMove = GetCenterOfUnits(actorsSharingMove);
-			if (!requireLineOfSight ||
-				IsPathObservable(self.World, self, mobileOffGrid.Locomotor, centerOfActorsSharingMove, mobileOffGrid.CenterPosition))
-			{
-				Console.WriteLine($"GetCenterOfUnits(actorsSharingMove): {GetCenterOfUnits(actorsSharingMove)}, mobileOffGrid.CenterPosition: {mobileOffGrid.CenterPosition}");
-				return GetCenterOfUnits(actorsSharingMove) - mobileOffGrid.CenterPosition;
-			}
-			else
-				return WVec.Zero;
 		}
 
 		public struct ActorWithMoveProps
@@ -482,7 +389,6 @@ namespace OpenRA.Mods.Common.Activities
 					});
 
 #pragma warning disable IDE0061 // Use expression body for local function
-			// TODO: Make radius part of accumulator
 			static bool TargetWithinBounds(int left, int right, int top, int bottom, WPos target)
 			{
 				return left <= target.X && right >= target.X && top <= target.Y && bottom >= target.Y;
@@ -510,13 +416,12 @@ namespace OpenRA.Mods.Common.Activities
 			if (mobileOffGrid.thetaStarSearch != null && mobileOffGrid.thetaStarSearch.pathFound
 				&& !pathFound)
 			{
-				// -- Expansion now managed by execution manager
-				//using (new Support.PerfTimer("ThetaStar"))
-				//	thetaStarSearch.Expand();
-
 				pathRemaining = GetThetaPathAndConvert(self);
 				if (pathRemaining.Count == 0)
 					pathRemaining = new List<WPos>() { target.CenterPosition };
+
+				if (!secondThetaRun)
+					GetNextTargetOrComplete(self);
 				else
 				{
 					List<WPos> thetaToNextTarg;
@@ -533,6 +438,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 				mobileOffGrid.thetaStarSearch = null;
 				pathFound = true;
+				secondThetaRun = false;
 			}
 
 			// Will not move unless there is a path to move on
@@ -566,7 +472,6 @@ namespace OpenRA.Mods.Common.Activities
 
 			var checkTarget = useLastVisibleTarget ? lastVisibleTarget : target;
 			var pos = mobileOffGrid.GetPosition();
-			//var delta = currPathTarget - pos;
 
 			// For Attack Move, we stop when we are within firing range of the target
 			if (minRange != WDist.Zero || maxRange != WDist.Zero)
@@ -624,9 +529,9 @@ namespace OpenRA.Mods.Common.Activities
 				if (UnitHasNotCollided(revisedMoveVec))
 				{
 #if DEBUGWITHOVERLAY
-					Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
-					/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
-					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
+					//Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
+					//RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
+					//RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);
 #endif
 					mobileOffGrid.AddToTraversedCirclesBuffer(self.CenterPosition + revisedMoveVec);
 					RenderCircleWithColor(self, mobileOffGrid.CenterPosition + revisedMoveVec, mobileOffGrid.UnitRadius, Color.LightGreen);
@@ -663,9 +568,7 @@ namespace OpenRA.Mods.Common.Activities
 				var lengthMoved = (mobileOffGrid.PositionBuffer.Last() - mobileOffGrid.PositionBuffer[0]).Length;
 				var deltaFirst = currPathTarget - mobileOffGrid.PositionBuffer[0];
 				var deltaLast = currPathTarget - mobileOffGrid.PositionBuffer.Last();
-				//System.Console.WriteLine($"lengthMoved: {lengthMoved}");
 
-				//if (lengthMoved < mobileOffGrid.MovementSpeed * 2) // && !searchingForNextTarget)
 				if (lengthMoved < mobileOffGrid.MovementSpeed) // && !searchingForNextTarget)
 				{
 					// Create new path to the next path, then join it to the remainder of the existing path
@@ -673,13 +576,12 @@ namespace OpenRA.Mods.Common.Activities
 					// Also do not re-run if max expansions were reached last time
 					isBlocked = true;
 					Console.WriteLine("Blocked!");
-					RenderPointCollDebug(self, mobileOffGrid.CenterPosition, Color.LightGreen, 6);
 					if (currPathTarget != lastPathTarget)
 					{
 						Console.WriteLine("Blocked and not last target!");
-						RenderPointCollDebug(self, mobileOffGrid.CenterPosition, Color.Orange, 6);
 						if (mobileOffGrid.PositionBuffer.Count >= 20) // 3 seconds
 						{
+							RenderPointCollDebug(self, mobileOffGrid.CenterPosition, Color.Orange, 6);
 							Console.WriteLine("Clear Position Buffer when >= 100");
 							isBlocked = false;
 							EndingActions();
@@ -698,7 +600,6 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			var selfHasReachedGoal = Delta.HorizontalLengthSquared < mobileOffGrid.UnitRadius.LengthSquared;
-			//var selfHasReachedGoal = Delta.Length < move.Length * 2;
 			var completedTargsOfNearbyActors = CompletedTargetsOfActors(GetNearbyActorsSharingMove(self));
 			tickCount = tickCount >= maxTicksBeforeLOScheck ? tickCount = 0 : tickCount + 1;
 			var nearbyActorHasReachedGoal = tickCount == 0 && completedTargsOfNearbyActors.Contains(currPathTarget) &&
@@ -709,8 +610,6 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (hasReachedGoal)
 			{
-				//System.Console.WriteLine($"selfHasReachedGoal: {selfHasReachedGoal}, nearbyActorHasReachedGoal: {nearbyActorHasReachedGoal}\n" +
-				//						 $"Delta.HorizontalLengthSquared {Delta.HorizontalLengthSquared}, mobileOffGrid.UnitRadius.LengthSquared:{mobileOffGrid.UnitRadius.LengthSquared}");
 #if DEBUG || DEBUGWITHOVERLAY
 				// System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
 #endif
@@ -753,20 +652,14 @@ namespace OpenRA.Mods.Common.Activities
 				yield return new TargetLineNode(useLastVisibleTarget ? lastVisibleTarget : target, targetLineColor.Value);
 		}
 
-		public static WVec MoveStep(int speed, WAngle facing)
-		{
-			var dir = new WVec(0, -1024, 0).Rotate(WRot.FromYaw(facing));
-			return speed * dir / 1024;
-		}
-
 		public List<Actor> GetNearbyActorsSharingMove(Actor self, bool excludeSelf = true)
 		{
-			/*RenderCircle(self, mobileOffGrid.CenterPosition, nearbyActorRange);*/
+			//RenderCircle(self, mobileOffGrid.CenterPosition, nearbyActorRange);
 			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, MaxRangeToTarget());
 			var actorsSharingMoveNearMe = new List<Actor>();
 			foreach (var actor in nearbyActors)
 				if (!actor.IsDead && (actor != self || !excludeSelf) && actor.Owner == self.Owner && actorsSharingMove.Contains(actor) &&
-					!(actor.CurrentActivity is ReturnToCellActivity))
+					actor.CurrentActivity is not ReturnToCellActivity)
 					actorsSharingMoveNearMe.Add(actor); // No need to check if MobileOffGrid exists since all actors in actorsSharingMove
 														// are moving
 			return actorsSharingMoveNearMe;
@@ -780,14 +673,6 @@ namespace OpenRA.Mods.Common.Activities
 			var completedTargs = actorListMobileOGs.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
 			completedTargs = completedTargs.Union(actorListMobileOGs.Select(m => m.LastCompletedTarget)).ToList();
 			return completedTargs;
-		}
-
-		public static int CalculateTurnRadius(int speed, WAngle turnSpeed)
-		{
-			// turnSpeed -> divide into 256 to get the number of ticks per complete rotation
-			// speed -> multiply to get distance travelled per rotation (circumference)
-			// 180 -> divide by 2*pi to get the turn radius: 180==1024/(2*pi), with some extra leeway
-			return turnSpeed.Angle > 0 ? 180 * speed / turnSpeed.Angle : 0;
 		}
 	}
 }
