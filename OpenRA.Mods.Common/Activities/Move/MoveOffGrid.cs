@@ -104,18 +104,13 @@ namespace OpenRA.Mods.Common.Activities
 
 		// LOS Checking interval
 		int tickCount = 0;
-		int maxTicksBeforeLOScheck = 3;
+		readonly int maxTicksBeforeLOScheck = 3;
 		readonly Locomotor locomotor;
-		Color pickedColor;
 
 		ThetaPathfinderExecutionManager thetaPFexecManager;
-		bool secondThetaRun = false;
-		List<Actor> actorsSharingMove = new List<Actor>();
+		List<Actor> actorsSharingMove = new();
 		bool pathFound = false;
-		List<WPos> pathRemaining = new List<WPos>();
-		bool reachedMaxExpansions = false;
-		int thetaIters = 0;
-		int maxThetaIters = 3;
+		List<WPos> pathRemaining = new();
 		WPos currPathTarget;
 		WPos lastPathTarget;
 		bool isBlocked = false;
@@ -256,6 +251,8 @@ namespace OpenRA.Mods.Common.Activities
 
 		public static void RenderCircleCollDebug(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
+		public static void RenderCircleCollDebug(Actor self, WPos pos, WDist radius, int thickness)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius), thickness); }
 
 		public static void RenderCircleWithColor(Actor self, WPos pos, WDist radius, Color color)
 		{
@@ -275,6 +272,8 @@ namespace OpenRA.Mods.Common.Activities
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
 		public static void RenderPointCollDebug(Actor self, WPos pos, Color color)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color); }
+		public static void RenderPointCollDebug(Actor self, WPos pos, Color color, int thickness)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color, thickness); }
 
 		/* --- Not Working ---
 		 * public static WVec CombineDistAndYawVecWithRotation(WDist dist, WVec yawVec, WRot rotation)
@@ -302,9 +301,6 @@ namespace OpenRA.Mods.Common.Activities
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 
 			actorsSharingMove = groupedActors;
-			/*System.Console.WriteLine($"groupedActors: {groupedActors.Count}");
-			foreach (var ga in groupedActors)
-				System.Console.WriteLine($"groupedActor at {self.World.Map.CellContaining(ga.CenterPosition)}");*/
 
 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
 			// Moving to any position (even if quite stale) is still better than immediately giving up
@@ -323,10 +319,10 @@ namespace OpenRA.Mods.Common.Activities
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 			: this(self, groupedActors, t, initialTargetPosition, targetLineColor)
 		{
-			System.Console.WriteLine($"Target is {target}");
-			#if DEBUG || DEBUGWITHOVERLAY
-			System.Console.WriteLine("MoveOffGrid created at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
-			#endif
+			Console.WriteLine($"Target is {target}");
+#if DEBUG || DEBUGWITHOVERLAY
+			Console.WriteLine("MoveOffGrid created at " + DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond);
+#endif
 			this.maxRange = maxRange;
 			this.minRange = minRange;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
@@ -351,7 +347,6 @@ namespace OpenRA.Mods.Common.Activities
 				// must be processed collectively in order for the grouped pathfinding to work.
 				// Otherwise pathfinding will be inefficient and slow.
 				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, actorsSharingMove);
-				thetaIters++;
 			}
 
 			if (!usePathFinder)
@@ -520,18 +515,12 @@ namespace OpenRA.Mods.Common.Activities
 				//	thetaStarSearch.Expand();
 
 				pathRemaining = GetThetaPathAndConvert(self);
-				reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
 				if (pathRemaining.Count == 0)
 					pathRemaining = new List<WPos>() { target.CenterPosition };
-
-				if (!secondThetaRun)
-					GetNextTargetOrComplete(self);
 				else
 				{
 					List<WPos> thetaToNextTarg;
 					thetaToNextTarg = GetThetaPathAndConvert(self);
-					reachedMaxExpansions = mobileOffGrid.thetaStarSearch.HitTotalExpansionLimit;
-					thetaIters++;
 					if (thetaToNextTarg.Count > 1)
 					{
 						pathRemaining = thetaToNextTarg.Concat(pathRemaining).ToList();
@@ -544,7 +533,6 @@ namespace OpenRA.Mods.Common.Activities
 				}
 				mobileOffGrid.thetaStarSearch = null;
 				pathFound = true;
-				secondThetaRun = false;
 			}
 
 			// Will not move unless there is a path to move on
@@ -636,7 +624,7 @@ namespace OpenRA.Mods.Common.Activities
 				if (UnitHasNotCollided(revisedMoveVec))
 				{
 #if DEBUGWITHOVERLAY
-					System.Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
+					Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
 					/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
 #endif
@@ -658,27 +646,15 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			//// Check collision with walls
-			//var cellsCollidingSet = new List<CPos>();
+			var cellsCollidingSet = new List<CPos>();
 			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
 			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
-			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
+			cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
 
-			//var fleeVecToUse = cellsCollidingSet.Distinct().Select(c => self.World.Map.CenterOfCell(c))
-			//											 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
+			var fleeVecToUse = cellsCollidingSet.Distinct().Select(c => self.World.Map.CenterOfCell(c))
+														 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
 
-			//mobileOffGrid.FleeVectors.AddRange(fleeVecToUse.ConvertAll(v => new MvVec(v, 1)));
-
-			//for (var i = 0; i < cellsCollidingSet.Count; i++)
-			//{
-			//	var currCellsColliding = cellsCollidingSet.ElementAt(i);
-			//	if (currCellsColliding.Count > 0)
-			//	{
-			//		var fleeVecs = currCellsColliding.Select(c => self.World.Map.CenterOfCell(c))    // Note: we add scalar prop. to i
-			//										 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
-			//		var fleeVecToUse = AvgOfVectors(fleeVecs);
-			//		mobileOffGrid.FleeVectors.Add(new MvVec(fleeVecToUse, 1));
-			//	}
-			//}
+			mobileOffGrid.FleeVectors.AddRange(fleeVecToUse.ConvertAll(v => new MvVec(v, 1)));
 
 			var move = mobileOffGrid.GenFinalWVec();
 
@@ -697,27 +673,14 @@ namespace OpenRA.Mods.Common.Activities
 					// Also do not re-run if max expansions were reached last time
 					isBlocked = true;
 					Console.WriteLine("Blocked!");
+					RenderPointCollDebug(self, mobileOffGrid.CenterPosition, Color.LightGreen, 6);
 					if (currPathTarget != lastPathTarget)
 					{
 						Console.WriteLine("Blocked and not last target!");
-						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
+						RenderPointCollDebug(self, mobileOffGrid.CenterPosition, Color.Orange, 6);
+						if (mobileOffGrid.PositionBuffer.Count >= 20) // 3 seconds
 						{
-							Console.WriteLine("Expand Theta when blocked");
-							searchingForNextTarget = true;
-							// mobileOffGrid.thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget
-							//										  , actorsSharingMove);
-							// IMPORTANT: This AddMoveOrder call relies on _all_ MoveOffGrid Activities
-							// being called _before_ any traits are called. This is because all of the actors
-							// must be processed collectively in order for the grouped pathfinding to work.
-							// Otherwise pathfinding will be inefficient and slow.
-							thetaPFexecManager.AddMoveOrder(self, currPathTarget, actorsSharingMove, secondThetaRun: true);
-							secondThetaRun = true;
-							pathFound = false;
-							thetaIters++;
-						}
-						else if (mobileOffGrid.PositionBuffer.Count >= 15) // 3 seconds
-						{
-							System.Console.WriteLine("Clear Position Buffer when >= 15");
+							Console.WriteLine("Clear Position Buffer when >= 100");
 							isBlocked = false;
 							EndingActions();
 							return Complete();
@@ -729,6 +692,9 @@ namespace OpenRA.Mods.Common.Activities
 					EndingActions();
 					mobileOffGrid.PositionBuffer.Clear();
 				}
+				// lengthMoved >= mobileOffGrid.MovementSpeed
+				else
+					mobileOffGrid.PositionBuffer.Clear();
 			}
 
 			var selfHasReachedGoal = Delta.HorizontalLengthSquared < mobileOffGrid.UnitRadius.LengthSquared;
@@ -754,13 +720,12 @@ namespace OpenRA.Mods.Common.Activities
 					// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
 					var deltaMove = move;
 					mobileOffGrid.SeekVectors.Clear();
-					//mobileOffGrid.SetDesiredFacing(WAngle.ArcTan(mobileOffGrid.CenterPosition.Y, mobileOffGrid.CenterPosition.X));
 					mobileOffGrid.SetDesiredAltitude(dat);
 					mobileOffGrid.SetDesiredMove(deltaMove);
 					mobileOffGrid.SetIgnoreZVec(true);
 				}
 
-				// for debugging onlyad
+				// for debugging only
 				//var pathString = "";
 				//foreach (var node in pathRemaining)
 				//{
@@ -801,7 +766,7 @@ namespace OpenRA.Mods.Common.Activities
 			var actorsSharingMoveNearMe = new List<Actor>();
 			foreach (var actor in nearbyActors)
 				if (!actor.IsDead && (actor != self || !excludeSelf) && actor.Owner == self.Owner && actorsSharingMove.Contains(actor) &&
-					!(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
+					!(actor.CurrentActivity is ReturnToCellActivity))
 					actorsSharingMoveNearMe.Add(actor); // No need to check if MobileOffGrid exists since all actors in actorsSharingMove
 														// are moving
 			return actorsSharingMoveNearMe;
@@ -810,7 +775,7 @@ namespace OpenRA.Mods.Common.Activities
 		public List<WPos> CompletedTargetsOfActors(List<Actor> actorList)
 		{
 			var actorListMobileOGs = actorList.Where(a => !a.IsDead)
-										.Select(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault())
+										.Select(a => a.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled))
 										.Where(m => m != null);
 			var completedTargs = actorListMobileOGs.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
 			completedTargs = completedTargs.Union(actorListMobileOGs.Select(m => m.LastCompletedTarget)).ToList();

@@ -319,7 +319,7 @@ namespace OpenRA.Mods.Common.Traits
 		public WVec Delta => CurrPathTarget - CenterPosition;
 		public List<WPos> PathComplete = new List<WPos>();
 		public List<WPos> PositionBuffer = new List<WPos>();
-		public int PositionBufferCapacity = 180;
+		public int PositionBufferCapacity = 20;
 		public int TraversedCirclesBufferCapacity = 10;
 		public List<WPos> TraversedCirclesBuffer = new List<WPos>();
 		public static void AddToBuffer<T>(ref List<T> buffer, int bufferCapacity, T item)

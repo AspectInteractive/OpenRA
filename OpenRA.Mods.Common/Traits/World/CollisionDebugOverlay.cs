@@ -28,32 +28,33 @@ namespace OpenRA.Mods.Common.Traits
 	public class CollisionDebugOverlay : IWorldLoaded, IChatCommand, IRenderAnnotations
 	{
 		public readonly List<Command> Comms;
-		private List<(List<WPos>, Color)> linesWithColors = new List<(List<WPos>, Color)>();
-		private List<((WPos, WDist), Color)> circlesWithColors = new List<((WPos, WDist), Color)>();
-		private List<(WPos, Color)> pointsWithColors = new List<(WPos, Color)>();
-		private List<(CCState, Color)> statesWithColors = new List<(CCState, Color)>();
-		private List<List<WPos>> paths = new List<List<WPos>>();
-		private List<List<WPos>> lines = new List<List<WPos>>();
+		readonly List<(List<WPos>, Color)> linesWithColors = new();
+		readonly List<((WPos, WDist), Color, int)> circlesWithColors = new();
+		readonly List<(WPos, Color, int)> pointsWithColors = new();
+		List<(CCState, Color)> statesWithColors = new();
+		readonly List<List<WPos>> paths = new();
+		readonly List<List<WPos>> lines = new();
 
 		// Set this to true to display annotations showing the cost at each cell
-		private readonly bool showCosts = true;
+		readonly bool showCosts = true;
 
 		public bool Enabled;
-		private float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
-		private float pointHue = Color.Red.ToAhsv().H; // 0.0 - 1.0
-		private float circleHue = Color.LightGreen.ToAhsv().H; // 0.0 - 1.0
-		private float pathHue = Color.Yellow.ToAhsv().H; // 0.0 - 1.0
-		private float lineHue = Color.LightBlue.ToAhsv().H; // 0.0 - 1.0
-		private float currSat = 1.0F; // 0.0 - 1.0
-		private float currLight = 0.7F; // 0.0 - 1.0 with 1.0 being brightest
-		private float lineColorIncrement = 0.05F;
+		const int DefaultThickness = 3;
+		float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
+		readonly float pointHue = Color.Red.ToAhsv().H; // 0.0 - 1.0
+		readonly float circleHue = Color.LightGreen.ToAhsv().H; // 0.0 - 1.0
+		readonly float pathHue = Color.Yellow.ToAhsv().H; // 0.0 - 1.0
+		readonly float lineHue = Color.LightBlue.ToAhsv().H; // 0.0 - 1.0
+		float currSat = 1.0F; // 0.0 - 1.0
+		float currLight = 0.7F; // 0.0 - 1.0 with 1.0 being brightest
+		float lineColorIncrement = 0.05F;
 		public Action<string> ToggleVisibility;
 
 		public CollisionDebugOverlay()
 		{
 			Comms = new List<Command>()
 			{
-				new Command("colldebug", "toggles the collision debug overlay.", true)
+				new("colldebug", "toggles the collision debug overlay.", true)
 			};
 		}
 
@@ -77,7 +78,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		void IChatCommand.InvokeCommand(string name, string arg)
 		{
-			if (Comms.Where(comm => comm.Name == name).Any())
+			if (Comms.Any(comm => comm.Name == name))
 			{
 				Enabled ^= true;
 				ToggleVisibility("");
@@ -109,10 +110,10 @@ namespace OpenRA.Mods.Common.Traits
 																	int endPointThickness, Color endPointColor)
 		{
 			var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
-			Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderableWithZIndex(wpos1, wpos2,
+			void FuncOnLinkedPoints(WPos wpos1, WPos wpos2) => linesToRender.Add(new LineAnnotationRenderableWithZIndex(wpos1, wpos2,
 																			lineThickness, lineColor, lineColor,
 																			(endPointRadius, endPointThickness, endPointColor)));
-			GenericLinkedPointsFunc(path, path.Count, funcOnLinkedPoints);
+			GenericLinkedPointsFunc(path, path.Count, FuncOnLinkedPoints);
 			return linesToRender;
 		}
 
@@ -122,7 +123,6 @@ namespace OpenRA.Mods.Common.Traits
 				yield break;
 
 			var pointRadius = 100;
-			var pointThickness = 3;
 			var lineThickness = 3;
 			var endPointRadius = 100;
 			var endPointThickness = 3;
@@ -130,27 +130,28 @@ namespace OpenRA.Mods.Common.Traits
 			var font = Game.Renderer.Fonts[fontName];
 			Color lineColor;
 
-			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
-			{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true); };
-			Func<(WPos, WDist), Color, CircleAnnotationRenderable> circleRenderFunc = (c, color) =>
-			{ return new CircleAnnotationRenderable(c.Item1, c.Item2, pointThickness, color, false); };
+			CircleAnnotationRenderable PointRenderFunc(WPos p, Color color, int thickness = DefaultThickness) =>
+				new(p, new WDist(pointRadius), thickness, color, true);
+
+			static CircleAnnotationRenderable CircleRenderFunc((WPos, WDist) c, Color color, int thickness = DefaultThickness) =>
+				new(c.Item1, c.Item2, thickness, color, false);
 
 			// Render States
 			foreach (var (ccState, color) in statesWithColors)
 			{
-				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
+				yield return PointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
 				if (showCosts)
 					yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
 															color, $"({ccState.Gval})");
 			}
 
 			// Render Points
-			foreach (var (point, color) in pointsWithColors)
-				yield return pointRenderFunc(point, color);
+			foreach (var (point, color, thickness) in pointsWithColors)
+				yield return PointRenderFunc(point, color, thickness);
 
 			// Render Circles
-			foreach (var (circle, color) in circlesWithColors)
-				yield return circleRenderFunc(circle, color);
+			foreach (var (circle, color, thickness) in circlesWithColors)
+				yield return CircleRenderFunc(circle, color, thickness);
 
 			// Render Paths
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
@@ -188,7 +189,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			for (var i = 0; i < statesWithColors.Count; i++)
 			{
-				newPointsWithColor.Add((statesWithColors.ElementAt(i).Item1, currColor));
+				newPointsWithColor.Add((statesWithColors[i].Item1, currColor));
 				currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon);
 				currColor = Color.FromAhsv(currHue, currSat, currLight);
 			}
@@ -210,21 +211,21 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void AddPoint(WPos pos)
 		{
-			pointsWithColors.Add((pos, Color.FromAhsv(pointHue, currSat, currLight)));
+			pointsWithColors.Add((pos, Color.FromAhsv(pointHue, currSat, currLight), DefaultThickness));
 			UpdatePointColors();
 		}
 
-		public void AddPoint(WPos pos, Color color)
+		public void AddPoint(WPos pos, Color color, int thickness = DefaultThickness)
 		{
-			pointsWithColors.Add((pos, color));
+			pointsWithColors.Add((pos, color, thickness));
 			UpdatePointColors();
 		}
 
 		public void RemovePoint(WPos pos)
 		{
-			foreach (var (currPos, currColor) in pointsWithColors)
+			foreach (var (currPos, currColor, thickness) in pointsWithColors)
 				if (currPos == pos)
-					pointsWithColors.Remove((pos, currColor));
+					pointsWithColors.Remove((pos, currColor, thickness));
 			UpdatePointColors();
 		}
 
@@ -234,9 +235,10 @@ namespace OpenRA.Mods.Common.Traits
 		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l == line); }
 		public void AddLineWithColor(List<WPos> line, Color color) { linesWithColors.Add((line, color)); }
 		public void RemoveLineWithColor(List<WPos> line) { linesWithColors.RemoveAll(lwc => lwc.Item1 == line); }
-		public void AddCircle((WPos, WDist) circle) { circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight))); }
-		public void AddCircleWithColor((WPos, WDist) circle, Color color) { circlesWithColors.Add((circle, color)); }
-		public void RemoveCircle((WPos, WDist) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
+		public void AddCircle((WPos P, WDist D) circle, int thickness = DefaultThickness)
+		{ circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight), DefaultThickness)); }
+		public void AddCircleWithColor((WPos P, WDist D) circle, Color color, int thickness = DefaultThickness) { circlesWithColors.Add((circle, color, DefaultThickness)); }
+		public void RemoveCircle((WPos P, WDist D) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
 		public void ClearIntervals() { statesWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
 		public void ClearLines() { lines.Clear(); }

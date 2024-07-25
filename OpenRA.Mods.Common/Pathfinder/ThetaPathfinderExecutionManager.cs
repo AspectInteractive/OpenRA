@@ -122,10 +122,18 @@ namespace OpenRA.Mods.Common.Traits
 		public void AddMoveOrder(Actor actor, WPos targetPos, List<Actor> sharedMoveActors, bool secondThetaRun = false)
 		{
 			// Bypass circle logic if distance to target is small enough
-			if (!GreaterThanMinDistanceForCircles(actor, targetPos) || secondThetaRun)
+			if (!GreaterThanMinDistanceForCircles(actor, targetPos))
 			{
 				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 																 targetPos, sharedMoveActors)
+				{ running = true };
+				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
+				AddPF(rawThetaStarSearch);
+			}
+			else if (secondThetaRun)
+			{
+				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
+																 targetPos, sharedMoveActors, 0)
 				{ running = true };
 				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
 				AddPF(rawThetaStarSearch);
