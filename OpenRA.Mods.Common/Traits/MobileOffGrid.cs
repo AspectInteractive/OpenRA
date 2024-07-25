@@ -560,10 +560,10 @@ namespace OpenRA.Mods.Common.Traits
 		public void SetDesiredMove(WVec desiredMove) { DesiredMove = desiredMove; }
 		public void SetDesiredAltitude(WDist desiredAltitude) { DesiredAltitude = desiredAltitude; }
 		public void SetIgnoreZVec(bool ignoreZVec) { IgnoreZVec = ignoreZVec; }
-		public WVec RepulsionVecFunc(MobileOffGrid actorMobileOG, WPos selfPos, WPos actorPos, int moveSpeedScalar = 1)
+		public WVec RepulsionVecFunc(int repellingMovementSpeed, WPos selfPos, WPos nearbyActorPos, int moveSpeedScalar = 1)
 		{
-			var repulsionDelta = selfPos - actorPos;
-			var distToMove = Math.Min(repulsionDelta.Length, actorMobileOG.MovementSpeed);
+			var repulsionDelta = nearbyActorPos - selfPos;
+			var distToMove = Math.Min(repulsionDelta.Length, repellingMovementSpeed * moveSpeedScalar);
 			return -new WVec(new WDist(distToMove), WRot.FromYaw(repulsionDelta.Yaw));
 		}
 
@@ -582,27 +582,28 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var nearbyActorRange = UnitRadius * 2;
 			var nearbyActors = self.World.FindActorsInCircle(CenterPosition, nearbyActorRange);
+			var repelFleeVectors = new List<MvVec>();
 
-			foreach (var actor in nearbyActors)
+			foreach (var nearbyActor in nearbyActors)
 			{
-				if (!actor.IsDead && actor != self)
+				if (!nearbyActor.IsDead && nearbyActor != self)
 				{
-					var actorMobileOGs = actor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
-					if (actorMobileOGs.Any() && !(actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity))
+					var nearbyActorMobileOGs = nearbyActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
+					if (nearbyActorMobileOGs.Any() && nearbyActor.CurrentActivity is not ReturnToCellActivity)
 					{
-						var actorMobileOG = actorMobileOGs.FirstOrDefault();
-						var repulsionMvVec = new MvVec(RepulsionVecFunc(actorMobileOG, CenterPosition, actorMobileOG.CenterPosition), 1);
-						var proposedActorMove = GenFinalWVec(actorMobileOG.SeekVectors,
-															 actorMobileOG.FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
-						// Do not repel actors into blocked cells
-						if (!CellsCollidingWithPosBool(actor, actor.CenterPosition, proposedActorMove, 3, Locomotor) &&
-							!ActorIsAiming(actor)) // we do not repel Attacking actors, we repel against them
-							actorMobileOG.FleeVectors.Add(repulsionMvVec);
-						else // if collision will occur, we must apply reverse repulsion to ourselves
-							FleeVectors.Add(new MvVec(-repulsionMvVec.Vec, 1));
+						var nearbyActorMobileOG = nearbyActorMobileOGs.FirstOrDefault();
+						var repulsionMvVec = new MvVec(RepulsionVecFunc(nearbyActorMobileOGs.FirstOrDefault().MovementSpeed,
+							CenterPosition, nearbyActorMobileOG.CenterPosition), 1);
+						repelFleeVectors = repelFleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList();
 					}
 				}
 			}
+
+			// Do not add the new flee vectors if it leads to being blocked by cell.
+			var proposedFleeVectors = FleeVectors.Union(repelFleeVectors).ToList();
+			if (!CellsCollidingWithPosBool(self, self.CenterPosition, GenFinalWVec(SeekVectors, proposedFleeVectors), 3, Locomotor) &&
+				!ActorIsAiming(self)) // we do not repel Attacking actors, we repel against them
+				FleeVectors = proposedFleeVectors;
 		}
 
 		public void MobileOffGridMoveTick(Actor self)
@@ -839,8 +840,10 @@ namespace OpenRA.Mods.Common.Traits
 			if (includeCellCollision)
 				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
 				{
-					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item1, Color.LightGreen);
-					//MoveOffGrid.RenderPointCollDebug(self, sdPair.Item2, Color.LightGreen);
+#if DEBUGWITHOVERLAY
+					MoveOffGrid.RenderPointCollDebug(self, sdPair.Item1, Color.LightGreen);
+					MoveOffGrid.RenderPointCollDebug(self, sdPair.Item2, Color.LightGreen);
+#endif
 					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
 					foreach (var cell in cellsToCheck)
 						if (CellIsBlocked(self, locomotor, cell))
@@ -857,24 +860,29 @@ namespace OpenRA.Mods.Common.Traits
 				if (!destActor.IsDead && ValidCollisionActor(destActor) && destActorMobileOffGrids.Any())
 				{
 					// adding move to use future pos
-					var destActorCenter = (destActor.CenterPosition + destActorMobileOffGrids.FirstOrDefault().GenFinalWVec());
+					var destActorCenter = destActor.CenterPosition + destActorMobileOffGrids.FirstOrDefault().GenFinalWVec();
 					if (destActorCenter != WPos.Zero)
 					{
-						//MoveOffGrid.RenderPointCollDebug(self, destActorCenter, Color.LightGreen);
+#if DEBUGWITHOVERLAY
+						MoveOffGrid.RenderPointCollDebug(self, destActorCenter, Color.LightGreen);
+#endif
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-							if (destShape.Info.Type is OpenRA.Mods.Common.HitShapes.CircleShape)
+							if (destShape.Info.Type is HitShapes.CircleShape)
 								foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
 								{
 									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
 									if (intersection != null)
 									{
-										//MoveOffGrid.RenderLineWithColorCollDebug(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
+#if DEBUGWITHOVERLAY
+										MoveOffGrid.RenderLineWithColorCollDebug(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
+#endif
 										intersections.Add((WPos)intersection);
 									}
 									else
 									{
-										//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
-										continue;
+#if DEBUGWITHOVERLAY
+										MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
+#endif
 									}
 								}
 					}
@@ -884,109 +892,13 @@ namespace OpenRA.Mods.Common.Traits
 			if (intersections.Count > 0)
 			{
 				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
+#if DEBUGWITHOVERLAY
 				//MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
+#endif
 				return firstIntersection;
 			}
 			else
 				return null;
-		}
-
-		public bool HasNotCollided(Actor self, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0, bool attackingUnitsOnly = false)
-		{
-			if (self.CurrentActivity is ReturnToCellActivity) // we ignore collision if the unit is returning to a cell, e.g. coming out of a factory
-				return true;
-
-			var selfCenterPos = self.CenterPosition.XYToInt2();
-			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			Func<CPos, bool> cellIsBlocked = c => CellIsBlocked(self, locomotor, c);
-			Func<int2, HitShape, int2, HitShape, bool> posIsBlocked = (p, selfShape, destP, destShape) =>
-				{ return destShape.Info.Type.IntersectsWithHitShape(p, destP, selfShape); };
-
-			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-			foreach (var selfShape in selfShapes)
-			{
-				foreach (var corner in selfShape.Info.Type.GetCorners(selfCenterPos))
-				{
-					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
-					var cell = self.World.Map.CellContaining(corner);
-					for (var i = startI; i < lookAhead; i++)
-					{
-						var cornerWithOffset = corner + move * i;
-						if ((!incOrigin || cellIsBlocked(cell)) && cellIsBlocked(self.World.Map.CellContaining(cornerWithOffset)))
-							return false;
-
-						foreach (var destActor in self.World.FindActorsInCircle(cornerWithOffset, UnitRadius)
-															.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
-						{
-							if (!destActor.IsDead && ValidCollisionActor(destActor))
-							{
-								//MoveOffGrid.RenderPoint(self, cornerWithOffset, Color.LightGreen);
-								var destActorCenter = (destActor.CenterPosition +
-														  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
-															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
-								if (destActorCenter != WPos.Zero)
-								{
-									//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
-									foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-										if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
-											posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
-											return false;
-								}
-							}
-						}
-					}
-				}
-			}
-			return true;
-		}
-
-		public WVec? GetCollisionVector(Actor self, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0, bool attackingUnitsOnly = false)
-		{
-			if (self.CurrentActivity is ReturnToCellActivity) // we ignore collision if the unit is returning to a cell, e.g. coming out of a factory
-				return null;
-
-			var selfCenterPos = self.CenterPosition.XYToInt2();
-			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			Func<CPos, bool> cellIsBlocked = c => CellIsBlocked(self, locomotor, c);
-			Func<int2, HitShape, int2, HitShape, bool> posIsBlocked = (p, selfShape, destP, destShape) =>
-			{ return destShape.Info.Type.IntersectsWithHitShape(p, destP, selfShape); };
-
-			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-			foreach (var selfShape in selfShapes)
-			{
-				foreach (var corner in selfShape.Info.Type.GetCorners(selfCenterPos))
-				{
-					/*System.Console.WriteLine($"checking corner {corner} of shape {selfShape.Info.Type}");*/
-					var cell = self.World.Map.CellContaining(corner);
-					for (var i = startI; i < lookAhead; i++)
-					{
-						var cornerWithOffset = corner + move * i;
-						var cellContainingCornerWithOffset = self.World.Map.CellContaining(cornerWithOffset);
-						if ((!incOrigin || cellIsBlocked(cell)) && cellIsBlocked(cellContainingCornerWithOffset))
-							return cornerWithOffset - self.World.Map.CenterOfCell(cellContainingCornerWithOffset);
-
-						foreach (var destActor in self.World.FindActorsInCircle(cornerWithOffset, UnitRadius)
-															.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
-						{
-							if (!destActor.IsDead && ValidCollisionActor(destActor))
-							{
-								//MoveOffGrid.RenderPoint(self, cornerWithOffset, Color.LightGreen);
-								var destActorCenter = (destActor.CenterPosition +
-														  destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled)
-															.FirstOrDefault().GenFinalWVec()); // adding move to use future pos
-								//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
-								foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-									if ((!incOrigin || posIsBlocked(selfCenterPos, selfShape, destActorCenter.XYToInt2(), destShape)) &&
-										posIsBlocked(cornerWithOffset.XYToInt2(), selfShape, destActorCenter.XYToInt2(), destShape))
-										return destActorCenter - cornerWithOffset;
-							}
-						}
-					}
-				}
-			}
-			return null;
 		}
 
 		protected virtual void Tick(Actor self)
@@ -1634,9 +1546,9 @@ namespace OpenRA.Mods.Common.Traits
 
 				var target = Target.FromPos(order.Target.CenterPosition);
 				self.QueueActivity(order.Queued, new MoveOffGrid(self, order.GroupedActors.ToList(), target, targetLineColor: Info.TargetLineColor));
-				#if DEBUG
+#if DEBUG
 				System.Console.WriteLine("ResolveOrder() with 'Move' to (" + order.Target.CenterPosition.X.ToString() + "," + order.Target.CenterPosition.Y.ToString() + ") called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
-				#endif
+#endif
 				self.ShowTargetLines();
 			}
 			else if (orderString == "Land")
@@ -1689,9 +1601,9 @@ namespace OpenRA.Mods.Common.Traits
 
 				self.CancelActivity();
 				UnReserve();
-				#if DEBUG
+#if DEBUG
 				System.Console.WriteLine("ResolveOrder() with 'Stop' called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
-				#endif
+#endif
 			}
 			else if (orderString == "ReturnToBase")
 			{

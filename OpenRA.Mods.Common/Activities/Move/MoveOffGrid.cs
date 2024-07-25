@@ -398,9 +398,9 @@ namespace OpenRA.Mods.Common.Activities
 		{ return pp.ccPos != CCPos.Zero ? PadCC(self.World, self, locomotor, mobileOffGrid, pp.ccPos) : pp.wPos; }
 
 		public List<WPos> GetThetaPathAndConvert(Actor self)
-		{ return mobileOffGrid.thetaStarSearch.path.Select(pp => PadCCifCC(self, pp)).ToList(); }
+		{ return mobileOffGrid.thetaStarSearch.path.ConvertAll(pp => PadCCifCC(self, pp)); }
 
-		public WPos GetCenterOfUnits(List<Actor> actorsSharingMove)
+		public static WPos GetCenterOfUnits(List<Actor> actorsSharingMove)
 		{
 			return actorsSharingMove.Where(a => !a.IsDead).Select(a => a.TraitsImplementing<MobileOffGrid>().FirstOrDefault().CenterPosition).Average();
 		}
@@ -494,10 +494,12 @@ namespace OpenRA.Mods.Common.Activities
 			}
 #pragma warning restore IDE0061 // Use expression body for local function
 
+#if DEBUGWITHOVERLAY
 			//RenderPointCollDebug(self, new WPos(actorsSharingMoveXYBounds.MinX, actorsSharingMoveXYBounds.MinY, 0));
 			//RenderPointCollDebug(self, new WPos(actorsSharingMoveXYBounds.MinX, actorsSharingMoveXYBounds.MaxY, 0));
 			//RenderPointCollDebug(self, new WPos(actorsSharingMoveXYBounds.MaxX, actorsSharingMoveXYBounds.MinY, 0));
 			//RenderPointCollDebug(self, new WPos(actorsSharingMoveXYBounds.MaxX, actorsSharingMoveXYBounds.MaxY, 0));
+#endif
 
 			if (actorsSharingMove.Count > 1 && actorsSharingMoveWithProps.All(a => a.IsOffsetTargetObservable && a.IsOffsetCloseEnough)
 				&& !TargetWithinBounds(actorsSharingMoveXYBounds.MinX, actorsSharingMoveXYBounds.MaxX,
@@ -633,11 +635,11 @@ namespace OpenRA.Mods.Common.Activities
 
 				if (UnitHasNotCollided(revisedMoveVec))
 				{
-					#if DEBUGWITHOVERLAY
+#if DEBUGWITHOVERLAY
 					System.Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
 					/*RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);*/
-					#endif
+#endif
 					mobileOffGrid.AddToTraversedCirclesBuffer(self.CenterPosition + revisedMoveVec);
 					RenderCircleWithColor(self, mobileOffGrid.CenterPosition + revisedMoveVec, mobileOffGrid.UnitRadius, Color.LightGreen);
 					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
@@ -656,15 +658,15 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			//// Check collision with walls
-			var cellsCollidingSet = new List<CPos>();
+			//var cellsCollidingSet = new List<CPos>();
 			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, locomotor));
 			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
-			cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
+			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
 
-			var fleeVecToUse = cellsCollidingSet.Distinct().Select(c => self.World.Map.CenterOfCell(c))
-														 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
+			//var fleeVecToUse = cellsCollidingSet.Distinct().Select(c => self.World.Map.CenterOfCell(c))
+			//											 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
 
-			mobileOffGrid.FleeVectors.AddRange(fleeVecToUse.ConvertAll(v => new MvVec(v, 1)));
+			//mobileOffGrid.FleeVectors.AddRange(fleeVecToUse.ConvertAll(v => new MvVec(v, 1)));
 
 			//for (var i = 0; i < cellsCollidingSet.Count; i++)
 			//{
@@ -694,13 +696,13 @@ namespace OpenRA.Mods.Common.Activities
 					// Make sure we are not re-running this if we received the same result last time
 					// Also do not re-run if max expansions were reached last time
 					isBlocked = true;
-					System.Console.WriteLine("Blocked!");
+					Console.WriteLine("Blocked!");
 					if (currPathTarget != lastPathTarget)
 					{
-						System.Console.WriteLine("Blocked and not last target!");
+						Console.WriteLine("Blocked and not last target!");
 						if (!reachedMaxExpansions && thetaIters < maxThetaIters)
 						{
-							System.Console.WriteLine("Expand Theta when blocked");
+							Console.WriteLine("Expand Theta when blocked");
 							searchingForNextTarget = true;
 							// mobileOffGrid.thetaStarSearch = new ThetaStarPathSearch(self.World, self, mobileOffGrid.CenterPosition, currPathTarget
 							//										  , actorsSharingMove);
@@ -743,9 +745,9 @@ namespace OpenRA.Mods.Common.Activities
 			{
 				//System.Console.WriteLine($"selfHasReachedGoal: {selfHasReachedGoal}, nearbyActorHasReachedGoal: {nearbyActorHasReachedGoal}\n" +
 				//						 $"Delta.HorizontalLengthSquared {Delta.HorizontalLengthSquared}, mobileOffGrid.UnitRadius.LengthSquared:{mobileOffGrid.UnitRadius.LengthSquared}");
-				#if DEBUG || DEBUGWITHOVERLAY
+#if DEBUG || DEBUGWITHOVERLAY
 				// System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
-				#endif
+#endif
 
 				if (Delta.HorizontalLengthSquared != 0 && selfHasReachedGoal)
 				{

@@ -137,7 +137,7 @@ namespace OpenRA.Mods.Common.Traits
 				if (!playerCircleGroups.ContainsKey(playerCircleGroupIndex))
 					playerCircleGroups[playerCircleGroupIndex] = new List<ThetaCircle>();
 				if (playerCircleGroups[playerCircleGroupIndex].Count == 0)
-					playerCircleGroups[playerCircleGroupIndex].Add(new ThetaCircle(actor.CenterPosition, new WDist(radiusForSharedThetas)));
+					playerCircleGroups[playerCircleGroupIndex].Add(new ThetaCircle(MoveOffGrid.GetCenterOfUnits(sharedMoveActors), new WDist(radiusForSharedThetas)));
 
 				// For the found Player Circle group, loop through each circle, attempting to find one that contains the actor
 				var circleFound = false;
@@ -147,7 +147,7 @@ namespace OpenRA.Mods.Common.Traits
 					if (CircleShape.PosIsInsideCircle(circle.CircleCenter, circle.CircleRadius.Length, actor.CenterPosition))
 					{
 #if DEBUGWITHOVERLAY
-						//MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
+						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
 #endif
 						// Create a slice in the circle at the position of the actor and return the index of this slice
 						var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
@@ -155,9 +155,9 @@ namespace OpenRA.Mods.Common.Traits
 
 #if DEBUGWITHOVERLAY
 						//Slice Line is the standard sliceAngle * index to get the slice
-						//var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
-						//MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
-						//								Color.DarkBlue);
+						var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
+						MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
+														Color.DarkBlue);
 #endif
 
 						var circleSliceIndex = new CircleSliceIndex(playerCircleGroupIndex, circleIndex, sliceIndex);
