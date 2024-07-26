@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Commands;
 using OpenRA.Traits;
 
@@ -62,6 +63,18 @@ namespace OpenRA.Mods.Common.Traits
 				thetaStarPathFinderTrait.ClearPoints();
 				thetaStarPathFinderTrait.ClearCircles();
 				thetaStarPathFinderTrait.ClearRadiuses();
+
+				var collDebugOverlayTrait = w.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
+				collDebugOverlayTrait.ClearIntervals();
+				collDebugOverlayTrait.ClearPaths();
+				collDebugOverlayTrait.ClearLines();
+				collDebugOverlayTrait.ClearLinesWithColors();
+				collDebugOverlayTrait.ClearStates();
+				collDebugOverlayTrait.ClearPoints();
+				collDebugOverlayTrait.ClearCircles();
+				collDebugOverlayTrait.ClearRadiuses();
+				collDebugOverlayTrait.ClearActorTexts();
+				collDebugOverlayTrait.ClearTexts();
 			};
 		}
 

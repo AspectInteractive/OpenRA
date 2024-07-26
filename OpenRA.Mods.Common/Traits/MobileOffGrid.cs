@@ -279,7 +279,7 @@ namespace OpenRA.Mods.Common.Traits
 		readonly bool returnToCellOnCreation;
 		readonly bool returnToCellOnCreationRecalculateSubCell = true;
 		readonly int creationActivityDelay;
-		bool notify = true;
+		readonly bool notify = true;
 
 		#region IMove CurrentMovementTypes
 		MovementType movementTypes;
@@ -523,26 +523,26 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public enum WVecTypes { Seek, Flee, All }
-		public WVec GenFinalWVec(WVecTypes wvecTypes = WVecTypes.All)
+		public WVec GenFinalWVec(WVecTypes wvecTypes = WVecTypes.All, bool ignoreTimer = false)
 		{
 			var finalVec = WVec.Zero;
 			if (wvecTypes == WVecTypes.Seek || wvecTypes == WVecTypes.All)
 				foreach (var mvVec in SeekVectors)
-					finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
+					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
 			if (wvecTypes == WVecTypes.Flee || wvecTypes == WVecTypes.All)
 				foreach (var mvVec in FleeVectors)
-					finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
+					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
 			return finalVec;
 		}
-		public WVec GenFinalWVec(List<MvVec> seekVectors, List<MvVec> fleeVectors, WVecTypes wvecTypes = WVecTypes.All)
+		public WVec GenFinalWVec(List<MvVec> seekVectors, List<MvVec> fleeVectors, WVecTypes wvecTypes = WVecTypes.All, bool ignoreTimer = false)
 		{
 			var finalVec = WVec.Zero;
 			if (wvecTypes == WVecTypes.Seek || wvecTypes == WVecTypes.All)
 				foreach (var mvVec in seekVectors)
-					finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
+					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
 			if (wvecTypes == WVecTypes.Flee || wvecTypes == WVecTypes.All)
 				foreach (var mvVec in fleeVectors)
-					finalVec = mvVec.TickTimer != 0 ? finalVec + mvVec.Vec : finalVec;
+					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
 			return finalVec;
 		}
 
@@ -572,7 +572,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (!actor.IsDead)
 			{
 				var actorAttacks = actor.TraitsImplementing<AttackTurreted>().Where(Exts.IsTraitEnabled).ToArray();
-				if (actorAttacks.Where(at => at.IsAiming).Any())
+				if (actorAttacks.Any(at => at.IsAiming))
 					return true;
 			}
 			return false;
@@ -609,7 +609,11 @@ namespace OpenRA.Mods.Common.Traits
 		public void MobileOffGridMoveTick(Actor self)
 		{
 			var move = DesiredMove == WVec.Zero ? GenFinalWVec() : DesiredMove;
-			if (move == WVec.Zero)
+
+			if (move == WVec.Zero &&
+			   (GenFinalWVec(WVecTypes.Seek, false) != -GenFinalWVec(WVecTypes.Flee, false) ||
+				(GenFinalWVec(WVecTypes.Seek, false) == WVec.Zero && GenFinalWVec(WVecTypes.Seek, false) == WVec.Zero))
+			   )
 				return;
 
 			DecrementTickFleeVectors();
@@ -903,6 +907,13 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected virtual void Tick(Actor self)
 		{
+			static string VecToXYstring(WVec v) => $"{v.X},{v.Y}";
+			var seek = GenFinalWVec(WVecTypes.Seek, ignoreTimer: false);
+			var flee = GenFinalWVec(WVecTypes.Flee, ignoreTimer: false);
+
+			MoveOffGrid.RemoveActorTextCollDebug(self, self);
+			MoveOffGrid.RenderActorTextCollDebug(self, self, CenterPosition, $"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Yellow);
+
 			var oldCachedFacing = cachedFacing;
 			cachedFacing = Facing;
 
@@ -1269,7 +1280,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			protected override void OnFirstRun(Actor self)
 			{
-				System.Console.WriteLine("MobileOffGrid.OnFirstRun() issued at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
+				//System.Console.WriteLine("MobileOffGrid.OnFirstRun() issued at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
 				pos = self.CenterPosition;
 				if (self.World.Map.DistanceAboveTerrain(pos) > WDist.Zero && self.TraitOrDefault<Parachutable>() != null)
 					QueueChild(new Parachute(self));

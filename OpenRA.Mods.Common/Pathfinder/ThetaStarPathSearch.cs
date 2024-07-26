@@ -1011,7 +1011,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			else
 				CCLineOfSightFunc = IsPathObsCached;
 			this.self = self;
-			mobileOffGrid = self.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).FirstOrDefault();
+			mobileOffGrid = self.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled);
 			locomotor = thisWorld.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 			ccPosMaxSizeX = thisWorld.Map.MapSize.X;
 			ccPosMinSizeX = 0;

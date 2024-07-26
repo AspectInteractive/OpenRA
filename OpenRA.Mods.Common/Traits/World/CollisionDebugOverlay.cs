@@ -32,6 +32,8 @@ namespace OpenRA.Mods.Common.Traits
 		readonly List<((WPos, WDist), Color, int)> circlesWithColors = new();
 		readonly List<(WPos, Color, int)> pointsWithColors = new();
 		List<(CCState, Color)> statesWithColors = new();
+		readonly List<(WPos, string, Color, string)> textsWithColors = new();
+		readonly List<(Actor, WPos, string, Color, string)> actorTextsWithColors = new();
 		readonly List<List<WPos>> paths = new();
 		readonly List<List<WPos>> lines = new();
 
@@ -126,8 +128,8 @@ namespace OpenRA.Mods.Common.Traits
 			var lineThickness = 3;
 			var endPointRadius = 100;
 			var endPointThickness = 3;
-			var fontName = "TinyBold";
-			var font = Game.Renderer.Fonts[fontName];
+			var defaultFontName = "TinyBold";
+			var font = Game.Renderer.Fonts[defaultFontName];
 			Color lineColor;
 
 			CircleAnnotationRenderable PointRenderFunc(WPos p, Color color, int thickness = DefaultThickness) =>
@@ -135,6 +137,13 @@ namespace OpenRA.Mods.Common.Traits
 
 			static CircleAnnotationRenderable CircleRenderFunc((WPos, WDist) c, Color color, int thickness = DefaultThickness) =>
 				new(c.Item1, c.Item2, thickness, color, false);
+
+			TextAnnotationRenderable TextRenderFunc(WPos p, string text, Color color, string fontname)
+			{
+				fontname ??= defaultFontName;
+				var font = Game.Renderer.Fonts[fontname];
+				return new(font, p, 0, color, text);
+			}
 
 			// Render States
 			foreach (var (ccState, color) in statesWithColors)
@@ -144,6 +153,14 @@ namespace OpenRA.Mods.Common.Traits
 					yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
 															color, $"({ccState.Gval})");
 			}
+
+			// Render Texts
+			foreach (var (pos, text, color, fontname) in textsWithColors)
+				yield return TextRenderFunc(pos, text, color, fontname);
+
+			// Render Actor Texts
+			foreach (var (_, pos, text, color, fontname) in actorTextsWithColors)
+				yield return TextRenderFunc(pos, text, color, fontname);
 
 			// Render Points
 			foreach (var (point, color, thickness) in pointsWithColors)
@@ -229,6 +246,15 @@ namespace OpenRA.Mods.Common.Traits
 			UpdatePointColors();
 		}
 
+		public void AddText(WPos pos, string text, Color color, string fontname = null) { textsWithColors.Add((pos, text, color, fontname)); }
+		public void AddActorText(Actor self, WPos pos, string text, Color color, string fontname = null) { actorTextsWithColors.Add((self, pos, text, color, fontname)); }
+
+		public void RemoveText(WPos pos, string text) { textsWithColors.RemoveAll(twc => twc.Item1 == pos && twc.Item2 == text); }
+
+		public void RemoveActorText(Actor self) { actorTextsWithColors.RemoveAll(at => at.Item1 == self); }
+		public void RemoveActorText(Actor self, WPos pos) { actorTextsWithColors.RemoveAll(at => at.Item1 == self && at.Item2 == pos); }
+		public void RemoveActorText(Actor self, string text) { actorTextsWithColors.RemoveAll(at => at.Item1 == self && at.Item3 == text); }
+		public void RemoveActorText(Actor self, WPos pos, string text) { actorTextsWithColors.RemoveAll(at => at.Item1 == self && at.Item2 == pos && at.Item3 == text); }
 		public void AddPath(List<WPos> path) { paths.Add(path); }
 		public void RemovePath(List<WPos> path) { paths.RemoveAll(p => p == path); }
 		public void AddLine(List<WPos> line) { lines.Add(line); }
@@ -247,6 +273,8 @@ namespace OpenRA.Mods.Common.Traits
 		public void ClearPoints() { pointsWithColors.Clear(); }
 		public void ClearCircles() { circlesWithColors.Clear(); }
 		public void ClearRadiuses() { circlesWithColors.Clear(); }
+		public void ClearTexts() { textsWithColors.Clear(); }
+		public void ClearActorTexts() { actorTextsWithColors.Clear(); }
 
 		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}
