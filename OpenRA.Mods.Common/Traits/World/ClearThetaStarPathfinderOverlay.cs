@@ -71,6 +71,7 @@ namespace OpenRA.Mods.Common.Traits
 				collDebugOverlayTrait.ClearLinesWithColors();
 				collDebugOverlayTrait.ClearStates();
 				collDebugOverlayTrait.ClearPoints();
+				collDebugOverlayTrait.ClearActorPoints();
 				collDebugOverlayTrait.ClearCircles();
 				collDebugOverlayTrait.ClearRadiuses();
 				collDebugOverlayTrait.ClearActorTexts();

@@ -281,6 +281,10 @@ namespace OpenRA.Mods.Common.Traits
 		readonly int creationActivityDelay;
 		readonly bool notify = true;
 
+		public enum MovementState { Undefined, Blocked, Seeking, Starting, Stopped, Repathing, FinishedTarget, Ending }
+
+		public MovementState CurrMovementState = MovementState.Undefined;
+
 		#region IMove CurrentMovementTypes
 		MovementType movementTypes;
 		public MovementType CurrentMovementTypes
@@ -910,9 +914,17 @@ namespace OpenRA.Mods.Common.Traits
 			static string VecToXYstring(WVec v) => $"{v.X},{v.Y}";
 			var seek = GenFinalWVec(WVecTypes.Seek, ignoreTimer: false);
 			var flee = GenFinalWVec(WVecTypes.Flee, ignoreTimer: false);
+			//MoveOffGrid.RemoveActorTextCollDebug(self, self);
+			//MoveOffGrid.RenderActorTextCollDebug(self, self, CenterPosition, $"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Yellow);
 
 			MoveOffGrid.RemoveActorTextCollDebug(self, self);
-			MoveOffGrid.RenderActorTextCollDebug(self, self, CenterPosition, $"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Yellow);
+			MoveOffGrid.RenderActorTextCollDebug(self, self, CenterPosition,
+				$"cpt:{CurrPathTarget.X},{CurrPathTarget.Y},\nMS:{Enum.GetName(typeof(MovementState), CurrMovementState)}\n" +
+				$"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Orange);
+			if (CurrPathTarget != WPos.Zero)
+				MoveOffGrid.RenderActorPointCollDebug(self, CurrPathTarget, Color.Purple);
+			else
+				MoveOffGrid.RemoveActorPointCollDebug(self, self);
 
 			var oldCachedFacing = cachedFacing;
 			cachedFacing = Facing;

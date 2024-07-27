@@ -83,6 +83,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// The number of expansions allowed across all Theta pathfinders
+		bool removingThetaPFs = false;
 		readonly int maxCurrExpansions = 200;
 		readonly int radiusForSharedThetas = 1024 * 10;
 		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
@@ -91,6 +92,8 @@ namespace OpenRA.Mods.Common.Traits
 		readonly Dictionary<PlayerCircleGroupIndex, List<ThetaCircle>> playerCircleGroups = new();
 		public Dictionary<CircleSliceIndex, List<ActorWithOrder>> ActorOrdersInCircleSlices = new();
 		public List<ThetaStarPathSearch> ThetaPFsToRun = new();
+		List<(ThetaStarPathSearch, ThetaPFAction)> thetaPFActions = new();
+		enum ThetaPFAction { Add, Remove }
 
 		public bool GreaterThanMinDistanceForCircles(Actor actor, WPos targetPos)
 		{ return (targetPos - actor.CenterPosition).LengthSquared > minDistanceForCircles * minDistanceForCircles; }
@@ -119,10 +122,33 @@ namespace OpenRA.Mods.Common.Traits
 			GenSharedMoveThetaPFs(self.World);
 		}
 
-		public void AddMoveOrder(Actor actor, WPos targetPos, List<Actor> sharedMoveActors, bool secondThetaRun = false)
+		static WPos GetUnblockedWPos(Actor self, World world, WPos checkPos)
 		{
+			var locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
+			var checkCCPos = ThetaStarPathSearch.GetNearestCCPos(world, checkPos);
+			if (!ThetaStarPathSearch.CcinMap(checkCCPos, world) ||
+				ThetaStarPathSearch.IsCellBlocked(self, locomotor, world.Map.CellContaining(checkPos), BlockedByActor.Immovable))
+				checkCCPos = ThetaStarPathSearch.GetBestCandidateCCPos(self, world, locomotor, checkPos);
+			else
+				return checkPos;
+
+			return world.Map.WPosFromCCPos(checkCCPos);
+		}
+
+		public void RemovePF(Actor actor) { RemovePF(actor, WPos.Zero); }
+
+		public void RemovePF(Actor actor, WPos targetPos)
+		{
+			foreach (var thetaPF in ThetaPFsToRun)
+				if (thetaPF.self == actor && (targetPos == WPos.Zero || thetaPF.Dest == targetPos))
+					thetaPFActions.Add((thetaPF, ThetaPFAction.Remove));
+		}
+
+		public void AddMoveOrder(Actor actor, WPos targetPos, List<Actor> sharedMoveActors = null, bool secondThetaRun = false)
+		{
+			var world = actor.World;
 			// Bypass circle logic if distance to target is small enough
-			if (!GreaterThanMinDistanceForCircles(actor, targetPos))
+			if (!GreaterThanMinDistanceForCircles(actor, targetPos) || sharedMoveActors == null)
 			{
 				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 																 targetPos, sharedMoveActors)
@@ -130,7 +156,7 @@ namespace OpenRA.Mods.Common.Traits
 				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
 				AddPF(rawThetaStarSearch);
 			}
-			else if (secondThetaRun)
+			else if (secondThetaRun || actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity)
 			{
 				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 																 targetPos, sharedMoveActors, 0)
@@ -156,7 +182,7 @@ namespace OpenRA.Mods.Common.Traits
 					var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																		actor.CenterPosition, sliceAngle);
 					if (CircleShape.PosIsInsideCircle(circle.CircleCenter, circle.CircleRadius.Length, actor.CenterPosition) &&
-						SliceIsBlockedByCell(actor, circle.CircleCenter, sliceIndex))
+						!SliceIsBlockedByCell(actor, circle.CircleCenter, sliceIndex))
 					{
 #if DEBUGWITHOVERLAY
 						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
@@ -200,7 +226,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void AddPF(ThetaStarPathSearch thetaPF) { ThetaPFsToRun.Add(thetaPF); }
+		public void AddPF(ThetaStarPathSearch thetaPF) { thetaPFActions.Add((thetaPF, ThetaPFAction.Add)); }
 
 		public List<WPos> GetSliceLine(WPos circleCenter, WDist circleRadius, int sliceAngle, int sliceIndex)
 		{
@@ -268,15 +294,27 @@ namespace OpenRA.Mods.Common.Traits
 							var firstActorOrder = actorOrdersInSliceGroup[0];
 							var avgSourcePosOfGroup = IEnumerableExtensions.Average(actorOrdersInSliceGroup
 																					   .Select(ao => ao.Actor.CenterPosition));
+							var thetaSourcePos = GetUnblockedWPos(firstActorOrder.Actor, world, avgSourcePosOfGroup);
 							var newAvgThetaStarSearch = new ThetaStarPathSearch(firstActorOrder.Actor.World,
-																			 firstActorOrder.Actor, avgSourcePosOfGroup,
+																			 firstActorOrder.Actor, thetaSourcePos,
 																			 firstActorOrder.TargetPos,
 																			 firstActorOrder.SharedMoveActors.ToList());
 
 							// Add Averaged Theta PF back to Actors, and to the GroupedThetaPF list
-							foreach (var actor in actorOrdersInSliceGroup.Select(ao => ao.Actor))
+							foreach (var (actor, targetPos) in actorOrdersInSliceGroup.Select(ao => (ao.Actor, ao.TargetPos)))
 							{
-								actor.Trait<MobileOffGrid>().thetaStarSearch = newAvgThetaStarSearch;
+								var locomotor = world.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
+								if (ThetaStarPathSearch.IsPathObservable(world, actor, locomotor, actor.CenterPosition, thetaSourcePos))
+									actor.Trait<MobileOffGrid>().thetaStarSearch = newAvgThetaStarSearch;
+								else
+								{
+									var individualAvgThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
+										targetPos, firstActorOrder.SharedMoveActors.ToList())
+									{ running = true };
+
+									actor.Trait<MobileOffGrid>().thetaStarSearch = individualAvgThetaStarSearch;
+									AddPF(individualAvgThetaStarSearch);
+								}
 							}
 
 							newAvgThetaStarSearch.running = true;
@@ -294,6 +332,13 @@ namespace OpenRA.Mods.Common.Traits
 
 		void Tick(World world)
 		{
+			// We only add or remove Theta PFs during tick cycle to ensure integrity is maintained
+			foreach (var (thetaPF, action) in thetaPFActions)
+				if (action == ThetaPFAction.Remove)
+					ThetaPFsToRun.Remove(thetaPF);
+				else if (action == ThetaPFAction.Add)
+					ThetaPFsToRun.Add(thetaPF);
+
 			// If there are new playerCircles to resolve, we resolve these first to populate ThetaPFsToRun.
 			if (playerCircleGroups.Count > 0)
 				GenSharedMoveThetaPFs(world);

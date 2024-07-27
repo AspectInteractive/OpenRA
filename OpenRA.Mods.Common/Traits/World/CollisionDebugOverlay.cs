@@ -31,6 +31,7 @@ namespace OpenRA.Mods.Common.Traits
 		readonly List<(List<WPos>, Color)> linesWithColors = new();
 		readonly List<((WPos, WDist), Color, int)> circlesWithColors = new();
 		readonly List<(WPos, Color, int)> pointsWithColors = new();
+		readonly List<(Actor, WPos, Color, int)> actorPointsWithColors = new();
 		List<(CCState, Color)> statesWithColors = new();
 		readonly List<(WPos, string, Color, string)> textsWithColors = new();
 		readonly List<(Actor, WPos, string, Color, string)> actorTextsWithColors = new();
@@ -166,6 +167,10 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var (point, color, thickness) in pointsWithColors)
 				yield return PointRenderFunc(point, color, thickness);
 
+			// Render Actor Points
+			foreach (var (_, point, color, thickness) in actorPointsWithColors)
+				yield return PointRenderFunc(point, color, thickness);
+
 			// Render Circles
 			foreach (var (circle, color, thickness) in circlesWithColors)
 				yield return CircleRenderFunc(circle, color, thickness);
@@ -232,10 +237,25 @@ namespace OpenRA.Mods.Common.Traits
 			UpdatePointColors();
 		}
 
+		public void AddPoint(WPos pos, int thickness = DefaultThickness)
+		{
+			pointsWithColors.Add((pos, Color.FromAhsv(pointHue, currSat, currLight), thickness));
+			UpdatePointColors();
+		}
+
 		public void AddPoint(WPos pos, Color color, int thickness = DefaultThickness)
 		{
 			pointsWithColors.Add((pos, color, thickness));
 			UpdatePointColors();
+		}
+		public void AddActorPoint(Actor self, WPos pos, int thickness = DefaultThickness)
+		{
+			actorPointsWithColors.Add((self, pos, Color.FromAhsv(pointHue, currSat, currLight), thickness));
+		}
+
+		public void AddActorPoint(Actor self, WPos pos, Color color, int thickness = DefaultThickness)
+		{
+			actorPointsWithColors.Add((self, pos, color, thickness));
 		}
 
 		public void RemovePoint(WPos pos)
@@ -245,6 +265,10 @@ namespace OpenRA.Mods.Common.Traits
 					pointsWithColors.Remove((pos, currColor, thickness));
 			UpdatePointColors();
 		}
+
+		public void RemoveActorPoint(WPos pos) { actorPointsWithColors.RemoveAll(ap => ap.Item2 == pos); }
+		public void RemoveActorPoint(Actor self) { actorPointsWithColors.RemoveAll(ap => ap.Item1 == self); }
+		public void RemoveActorPoint(Actor self, WPos pos) { actorPointsWithColors.RemoveAll(ap => ap.Item1 == self && ap.Item2 == pos); }
 
 		public void AddText(WPos pos, string text, Color color, string fontname = null) { textsWithColors.Add((pos, text, color, fontname)); }
 		public void AddActorText(Actor self, WPos pos, string text, Color color, string fontname = null) { actorTextsWithColors.Add((self, pos, text, color, fontname)); }
@@ -271,6 +295,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void ClearLinesWithColors() { linesWithColors.Clear(); }
 		public void ClearStates() { statesWithColors.Clear(); }
 		public void ClearPoints() { pointsWithColors.Clear(); }
+		public void ClearActorPoints() { actorPointsWithColors.Clear(); }
 		public void ClearCircles() { circlesWithColors.Clear(); }
 		public void ClearRadiuses() { circlesWithColors.Clear(); }
 		public void ClearTexts() { textsWithColors.Clear(); }

@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Activities;
+using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -97,6 +98,8 @@ namespace OpenRA.Mods.Common.Activities
 		WPos lastPathTarget;
 		bool isBlocked = false;
 		bool firstMove = false;
+		int thetaIters = 0;
+		readonly int maxThetaIters = 1;
 
 		WPos FinalPathTarget => pathRemaining.Count > 0 ? pathRemaining.Last() : currPathTarget;
 
@@ -148,8 +151,18 @@ namespace OpenRA.Mods.Common.Activities
 			return false;
 		}
 
+		public void ResetVariables()
+		{
+			currPathTarget = WPos.Zero;
+			lastPathTarget = WPos.Zero;
+			isBlocked = false;
+			searchingForNextTarget = false;
+			pathFound = false;
+		}
+
 		public bool Complete()
 		{
+			ResetVariables();
 			mobileOffGrid.PathComplete.Clear();
 			mobileOffGrid.PositionBuffer.Clear();
 			mobileOffGrid.CurrPathTarget = WPos.Zero;
@@ -210,7 +223,6 @@ namespace OpenRA.Mods.Common.Activities
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
 		public static void RemoveCircle(World world, WPos pos, WDist radius)
 		{ world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
-
 		public static void RenderPoint(Actor self, WPos pos)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
 		public static void RenderPoint(Actor self, WPos pos, Color color)
@@ -221,6 +233,18 @@ namespace OpenRA.Mods.Common.Activities
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color); }
 		public static void RenderPointCollDebug(Actor self, WPos pos, Color color, int thickness)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color, thickness); }
+		public static void RenderActorPointCollDebug(Actor self, WPos pos)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddActorPoint(self, pos); }
+		public static void RenderActorPointCollDebug(Actor self, WPos pos, Color color)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddActorPoint(self, pos, color); }
+		public static void RenderActorPointCollDebug(Actor self, WPos pos, Color color, int thickness)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddActorPoint(self, pos, color, thickness); }
+		public static void RemoveActorPointCollDebug(Actor self, Actor actor)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().RemoveActorPoint(actor); }
+		public static void RemoveActorPointCollDebug(Actor self, WPos pos)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().RemoveActorPoint(pos); }
+		public static void RemoveActorPointCollDebug(Actor self, Actor actor, WPos pos)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().RemoveActorPoint(actor, pos); }
 		public static void RenderTextCollDebug(Actor self, WPos pos, string text, Color color, string fontname = null)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddText(pos, text, color, fontname); }
 		public static void RemoveTextCollDebug(Actor self, WPos pos, string text)
@@ -429,6 +453,7 @@ namespace OpenRA.Mods.Common.Activities
 			if (mobileOffGrid.thetaStarSearch != null && mobileOffGrid.thetaStarSearch.pathFound
 				&& !pathFound)
 			{
+				mobileOffGrid.CurrMovementState = MovementState.Starting;
 				pathRemaining = GetThetaPathAndConvert(self);
 
 				// Default movement if no path is found
@@ -459,6 +484,7 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (IsCanceling)
 			{
+				mobileOffGrid.CurrMovementState = MovementState.Ending;
 				EndingActions();
 				return true;
 			}
@@ -474,6 +500,7 @@ namespace OpenRA.Mods.Common.Activities
 			// Target is hidden or dead, and we don't have a fallback position to move towards
 			if (useLastVisibleTarget && !lastVisibleTarget.IsValidFor(self))
 			{
+				mobileOffGrid.CurrMovementState = MovementState.Ending;
 				EndingActions();
 				return true;
 			}
@@ -587,11 +614,27 @@ namespace OpenRA.Mods.Common.Activities
 					if (currPathTarget != lastPathTarget)
 					{
 						//Console.WriteLine("Blocked and not last target!");
-						if (mobileOffGrid.PositionBuffer.Count >= 60) // 3 seconds
+						if (mobileOffGrid.PositionBuffer.Count >= 20) // 3 seconds
 						{
-							isBlocked = false;
-							EndingActions();
-							return Complete();
+							Console.WriteLine("Theta running a second time.");
+							if (thetaIters < maxThetaIters)
+							{
+								mobileOffGrid.CurrMovementState = MovementState.Repathing;
+								thetaPFexecManager.RemovePF(self);
+								mobileOffGrid.thetaStarSearch = null;
+								isBlocked = false;
+								EndingActions();
+								Complete();
+								thetaPFexecManager.AddMoveOrder(self, target.CenterPosition);
+								thetaIters++;
+							}
+							else
+							{
+								isBlocked = false;
+								mobileOffGrid.PositionBuffer.Clear();
+								EndingActions();
+								return Complete();
+							}
 						}
 					}
 				}
@@ -638,7 +681,7 @@ namespace OpenRA.Mods.Common.Activities
 				//	pathString += $"({node.X}, {node.Y}), ";
 				//}
 				//Console.WriteLine(pathString);
-
+				mobileOffGrid.CurrMovementState = MovementState.FinishedTarget;
 				EndingActions();
 				searchingForNextTarget = false;
 				return GetNextTargetOrComplete(self);
