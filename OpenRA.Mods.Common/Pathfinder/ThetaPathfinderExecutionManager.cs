@@ -152,16 +152,14 @@ namespace OpenRA.Mods.Common.Traits
 				for (var circleIndex = 0; circleIndex < playerCircleGroups[playerCircleGroupIndex].Count; circleIndex++)
 				{
 					var circle = playerCircleGroups[playerCircleGroupIndex].ElementAt(circleIndex);
-					if (CircleShape.PosIsInsideCircle(circle.CircleCenter, circle.CircleRadius.Length, actor.CenterPosition))
+					// Create a slice in the circle at the position of the actor and return the index of this slice
+					var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
+																		actor.CenterPosition, sliceAngle);
+					if (CircleShape.PosIsInsideCircle(circle.CircleCenter, circle.CircleRadius.Length, actor.CenterPosition) &&
+						SliceIsBlockedByCell(actor, circle.CircleCenter, sliceIndex))
 					{
 #if DEBUGWITHOVERLAY
 						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
-#endif
-						// Create a slice in the circle at the position of the actor and return the index of this slice
-						var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
-																			actor.CenterPosition, sliceAngle);
-
-#if DEBUGWITHOVERLAY
 						//Slice Line is the standard sliceAngle * index to get the slice
 						var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
 						MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
@@ -182,6 +180,9 @@ namespace OpenRA.Mods.Common.Traits
 					// Create the circle
 					playerCircleGroups[playerCircleGroupIndex].Add(new ThetaCircle(actor.CenterPosition, new WDist(radiusForSharedThetas)));
 					var circle = playerCircleGroups[playerCircleGroupIndex].Last();
+#if DEBUGWITHOVERLAY
+					MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
+#endif
 					var circleIndex = playerCircleGroups[playerCircleGroupIndex].Count - 1;
 					var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																		actor.CenterPosition, sliceAngle);
