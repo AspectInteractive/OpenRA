@@ -84,7 +84,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		// The number of expansions allowed across all Theta pathfinders
 		bool removingThetaPFs = false;
-		readonly int maxCurrExpansions = 200;
+		readonly int maxCurrExpansions = 100;
 		readonly int radiusForSharedThetas = 1024 * 10;
 		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
 		readonly int sliceAngle = 10;
@@ -106,10 +106,7 @@ namespace OpenRA.Mods.Common.Traits
 			var sliceAbsoluteAngle = (int)(sliceAngle * (sliceIndex - 0.5)); // We subtract 0.5 as we want the middle of the slice
 			var locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 			var move = new WVec(new WDist(radiusForSharedThetas), WRot.FromYaw(WAngle.FromDegrees(sliceAbsoluteAngle)));
-			if (self.Trait<MobileOffGrid>().GetFirstCollision(circleCenter, move, WDist.Zero, locomotor,
-														includeCellCollision: true, includeActorCollision: false) != null)
-				return true;
-			return false;
+			return self.Trait<MobileOffGrid>().HasCollidedWithCell(circleCenter, move, WDist.Zero, locomotor);
 		}
 
 		void ITick.Tick(Actor self) { Tick(self.World); }
@@ -181,8 +178,10 @@ namespace OpenRA.Mods.Common.Traits
 					// Create a slice in the circle at the position of the actor and return the index of this slice
 					var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
 																		actor.CenterPosition, sliceAngle);
+					var locomotor = actor.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 					if (CircleShape.PosIsInsideCircle(circle.CircleCenter, circle.CircleRadius.Length, actor.CenterPosition) &&
-						!SliceIsBlockedByCell(actor, circle.CircleCenter, sliceIndex))
+						!SliceIsBlockedByCell(actor, circle.CircleCenter, sliceIndex) &&
+						!actor.Trait<MobileOffGrid>().HasCollidedWithCell(actor.CenterPosition, circle.CircleCenter, locomotor))
 					{
 #if DEBUGWITHOVERLAY
 						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
@@ -304,15 +303,17 @@ namespace OpenRA.Mods.Common.Traits
 							foreach (var (actor, targetPos) in actorOrdersInSliceGroup.Select(ao => (ao.Actor, ao.TargetPos)))
 							{
 								var locomotor = world.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
-								if (ThetaStarPathSearch.IsPathObservable(world, actor, locomotor, actor.CenterPosition, thetaSourcePos))
-									actor.Trait<MobileOffGrid>().thetaStarSearch = newAvgThetaStarSearch;
+								var actorMobileOffGrid = actor.Trait<MobileOffGrid>();
+								if (ThetaStarPathSearch.IsPathObservable(world, actor, locomotor, actor.CenterPosition, thetaSourcePos,
+									actorMobileOffGrid.UnitRadius))
+									actorMobileOffGrid.thetaStarSearch = newAvgThetaStarSearch;
 								else
 								{
 									var individualAvgThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 										targetPos, firstActorOrder.SharedMoveActors.ToList())
 									{ running = true };
 
-									actor.Trait<MobileOffGrid>().thetaStarSearch = individualAvgThetaStarSearch;
+									actorMobileOffGrid.thetaStarSearch = individualAvgThetaStarSearch;
 									AddPF(individualAvgThetaStarSearch);
 								}
 							}

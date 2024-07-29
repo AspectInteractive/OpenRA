@@ -450,7 +450,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				var stateNeighbours = GetUnblockedNeighbours(thisWorld, self, locomotor, ccState.CC);
 				for (var i = 0; i < stateNeighbours.Count; i++)
 				{
-					var newParentState = GetState(stateNeighbours.ElementAt(i));
+					var newParentState = GetState(stateNeighbours[i]);
 					if (ClosedList.Any(state => state.CC == newParentState.CC))
 					{
 						var newGval = newParentState.Gval + ccState.GetEuclidDistanceTo(newParentState);
@@ -465,7 +465,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		public bool IsPathObsCached(CCPos rootCC, CCPos destCC)
-		{ return GetOrCreatePathObs((rootCC, destCC), () => IsPathObservable(rootCC, destCC)); }
+		{ return GetOrCreatePathObs((rootCC, destCC), () => IsPathObservable(rootCC, destCC, mobileOffGrid.UnitRadius)); }
 
 		public void Initialize(WPos sourcePos, WPos destPos)
 		{
@@ -476,6 +476,34 @@ namespace OpenRA.Mods.Common.Pathfinder
 				path = new List<PathPos>();
 				EndingActions(true); // since we have automatically found the path needed, which is no path since source = dest.
 			}
+
+			var hpf = thisWorld.WorldActor.Trait<IPathFinder>();
+			bool DestIsReachable(WPos d) => hpf.PathExistsForLocomotor(locomotor, thisWorld.Map.CellContaining(sourcePos),
+				thisWorld.Map.CellContaining(d), BlockedByActor.Immovable);
+
+			// Logic for finding closest pathable location to an invalid location by drawing a line from dest to source and picking the
+			// closest cell
+			//var destToTest = destPos;
+			//var destToTestCell = thisWorld.Map.CellContaining(destToTest);
+			//var sourceCell = thisWorld.Map.CellContaining(sourcePos);
+			//while (CPosinMap(destToTestCell) && !DestIsReachable(destToTest) && destToTestCell != sourceCell &&
+			//	  Math.Sign((destToTest - sourcePos).X) == Math.Sign((destPos - sourcePos).X) && // if sign has switched we are travesing in the
+			//	  Math.Sign((destToTest - sourcePos).Y) == Math.Sign((destPos - sourcePos).Y))   // opposite direction which is invalid
+			//{
+			//	MoveOffGrid.RenderPointCollDebug(self, destToTest, Primitives.Color.Yellow);
+			//	// We increment by less than a full cell to ensure all cells are touched at least once
+			//	destToTest -= new WVec(new WDist(768), WRot.FromYaw((destPos - sourcePos).Yaw));
+			//	destToTestCell = thisWorld.Map.CellContaining(destToTest);
+			//}
+
+			if (!DestIsReachable(destPos))
+			{
+				MoveOffGrid.RenderPointCollDebug(self, destPos, Primitives.Color.LightBlue);
+				EndingActions(true);
+				return;
+			}
+			//else // the destination is in the same domain index as the unit
+			//	destPos = destToTest;
 
 			Source = sourcePos;
 			Dest = destPos;
@@ -497,7 +525,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			}
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
-			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos))
+			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos, mobileOffGrid.UnitRadius))
 			{
 				// path.Add(sourcePos);
 				path.Add(new PathPos(destPos));
@@ -839,17 +867,23 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return false;
 		}
 
-		public bool IsPathObservable(WPos rootPos, WPos destPos) { return IsPathObservable(thisWorld, self, locomotor, rootPos, destPos); }
-		public static bool IsPathObservable(World world, Actor self, Locomotor locomotor, WPos rootPos, WPos destPos)
+		public bool IsPathObservable(WPos rootPos, WPos destPos, WDist unitRadius) { return IsPathObservable(thisWorld, self, locomotor, rootPos, destPos, unitRadius); }
+		public static bool IsPathObservable(World world, Actor self, Locomotor locomotor, WPos rootPos, WPos destPos, WDist unitRadius)
 		{
-			var cellsUnderneathLine = GetAllCellsUnderneathALine(world, rootPos, destPos, 1);
-			return !AreCellsIntersectingPath(world, self, locomotor, cellsUnderneathLine, rootPos, destPos);
+			foreach (var (source, dest) in MobileOffGrid.GenSDPairs(rootPos, destPos - rootPos, unitRadius))
+			{
+				var cellsUnderneathLine = GetAllCellsUnderneathALine(world, source, dest, 1);
+				if (AreCellsIntersectingPath(world, self, locomotor, cellsUnderneathLine, rootPos, destPos))
+					return false;
+			}
+
+			return true;
 		}
 
-		public bool IsPathObservable(CCPos rootCC, CCPos destCC)
-		{ return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), thisWorld.Map.WPosFromCCPos(destCC)); }
-		public bool IsPathObservable(WPos rootPos, CCPos destCC) { return IsPathObservable(rootPos, thisWorld.Map.WPosFromCCPos(destCC)); }
-		public bool IsPathObservable(CCPos rootCC, WPos destPos) { return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), destPos); }
+		public bool IsPathObservable(CCPos rootCC, CCPos destCC, WDist unitRadius)
+		{ return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), thisWorld.Map.WPosFromCCPos(destCC), unitRadius); }
+		public bool IsPathObservable(WPos rootPos, CCPos destCC, WDist unitRadius) { return IsPathObservable(rootPos, thisWorld.Map.WPosFromCCPos(destCC), unitRadius); }
+		public bool IsPathObservable(CCPos rootCC, WPos destPos, WDist unitRadius) { return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), destPos, unitRadius); }
 
 		private static int HeuristicFunction(CCPos cc, WPos goalPos, World world)
 		{

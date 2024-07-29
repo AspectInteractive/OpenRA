@@ -105,6 +105,34 @@ namespace OpenRA.Mods.Common.Activities
 
 		public enum MoveType { Undefined, Formation, NonFormation }
 
+		public List<BlockedByCell> DirectionOfCellsBlockingPos(Actor self, WPos pos, List<CPos> cells)
+		{
+			var cellContainingPos = self.World.Map.CellContaining(pos);
+			var blockedDirections = new List<BlockedByCell>();
+
+			foreach (var cell in cells)
+			{
+				if (cell.X < cellContainingPos.X && cell.Y < cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.TopLeft);
+				else if (cell.X == cellContainingPos.X && cell.Y < cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Top);
+				else if (cell.X > cellContainingPos.X && cell.Y < cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.TopRight);
+				else if (cell.X < cellContainingPos.X && cell.Y == cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Left);
+				else if (cell.X > cellContainingPos.X && cell.Y == cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Right);
+				else if (cell.X < cellContainingPos.X && cell.Y > cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.BottomLeft);
+				else if (cell.X == cellContainingPos.X && cell.Y > cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Bottom);
+				else if (cell.X > cellContainingPos.X && cell.Y > cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.BottomRight);
+			}
+
+			return blockedDirections;
+		}
+
 		public WDist MaxRangeToTarget()
 		{
 			var actorMobileOgs = actorsSharingMove.Where(a => !a.IsDead).Select(a => a.TraitsImplementing<MobileOffGrid>().FirstEnabledTraitOrDefault())
@@ -356,7 +384,7 @@ namespace OpenRA.Mods.Common.Activities
 		public static WPos GetCenterOfUnits(List<Actor> actorsSharingMove)
 		{
 			return actorsSharingMove.Select(a => a.TraitsImplementing<MobileOffGrid>().FirstOrDefault())
-				.Select(t => t.CenterPosition).Average();
+				.Where(t => t != null).Select(t => t.CenterPosition).Average();
 		}
 
 		public struct ActorWithMoveProps
@@ -406,7 +434,7 @@ namespace OpenRA.Mods.Common.Activities
 				am2.OffsetTarget = currPathTarget - am2.OffsetToCenterOfActors;
 				am2.IsOffsetCloseEnough = am2.OffsetToCenterOfActors.HorizontalLengthSquared < 1024 * 1024 * 40;
 				am2.IsOffsetTargetObservable = IsPathObservable(am2.Act.World, am2.Act, am2.MobOffGrid.Locomotor,
-					currPathTarget - am2.OffsetToCenterOfActors, mobileOffGrid.CenterPosition);
+					currPathTarget - am2.OffsetToCenterOfActors, mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius);
 				return am2;
 			}).ToList();
 			var actorsSharingMoveXYBounds = actorsSharingMoveWithProps.Select(a => new { a.MobOffGrid.CenterPosition, a.MobOffGrid.UnitRadius })
@@ -493,7 +521,7 @@ namespace OpenRA.Mods.Common.Activities
 			if (!targetIsHiddenActor && target.Type == TargetType.Actor)
 				lastVisibleTarget = Target.FromTargetPositions(target);
 
-			mobileOffGrid.SetDesiredFacing(-WAngle.ArcTan(mobileOffGrid.CenterPosition.Y - currPathTarget.Y, mobileOffGrid.CenterPosition.X - currPathTarget.X) + new WAngle(256));
+			mobileOffGrid.SetForcedFacing(-WAngle.ArcTan(mobileOffGrid.CenterPosition.Y - currPathTarget.Y, mobileOffGrid.CenterPosition.X - currPathTarget.X) + new WAngle(256));
 
 			useLastVisibleTarget = targetIsHiddenActor || !target.IsValidFor(self);
 
@@ -520,7 +548,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
-			bool UnitHasNotCollided(WVec mv) => mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true) == null;
+			bool UnitHasNotCollidedWithUnits(WVec mv) => mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true) == null;
 
 			// Update SeekVector if there is none
 			var deltaMoveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
@@ -530,13 +558,13 @@ namespace OpenRA.Mods.Common.Activities
 			var moveVec = mobileOffGrid.SeekVectors[0].Vec;
 			// Only change the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
 			// Revert to deltaMoveVec if we are no longer searching for the next target
-			if (!(useLocalAvoidance && !UnitHasNotCollided(moveVec)) && !searchingForNextTarget)
+			if (!(useLocalAvoidance && !UnitHasNotCollidedWithUnits(moveVec)) && !searchingForNextTarget)
 			{
 				mobileOffGrid.SeekVectors = new List<MvVec>() { new(deltaMoveVec) };
 				moveVec = deltaMoveVec;
 			}
 			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			else if ((useLocalAvoidance && !UnitHasNotCollided(moveVec)) || isBlocked)
+			else if ((useLocalAvoidance && !UnitHasNotCollidedWithUnits(moveVec)) || isBlocked)
 			{
 				var revisedMoveVec = moveVec;
 				int localAvoidanceAngleOffset;
@@ -559,9 +587,9 @@ namespace OpenRA.Mods.Common.Activities
 					// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					i++;
 				}
-				while (!UnitHasNotCollided(revisedMoveVec) && i < localAvoidanceAngleOffsets.Count);
+				while (!UnitHasNotCollidedWithUnits(revisedMoveVec) && i < localAvoidanceAngleOffsets.Count);
 
-				if (UnitHasNotCollided(revisedMoveVec))
+				if (UnitHasNotCollidedWithUnits(revisedMoveVec))
 				{
 #if DEBUGWITHOVERLAY
 					//Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
@@ -578,7 +606,7 @@ namespace OpenRA.Mods.Common.Activities
 					isBlocked = false;
 				}
 			}
-			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget && UnitHasNotCollided(pastMoveVec))
+			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget && UnitHasNotCollidedWithUnits(pastMoveVec))
 			{
 				pastMoveVec = new WVec(0, 0, 0);
 				currLocalAvoidanceAngleOffset = 0;
@@ -591,8 +619,11 @@ namespace OpenRA.Mods.Common.Activities
 			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, locomotor));
 			cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 1, locomotor));
 
+			// Used by MobileOffGrid to suppress movement in the direction that the unit is being blocked
+			mobileOffGrid.BlockedByCells = DirectionOfCellsBlockingPos(self, mobileOffGrid.CenterPosition, cellsCollidingSet);
+
 			var fleeVecToUse = cellsCollidingSet.Distinct().Select(c => self.World.Map.CenterOfCell(c))
-														 .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
+														   .Select(wp => RepulsionVecFunc(mobileOffGrid.CenterPosition, wp)).ToList();
 
 			mobileOffGrid.FleeVectors.AddRange(fleeVecToUse.ConvertAll(v => new MvVec(v, 1)));
 
@@ -669,8 +700,8 @@ namespace OpenRA.Mods.Common.Activities
 					// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
 					var deltaMove = move;
 					mobileOffGrid.SeekVectors.Clear();
-					mobileOffGrid.SetDesiredAltitude(dat);
-					mobileOffGrid.SetDesiredMove(deltaMove);
+					mobileOffGrid.SetForcedAltitude(dat);
+					mobileOffGrid.SetForcedMove(deltaMove);
 					mobileOffGrid.SetIgnoreZVec(true);
 				}
 

@@ -939,6 +939,6 @@ namespace OpenRA.Mods.Common.Traits
 		/// </summary>
 		/// <remarks>Path searches are not guaranteed to by symmetric,
 		/// the source and target locations cannot be swapped.</remarks>
-		bool PathExistsForLocomotor(Locomotor locomotor, CPos source, CPos target);
+		bool PathExistsForLocomotor(Locomotor locomotor, CPos source, CPos target, BlockedByActor check = BlockedByActor.None);
 	}
 }

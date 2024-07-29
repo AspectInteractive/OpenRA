@@ -11,7 +11,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Linq;
+using Linguini.Syntax.Ast;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
@@ -19,6 +21,8 @@ using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
+using TagLib.Riff;
+
 
 #pragma warning disable SA1513 // Closing brace should be followed by blank line
 
@@ -326,6 +330,10 @@ namespace OpenRA.Mods.Common.Traits
 		public int PositionBufferCapacity = 20;
 		public int TraversedCirclesBufferCapacity = 10;
 		public List<WPos> TraversedCirclesBuffer = new List<WPos>();
+
+		public List<BlockedByCell> BlockedByCells = new();
+
+		public enum BlockedByCell { TopLeft, Top, TopRight, Left, Right, BottomLeft, Bottom, BottomRight }
 		public static void AddToBuffer<T>(ref List<T> buffer, int bufferCapacity, T item)
 		{
 			buffer.Add(item);
@@ -363,8 +371,8 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public WAngle DesiredFacing = WAngle.Zero;
-		public WDist DesiredAltitude = WDist.Zero;
-		public WVec DesiredMove = WVec.Zero;
+		public WDist ForcedAltitude = WDist.Zero;
+		public WVec ForcedMove = WVec.Zero;
 		public bool IgnoreZVec = false;
 
 		public WAngle Pitch
@@ -559,10 +567,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void DecrementTickFleeVectors() { DecrementMoveVectorSet(ref FleeVectors); }
 		public void DecrementTickSeekVectors() { DecrementMoveVectorSet(ref SeekVectors); }
-		public void SetDesiredFacing(WAngle desiredFacing) { DesiredFacing = desiredFacing; }
+		public void SetForcedFacing(WAngle desiredFacing) { DesiredFacing = desiredFacing; }
 		public void SetDesiredFacingToFacing() { DesiredFacing = Facing; }
-		public void SetDesiredMove(WVec desiredMove) { DesiredMove = desiredMove; }
-		public void SetDesiredAltitude(WDist desiredAltitude) { DesiredAltitude = desiredAltitude; }
+		public void SetForcedMove(WVec desiredMove) { ForcedMove = desiredMove; }
+		public void SetForcedAltitude(WDist desiredAltitude) { ForcedAltitude = desiredAltitude; }
 		public void SetIgnoreZVec(bool ignoreZVec) { IgnoreZVec = ignoreZVec; }
 		public WVec RepulsionVecFunc(int repellingMovementSpeed, WPos selfPos, WPos nearbyActorPos, int moveSpeedScalar = 1)
 		{
@@ -582,7 +590,7 @@ namespace OpenRA.Mods.Common.Traits
 			return false;
 		}
 
-		public void RepelNearbyUnitsTick(Actor self)
+		public void CreateRepelNearbyUnitsVectorsTick2(Actor self)
 		{
 			var nearbyActorRange = UnitRadius * 2;
 			var nearbyActors = self.World.FindActorsInCircle(CenterPosition, nearbyActorRange);
@@ -610,9 +618,86 @@ namespace OpenRA.Mods.Common.Traits
 				FleeVectors = proposedFleeVectors;
 		}
 
+
+		//NEW SEMI WORKING INDIVIDUAL REPEL VERSION: TO BE COMPLETED
+		public void CreateRepelNearbyUnitsVectorsTick(Actor self)
+		{
+			var nearbyActorRange = UnitRadius * 2;
+			var nearbyActors = self.World.FindActorsInCircle(CenterPosition, nearbyActorRange);
+
+			if (!ActorIsAiming(self)) // Attacking actors are not repelled
+			{
+				foreach (var nearbyActor in nearbyActors)
+				{
+					if (!nearbyActor.IsDead && nearbyActor != self)
+					{
+						var nearbyActorMobileOGs = nearbyActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
+						if (nearbyActorMobileOGs.Any() && nearbyActor.CurrentActivity is not ReturnToCellActivity)
+						{
+							var nearbyActorMobileOG = nearbyActorMobileOGs.FirstOrDefault();
+							var repulsionMvVec = new MvVec(RepulsionVecFunc(nearbyActorMobileOGs.FirstOrDefault().MovementSpeed,
+								CenterPosition, nearbyActorMobileOG.CenterPosition), 1);
+
+							// Create hypothetical movement using flee vector to test if intersecting
+							var proposedWVec = GenFinalWVec(SeekVectors, FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
+							var intersectingEdges = GetIntersectingEdges(self.CenterPosition, proposedWVec, 1, Locomotor);
+							if (intersectingEdges.Count == 0)
+								FleeVectors.Add(repulsionMvVec);
+							else
+							{
+								// Remove any X or Y movement that causes the repulsion to intersect with an edge of a cell
+								var repulsionVector = repulsionMvVec.Vec;
+								foreach (var edge in intersectingEdges)
+									repulsionVector = RemoveVecOfIntersectingEdge(edge, repulsionVector);
+								if (repulsionVector.X != 0 || repulsionVector.Y != 0) // do not add flee vectors that have both X and Y as 0
+									FleeVectors.Add(new MvVec(repulsionVector, 1));
+							}
+						}
+					}
+				}
+			}
+		}
+
+		public WVec RemoveVecOfIntersectingEdge(Map.CellEdge edge, WVec move)
+		{
+			var newX = move.X;
+			var newY = move.Y;
+
+			if (edge.EdgeName == Map.CellEdgeName.Top || edge.EdgeName == Map.CellEdgeName.Bottom)
+				newY = 0; // if vec is coming from bottom or top, we remove the Y component to allow only horizontal movement
+			if (edge.EdgeName == Map.CellEdgeName.Left || edge.EdgeName == Map.CellEdgeName.Right)
+				newX = 0; // if vec is coming from the right or left, we remove the X component to allow only vertical movement
+
+			return new WVec(newX, newY, move.Z);
+		}
+
+		public static WVec RemoveBlockedVectors(WVec move, List<BlockedByCell> blockedByCells)
+		{
+			var newMoveX = move.X;
+			var newMoveY = move.Y;
+
+			if ((blockedByCells.Contains(BlockedByCell.TopLeft) || blockedByCells.Contains(BlockedByCell.Left) ||
+				blockedByCells.Contains(BlockedByCell.BottomLeft)) && newMoveX < 0)
+				newMoveX = 0;
+			else if ((blockedByCells.Contains(BlockedByCell.TopRight) || blockedByCells.Contains(BlockedByCell.Right) ||
+					blockedByCells.Contains(BlockedByCell.BottomRight)) && newMoveX > 0)
+				newMoveX = 0;
+
+			if ((blockedByCells.Contains(BlockedByCell.TopLeft) || blockedByCells.Contains(BlockedByCell.Top) ||
+				blockedByCells.Contains(BlockedByCell.TopRight)) && newMoveY < 0)
+				newMoveY = 0;
+			else if ((blockedByCells.Contains(BlockedByCell.BottomLeft) || blockedByCells.Contains(BlockedByCell.Bottom) ||
+					blockedByCells.Contains(BlockedByCell.BottomRight)) && newMoveY > 0)
+				newMoveY = 0;
+
+			return new WVec(newMoveX, newMoveY, move.Z);
+		}
+
 		public void MobileOffGridMoveTick(Actor self)
 		{
-			var move = DesiredMove == WVec.Zero ? GenFinalWVec() : DesiredMove;
+			var move = ForcedMove == WVec.Zero ? GenFinalWVec() : ForcedMove;
+			if (self.CurrentActivity is not ReturnToCellActivity)
+				move = RemoveBlockedVectors(move, BlockedByCells);
 
 			if (move == WVec.Zero &&
 			   (GenFinalWVec(WVecTypes.Seek, false) != -GenFinalWVec(WVecTypes.Flee, false) ||
@@ -647,10 +732,10 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Note: we assume that if move.Z is not zero, it's intentional and we want to move in that vertical direction instead of towards desiredAltitude.
 			// If that is not desired, the place that calls this should make sure moveOverride.Z is zero.
-			if ((DesiredAltitude != WDist.Zero && dat != DesiredAltitude) || move.Z != 0)
+			if ((ForcedAltitude != WDist.Zero && dat != ForcedAltitude) || move.Z != 0)
 			{
 				var maxDelta = move.HorizontalLength * Info.MaximumPitch.Tan() / 1024;
-				var moveZ = move.Z != 0 ? move.Z : (DesiredAltitude.Length - dat.Length);
+				var moveZ = move.Z != 0 ? move.Z : (ForcedAltitude.Length - dat.Length);
 				var deltaZ = moveZ.Clamp(-maxDelta, maxDelta);
 				move = new WVec(move.X, move.Y, deltaZ);
 			}
@@ -659,30 +744,37 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Reset temporary adjustments
 			SetIgnoreZVec(false);
-			SetDesiredMove(WVec.Zero);
-			SetDesiredFacing(WAngle.Zero);
-			SetDesiredAltitude(WDist.Zero);
+			SetForcedMove(WVec.Zero);
+			SetForcedFacing(WAngle.Zero);
+			SetForcedAltitude(WDist.Zero);
 		}
-		private static bool CPosinMap(Actor self, CPos cPos)
+		static bool CPosinMap(Actor self, CPos cPos)
 		{
 			return cPos.X >= 0 && cPos.X <= self.World.Map.MapSize.X - 1 &&
 				   cPos.Y >= 0 && cPos.Y <= self.World.Map.MapSize.Y - 1;
 		}
+		public static List<WPos> GetPointsSurroundingCircleUnit(WPos centerPos, WDist unitRadius) => GetPointsSurroundingCircleUnit(centerPos, unitRadius, WAngle.Zero);
 
-		public static Func<WDist, List<(WPos, WPos)>> GenSDPairCalcFunc(WPos selfCenter, WVec move, WDist unitRadius)
+		public static List<WPos> GetPointsSurroundingCircleUnit(WPos centerPos, WDist unitRadius, WAngle initialRotation, int angleIncAmount = 128)
 		{
-			var radiusVec = new WVec(unitRadius, WRot.FromYaw(move.Yaw));
-			var rightVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(256)));
-			var leftVec = radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(1024 - 256)));
-			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
-			Func<WDist, List<(WPos, WPos)>> calcSourceDestPairs = dist => new List<(WPos, WPos)>()
-			{
-				  (selfCenter + radiusVec, calcOffsetPos(selfCenter, dist) + radiusVec) // selfFront and destFront
-				, (selfCenter - radiusVec, calcOffsetPos(selfCenter, dist) - radiusVec) // selfBack and destBack
-				, (selfCenter + rightVec, calcOffsetPos(selfCenter, dist) + rightVec) // selfRight and destRight
-				, (selfCenter + leftVec, calcOffsetPos(selfCenter, dist) + leftVec) // selfLeft and destLeft
-			};
-			return calcSourceDestPairs;
+			var radiusVec = new WVec(unitRadius, WRot.FromYaw(initialRotation));
+			var points = new List<WPos>(); // Points surrounding circle
+			for (var a = 0; a < 1024; a += angleIncAmount) // 128 = 45 degrees,
+				points.Add(centerPos + radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(angleIncAmount))));
+			return points;
+		}
+
+		public static List<(WPos Source, WPos Dest)> GenSDPairs(WPos selfCenter, WAngle moveAngle, WDist moveDist, WDist unitRadius)
+		{
+			var distToDest = new WVec(moveDist, WRot.FromYaw(moveAngle));
+			return GetPointsSurroundingCircleUnit(selfCenter, unitRadius)
+					.Zip(GetPointsSurroundingCircleUnit(selfCenter + distToDest, unitRadius)).ToList();
+		}
+
+		public static List<(WPos Source, WPos Dest)> GenSDPairs(WPos selfCenter, WVec move, WDist unitRadius)
+		{
+			return GetPointsSurroundingCircleUnit(selfCenter, unitRadius)
+					.Zip(GetPointsSurroundingCircleUnit(selfCenter + move, unitRadius)).ToList();
 		}
 
 		public static bool CellIsBlocked(Actor self, Locomotor locomotor, CPos cell, BlockedByActor check = BlockedByActor.Immovable)
@@ -699,11 +791,43 @@ namespace OpenRA.Mods.Common.Traits
 			return false;
 		}
 
+		public static List<BlockedByCell> DirectionOfCellsBlockingPos(Actor self, WPos pos, CPos cell) =>
+			DirectionOfCellsBlockingPos(self, pos, new List<CPos>() { cell });
+
+		public static List<BlockedByCell> DirectionOfCellsBlockingPos(Actor self, WPos pos, List<CPos> cells)
+		{
+			var cellContainingPos = self.World.Map.CellContaining(pos);
+			var blockedDirections = new List<BlockedByCell>();
+
+			foreach (var cell in cells)
+			{
+				if (cell.X < cellContainingPos.X && cell.Y < cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.TopLeft);
+				else if (cell.X == cellContainingPos.X && cell.Y < cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Top);
+				else if (cell.X > cellContainingPos.X && cell.Y < cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.TopRight);
+				else if (cell.X < cellContainingPos.X && cell.Y == cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Left);
+				else if (cell.X > cellContainingPos.X && cell.Y == cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Right);
+				else if (cell.X < cellContainingPos.X && cell.Y > cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.BottomLeft);
+				else if (cell.X == cellContainingPos.X && cell.Y > cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.Bottom);
+				else if (cell.X > cellContainingPos.X && cell.Y > cellContainingPos.Y)
+					blockedDirections.Add(BlockedByCell.BottomRight);
+			}
+
+			return blockedDirections;
+		}
+
 		// This is a look ahead repel from cells that the unit is about to move into - hence the 'lookAhead' parameter
 		// It returns the list of cells that collide with the actor, for use with repulsion
 		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{ return CellsCollidingWithPos(self, self.CenterPosition, move, lookAhead, locomotor, incOrigin, skipLookAheadAmt); }
+
 		public List<CPos> CellsCollidingWithPos(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor,
 											bool incOrigin = false, int skipLookAheadAmt = 0)
 		{
@@ -713,22 +837,22 @@ namespace OpenRA.Mods.Common.Traits
 			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
 			// for each actor we are potentially colliding with
 			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
+
 			foreach (var selfShape in selfShapes)
 			{
 				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
 				foreach (var corner in hitShapeCorners)
 				{
-					var cell = self.World.Map.CellContaining(corner);
-					for (var i = startI; i < lookAhead; i++)
-					{
-						var cellToTest = self.World.Map.CellContaining(corner + move * i);
-						if (CellIsBlocked(self, locomotor, cellToTest, BlockedByActor.Immovable) && !cellsColliding.Contains(cellToTest))
-							cellsColliding.Add(cellToTest);
-					}
-					if (incOrigin && CellIsBlocked(self, locomotor, cell, BlockedByActor.Immovable) && !cellsColliding.Contains(cell))
-						cellsColliding.Add(cell);
+					var cellContainingCorner = self.World.Map.CellContaining(corner);
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, corner, corner + move * lookAhead, 0);
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell, BlockedByActor.Immovable) && !cellsColliding.Contains(cell))
+							cellsColliding.Add(cell);
+					if (incOrigin && CellIsBlocked(self, locomotor, cellContainingCorner, BlockedByActor.Immovable) && !cellsColliding.Contains(cellContainingCorner))
+						cellsColliding.Add(self.World.Map.CellContaining(corner));
 				}
 			}
+
 			return cellsColliding;
 		}
 
@@ -748,8 +872,9 @@ namespace OpenRA.Mods.Common.Traits
 				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
 				foreach (var corner in hitShapeCorners)
 				{
-					for (var i = startI; i < lookAhead; i++)
-						if (CellIsBlocked(self, locomotor, self.World.Map.CellContaining(corner + move * i)))
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, corner, corner + move * lookAhead, 0);
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell))
 							return true;
 					if (incOrigin && CellIsBlocked(self, locomotor, self.World.Map.CellContaining(corner)))
 						return true;
@@ -766,70 +891,71 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
-		public WPos? GetFirstCollision(WPos checkPos, WVec move, WDist lookAheadDist, Locomotor locomotor,
-									   bool attackingUnitsOnly = false, bool includeCellCollision = false, bool includeActorCollision = true)
+		public List<Map.CellEdge> GetIntersectingEdges(WPos checkPos, WVec move, int lookAhead, Locomotor locomotor)
+		{
+			var intersectingEdges = new List<Map.CellEdge>();
+			var selfCenter = checkPos;
+
+			// Ray cast to cell collisions
+			foreach (var (source, dest) in GenSDPairs(selfCenter, move * lookAhead, UnitRadius))
+			{
+				//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
+				//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
+				var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest);
+				foreach (var cell in cellsToCheck)
+					if (CellIsBlocked(self, locomotor, cell))
+						intersectingEdges = intersectingEdges.Union(self.World.Map.CellEdgesThatIntersectWithLine(cell, source, dest))
+														.ToList();
+			}
+
+			return intersectingEdges;
+		}
+
+		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
+		public bool HasCollidedWithCell(WPos checkPos, WVec move, WDist lookAheadDist, Locomotor locomotor)
 		{
 			var intersections = new List<WPos>();
 			var selfCenter = checkPos;
-			WPos CalcOffsetPos(WPos pos, WDist dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
 			// Ray cast to cell collisions
-			if (includeCellCollision && self.CurrentActivity is not ReturnToCellActivity)
-				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
+			if (self.CurrentActivity is not ReturnToCellActivity)
+			{
+				var newMoveVec = new WVec(UnitRadius * 2, WRot.FromYaw(move.Yaw));
+				foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, UnitRadius))
 				{
 					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
 					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
 					foreach (var cell in cellsToCheck)
 						if (CellIsBlocked(self, locomotor, cell))
-							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
-														 .ToList();
+							return true;
 				}
+			}
 
-			// Ray cast to actor collisions
-			if (includeActorCollision)
+			return false;
+		}
+
+		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
+		public bool HasCollidedWithCell(WPos sourcePos, WPos destPos, Locomotor locomotor)
+		{
+			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
+
+			// Ray cast to cell collisions
+			if (self.CurrentActivity is not ReturnToCellActivity)
 			{
-				foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (CalcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
-																		lookAheadDist)
-													.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
+				foreach (var (source, dest) in GenSDPairs(sourcePos, destPos - sourcePos, UnitRadius))
 				{
-					if (!destActor.IsDead && ValidCollisionActor(destActor))
-					{
-						var destActorCenter = destActor.CenterPosition + destActor.TraitsImplementing<MobileOffGrid>()
-												.FirstOrDefault(Exts.IsTraitEnabled).GenFinalWVec(); // adding move to use future pos
-						if (destActorCenter != WPos.Zero)
-						{
-							//MoveOffGrid.RenderPoint(self, destActorCenter, Color.LightGreen);
-							foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-								if (destShape.Info.Type is HitShapes.CircleShape)
-									foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
-									{
-										var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
-										if (intersection != null)
-										{
-											//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
-											intersections.Add((WPos)intersection);
-										}
-										else
-										{
-											//MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
-											continue;
-										}
-									}
-						}
-					}
+					//MoveOffGrid.RenderPoint(self, source, Color.LightGreen);
+					//MoveOffGrid.RenderPoint(self, dest, Color.LightGreen);
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
+					foreach (var cell in cellsToCheck)
+						if (CellIsBlocked(self, locomotor, cell))
+							return true;
 				}
 			}
 
-			if (intersections.Count > 0)
-			{
-				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
-				//MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
-				return firstIntersection;
-			}
-			else
-				return null;
+			return false;
 		}
 
 		// Main collision detection against units
@@ -841,26 +967,28 @@ namespace OpenRA.Mods.Common.Traits
 
 			var intersections = new List<WPos>();
 			var selfCenter = self.CenterPosition;
-			Func<WPos, WDist, WPos> calcOffsetPos = (pos, dist) => pos + new WVec(dist, WRot.FromYaw(move.Yaw));
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
 			// Ray cast to cell collisions
 			if (includeCellCollision)
-				foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(UnitRadius * 2))
+			{
+				var newMoveVec = new WVec(UnitRadius * 2, WRot.FromYaw(move.Yaw));
+				foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, UnitRadius))
 				{
 #if DEBUGWITHOVERLAY
-					MoveOffGrid.RenderPointCollDebug(self, sdPair.Item1, Color.LightGreen);
-					MoveOffGrid.RenderPointCollDebug(self, sdPair.Item2, Color.LightGreen);
+					//MoveOffGrid.RenderPointCollDebug(self, source, Color.LightGreen);
+					//MoveOffGrid.RenderPointCollDebug(self, dest, Color.LightGreen);
 #endif
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, sdPair.Item1, sdPair.Item2, neighboursToCount);
+					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
 					foreach (var cell in cellsToCheck)
 						if (CellIsBlocked(self, locomotor, cell))
-							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, sdPair.Item1, sdPair.Item2))
+							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, source, dest))
 														 .ToList();
 				}
+			}
 
 			// Ray cast to actor collisions
-			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (calcOffsetPos(selfCenter, lookAheadDist) - selfCenter) / 2,
+			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (selfCenter + new WVec(lookAheadDist, WRot.FromYaw(move.Yaw)) - selfCenter) / 2,
 																	lookAheadDist)
 												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 			{
@@ -872,27 +1000,30 @@ namespace OpenRA.Mods.Common.Traits
 					if (destActorCenter != WPos.Zero)
 					{
 #if DEBUGWITHOVERLAY
-						MoveOffGrid.RenderPointCollDebug(self, destActorCenter, Color.LightGreen);
+						//MoveOffGrid.RenderPointCollDebug(self, destActorCenter, Color.LightGreen);
 #endif
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 							if (destShape.Info.Type is HitShapes.CircleShape)
-								foreach (var sdPair in GenSDPairCalcFunc(selfCenter, move, UnitRadius)(lookAheadDist))
+							{
+								var newMoveVec = new WVec(lookAheadDist, WRot.FromYaw(move.Yaw));
+								foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, UnitRadius))
 								{
-									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, sdPair.Item1, sdPair.Item2);
+									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, source, dest);
 									if (intersection != null)
 									{
 #if DEBUGWITHOVERLAY
-										MoveOffGrid.RenderLineWithColorCollDebug(self, sdPair.Item1, (WPos)intersection, Color.OrangeRed);
+										//MoveOffGrid.RenderLineWithColorCollDebug(self, source, (WPos)intersection, Color.OrangeRed);
 #endif
 										intersections.Add((WPos)intersection);
 									}
 									else
 									{
 #if DEBUGWITHOVERLAY
-										MoveOffGrid.RenderLineWithColor(self, sdPair.Item1, sdPair.Item2, Color.LightBlue);
+										MoveOffGrid.RenderLineWithColor(self, source, dest, Color.LightBlue);
 #endif
 									}
 								}
+							}
 					}
 				}
 			}
@@ -922,9 +1053,11 @@ namespace OpenRA.Mods.Common.Traits
 				$"cpt:{CurrPathTarget.X},{CurrPathTarget.Y},\nMS:{Enum.GetName(typeof(MovementState), CurrMovementState)}\n" +
 				$"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Orange);
 			if (CurrPathTarget != WPos.Zero)
-				MoveOffGrid.RenderActorPointCollDebug(self, CurrPathTarget, Color.Purple);
+				{ }
+			//MoveOffGrid.RenderActorPointCollDebug(self, CurrPathTarget, Color.Purple);
 			else
-				MoveOffGrid.RemoveActorPointCollDebug(self, self);
+				{ }
+				//MoveOffGrid.RemoveActorPointCollDebug(self, self);
 
 			var oldCachedFacing = cachedFacing;
 			cachedFacing = Facing;
@@ -953,9 +1086,8 @@ namespace OpenRA.Mods.Common.Traits
 					Pitch = Util.TickFacing(Pitch, WAngle.Zero, Info.PitchSpeed);
 			}
 
-			// Update unit position
-			MobileOffGridMoveTick(self);
-			RepelNearbyUnitsTick(self);
+			CreateRepelNearbyUnitsVectorsTick(self);
+			MobileOffGridMoveTick(self); // Update unit position
 
 			// Update unit's cell as it moves
 			var cell = self.World.Map.CellContaining(CenterPosition);

@@ -253,9 +253,12 @@ namespace OpenRA.Mods.Common.Traits
 		/// important to not mix up the source and target locations. A path can exist from an inaccessible source space
 		/// to an accessible target space, but if those parameters as swapped then no path can exist.
 		/// </remarks>
-		public bool PathExistsForLocomotor(Locomotor locomotor, CPos source, CPos target)
+		public bool PathExistsForLocomotor(Locomotor locomotor, CPos source, CPos target, BlockedByActor check = BlockedByActor.None)
 		{
-			return hierarchicalPathFindersBlockedByNoneByLocomotor[locomotor].PathExists(source, target);
+			if (check == BlockedByActor.Immovable)
+				return hierarchicalPathFindersBlockedByImmovableByLocomotor[locomotor].PathExists(source, target);
+			else
+				return hierarchicalPathFindersBlockedByNoneByLocomotor[locomotor].PathExists(source, target);
 		}
 
 		static Locomotor GetActorLocomotor(Actor self)

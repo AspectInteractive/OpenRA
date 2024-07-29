@@ -965,6 +965,14 @@ namespace OpenRA
 		public static CCPos BottomLeftCCPos(CPos cell) { return new CCPos(cell.X, cell.Y + 1, cell.Layer); }
 		public static CCPos BottomRightCCPos(CPos cell) { return new CCPos(cell.X + 1, cell.Y + 1, cell.Layer); }
 
+		public static List<CCPos> AllCCPosFromCell(CPos cell)
+		{
+			return new List<CCPos>()
+			{
+				TopLeftCCPos(cell), TopRightCCPos(cell), BottomLeftCCPos(cell), BottomRightCCPos(cell),
+			};
+		}
+
 		public CPos? CellTopLeftOfCCPos(CCPos ccPos)
 		{
 			return ccPos.X != 0 && ccPos.Y != 0 ? new CPos(ccPos.X - 1, ccPos.Y - 1, ccPos.Layer) : (CPos?)null;
@@ -1137,6 +1145,39 @@ namespace OpenRA
 					return true; // at least one edge has intersected			
 			return false; // none of the cell's edges intersects with the line
 		}
+
+		public enum CellEdgeName { Top, Bottom, Left, Right }
+
+		public struct CellEdge
+		{
+			public List<WPos> Edge;
+			public CellEdgeName EdgeName;
+
+			public CellEdge(List<WPos> edge, CellEdgeName edgeName)
+			{
+				Edge = edge;
+				EdgeName = edgeName;
+			}
+		}
+
+		public List<CellEdge> CellEdgesThatIntersectWithLine(CPos cell, WPos b0, WPos b1)
+		{
+			var intersectingEdges = new List<CellEdge>();
+			var cellEdges = new List<CellEdge>()
+			{
+				new(TopEdgeOfCell(cell), CellEdgeName.Top),
+				new(BottomEdgeOfCell(cell), CellEdgeName.Bottom),
+				new(LeftEdgeOfCell(cell), CellEdgeName.Left),
+				new(RightEdgeOfCell(cell), CellEdgeName.Right),
+			};
+
+			foreach (var cellEdge in cellEdges)
+				if (CellEdgeIntersectsWithLine(cellEdge.Edge, b0, b1))
+					intersectingEdges.Add(cellEdge);
+
+			return intersectingEdges; // none of the cell's edges intersects with the line
+		}
+
 		public List<WPos> CellEdgeIntersectionsWithLine(CPos cell, WPos b0, WPos b1)
 		{
 			var intersectingPoints = new List<WPos>();
@@ -1157,6 +1198,7 @@ namespace OpenRA
 
 			return intersectingPoints; // none of the cell's edges intersects with the line
 		}
+
 
 		public WPos CenterOfSubCell(CPos cell, SubCell subCell)
 		{
