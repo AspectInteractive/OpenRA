@@ -83,8 +83,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// The number of expansions allowed across all Theta pathfinders
-		bool removingThetaPFs = false;
-		readonly int maxCurrExpansions = 100;
+		readonly int maxCurrExpansions = 500;
 		readonly int radiusForSharedThetas = 1024 * 10;
 		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
 		readonly int sliceAngle = 10;
@@ -93,6 +92,8 @@ namespace OpenRA.Mods.Common.Traits
 		public Dictionary<CircleSliceIndex, List<ActorWithOrder>> ActorOrdersInCircleSlices = new();
 		public List<ThetaStarPathSearch> ThetaPFsToRun = new();
 		List<(ThetaStarPathSearch, ThetaPFAction)> thetaPFActions = new();
+		public bool PlayerCirclesLocked = false;
+
 		enum ThetaPFAction { Add, Remove }
 
 		public bool GreaterThanMinDistanceForCircles(Actor actor, WPos targetPos)
@@ -116,7 +117,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			foreach (var actor in order.GroupedActors)
 				AddMoveOrder(actor, order.Target.CenterPosition, order.GroupedActors.ToList());
-			GenSharedMoveThetaPFs(self.World);
+			PlayerCirclesLocked = false;
 		}
 
 		static WPos GetUnblockedWPos(Actor self, World world, WPos checkPos)
@@ -143,6 +144,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void AddMoveOrder(Actor actor, WPos targetPos, List<Actor> sharedMoveActors = null, bool secondThetaRun = false)
 		{
+			PlayerCirclesLocked = true;
 			var world = actor.World;
 			// Bypass circle logic if distance to target is small enough
 			if (!GreaterThanMinDistanceForCircles(actor, targetPos) || sharedMoveActors == null)
@@ -238,6 +240,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void GenSharedMoveThetaPFs(World world)
 		{
+			// Do not generate shared moves until player circles have been unlocked (i.e. all player circle generation is complete)
+			if (PlayerCirclesLocked)
+				return;
+
 			foreach (var (playerCircleGroupIndex, playerCircleGroup) in playerCircleGroups)
 			{
 				var player = playerCircleGroupIndex.PlayerOwner;
@@ -300,6 +306,7 @@ namespace OpenRA.Mods.Common.Traits
 																			 firstActorOrder.SharedMoveActors.ToList());
 
 							// Add Averaged Theta PF back to Actors, and to the GroupedThetaPF list
+							var individualPFUsed = 0;
 							foreach (var (actor, targetPos) in actorOrdersInSliceGroup.Select(ao => (ao.Actor, ao.TargetPos)))
 							{
 								var locomotor = world.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
@@ -309,6 +316,7 @@ namespace OpenRA.Mods.Common.Traits
 									actorMobileOffGrid.thetaStarSearch = newAvgThetaStarSearch;
 								else
 								{
+									individualPFUsed++;
 									var individualAvgThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 										targetPos, firstActorOrder.SharedMoveActors.ToList())
 									{ running = true };
@@ -318,8 +326,12 @@ namespace OpenRA.Mods.Common.Traits
 								}
 							}
 
-							newAvgThetaStarSearch.running = true;
-							AddPF(newAvgThetaStarSearch);
+							// If all actors are using an individual pathfinder then we do not use the averaged pathfinder
+							if (individualPFUsed < actorOrdersInSliceGroup.Count)
+							{
+								newAvgThetaStarSearch.running = true;
+								AddPF(newAvgThetaStarSearch);
+							}
 						}
 					}
 				}
@@ -339,6 +351,7 @@ namespace OpenRA.Mods.Common.Traits
 					ThetaPFsToRun.Remove(thetaPF);
 				else if (action == ThetaPFAction.Add)
 					ThetaPFsToRun.Add(thetaPF);
+			thetaPFActions.Clear();
 
 			// If there are new playerCircles to resolve, we resolve these first to populate ThetaPFsToRun.
 			if (playerCircleGroups.Count > 0)

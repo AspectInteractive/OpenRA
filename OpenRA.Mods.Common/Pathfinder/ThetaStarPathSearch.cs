@@ -483,27 +483,27 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			// Logic for finding closest pathable location to an invalid location by drawing a line from dest to source and picking the
 			// closest cell
-			//var destToTest = destPos;
-			//var destToTestCell = thisWorld.Map.CellContaining(destToTest);
-			//var sourceCell = thisWorld.Map.CellContaining(sourcePos);
-			//while (CPosinMap(destToTestCell) && !DestIsReachable(destToTest) && destToTestCell != sourceCell &&
-			//	  Math.Sign((destToTest - sourcePos).X) == Math.Sign((destPos - sourcePos).X) && // if sign has switched we are travesing in the
-			//	  Math.Sign((destToTest - sourcePos).Y) == Math.Sign((destPos - sourcePos).Y))   // opposite direction which is invalid
-			//{
-			//	MoveOffGrid.RenderPointCollDebug(self, destToTest, Primitives.Color.Yellow);
-			//	// We increment by less than a full cell to ensure all cells are touched at least once
-			//	destToTest -= new WVec(new WDist(768), WRot.FromYaw((destPos - sourcePos).Yaw));
-			//	destToTestCell = thisWorld.Map.CellContaining(destToTest);
-			//}
+			var destToTest = destPos;
+			var destToTestCell = thisWorld.Map.CellContaining(destToTest);
+			var sourceCell = thisWorld.Map.CellContaining(sourcePos);
+			while (CPosinMap(destToTestCell) && !DestIsReachable(destToTest) && destToTestCell != sourceCell &&
+				  Math.Sign((destToTest - sourcePos).X) == Math.Sign((destPos - sourcePos).X) && // if sign has switched we are travesing in the
+				  Math.Sign((destToTest - sourcePos).Y) == Math.Sign((destPos - sourcePos).Y))   // opposite direction which is invalid
+			{
+				MoveOffGrid.RenderPointCollDebug(self, destToTest, Primitives.Color.Yellow);
+				// We increment by less than a full cell to ensure all cells are touched at least once
+				destToTest -= new WVec(new WDist(768), WRot.FromYaw((destPos - sourcePos).Yaw));
+				destToTestCell = thisWorld.Map.CellContaining(destToTest);
+			}
 
-			if (!DestIsReachable(destPos))
+			if (!DestIsReachable(destToTest))
 			{
 				MoveOffGrid.RenderPointCollDebug(self, destPos, Primitives.Color.LightBlue);
 				EndingActions(true);
 				return;
 			}
-			//else // the destination is in the same domain index as the unit
-			//	destPos = destToTest;
+			else // the destination is in the same domain index as the unit
+				destPos = destToTest;
 
 			Source = sourcePos;
 			Dest = destPos;

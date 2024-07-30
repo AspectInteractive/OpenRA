@@ -356,6 +356,7 @@ namespace OpenRA.Mods.Common.Activities
 				// must be processed collectively in order for the grouped pathfinding to work.
 				// Otherwise pathfinding will be inefficient and slow.
 				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, actorsSharingMove);
+				thetaPFexecManager.PlayerCirclesLocked = false;
 			}
 
 			if (!usePathFinder)
@@ -514,7 +515,7 @@ namespace OpenRA.Mods.Common.Activities
 			{
 				mobileOffGrid.CurrMovementState = MovementState.Ending;
 				EndingActions();
-				return true;
+				return Complete();
 			}
 
 			target = target.Recalculate(self.Owner, out var targetIsHiddenActor);
@@ -657,6 +658,7 @@ namespace OpenRA.Mods.Common.Activities
 								EndingActions();
 								Complete();
 								thetaPFexecManager.AddMoveOrder(self, target.CenterPosition);
+								thetaPFexecManager.PlayerCirclesLocked = false;
 								thetaIters++;
 							}
 							else
