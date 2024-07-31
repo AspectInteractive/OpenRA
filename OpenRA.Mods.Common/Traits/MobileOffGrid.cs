@@ -912,39 +912,27 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
-		public bool HasCollidedWithCell(WPos checkPos, WVec move, WDist lookAheadDist, Locomotor locomotor)
+		public bool HasCollidedWithCell(WPos sourcePos, WVec move, WDist lookAheadDist, Locomotor locomotor)
 		{
-			var intersections = new List<WPos>();
-			var selfCenter = checkPos;
-			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
-
-			// Ray cast to cell collisions
-			if (self.CurrentActivity is not ReturnToCellActivity)
-			{
-				var newMoveVec = new WVec(UnitRadius * 2, WRot.FromYaw(move.Yaw));
-				foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, UnitRadius))
-				{
-					//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
-					//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell))
-							return true;
-				}
-			}
-
-			return false;
+			var newMoveVec = new WVec(UnitRadius * 2, WRot.FromYaw(move.Yaw));
+			return DoesUnitMoveCollideWithCell(sourcePos, newMoveVec, locomotor);
 		}
 
 		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
 		public bool HasCollidedWithCell(WPos sourcePos, WPos destPos, Locomotor locomotor)
 		{
+			return DoesUnitMoveCollideWithCell(sourcePos, destPos - sourcePos, locomotor);
+		}
+
+		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
+		public bool DoesUnitMoveCollideWithCell(WPos sourcePos, WVec move, Locomotor locomotor)
+		{
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
 			// Ray cast to cell collisions
 			if (self.CurrentActivity is not ReturnToCellActivity)
 			{
-				foreach (var (source, dest) in GenSDPairs(sourcePos, destPos - sourcePos, UnitRadius))
+				foreach (var (source, dest) in GenSDPairs(sourcePos, move, UnitRadius))
 				{
 					//MoveOffGrid.RenderPoint(self, source, Color.LightGreen);
 					//MoveOffGrid.RenderPoint(self, dest, Color.LightGreen);
@@ -1378,8 +1366,7 @@ namespace OpenRA.Mods.Common.Traits
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
 			var groupedActors = self.World.Selection.Actors
-									.Where(a => !a.IsDead)
-									.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
+									.Where(a => !a.IsDead && a.TraitsImplementing<MobileOffGrid>().Any(Exts.IsTraitEnabled)).ToList();
 			return new MoveOffGrid(self, groupedActors, target, WDist.Zero, range, initialTargetPosition, targetLineColor);
 		}
 
@@ -1387,8 +1374,7 @@ namespace OpenRA.Mods.Common.Traits
 			WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
 			var groupedActors = self.World.Selection.Actors
-									.Where(a => !a.IsDead)
-									.Where(a => a.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled).Any()).ToList();
+									.Where(a => !a.IsDead && a.TraitsImplementing<MobileOffGrid>().Any(Exts.IsTraitEnabled)).ToList();
 			return new MoveOffGrid(self, groupedActors, target, minRange, maxRange, initialTargetPosition, targetLineColor);
 		}
 
@@ -1686,6 +1672,13 @@ namespace OpenRA.Mods.Common.Traits
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
+		}
+
+		public static List<TraitPair<MobileOffGrid>> GetGroupedActorsWithMobileOGs(List<Actor> groupedActors)
+		{
+			return groupedActors.Where(a => !a.IsDead && a.TraitsImplementing<MobileOffGrid>().Any())
+				.Select(a => new TraitPair<MobileOffGrid>(a, a.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled)))
+				.ToList();
 		}
 
 		public void ResolveOrder(Actor self, Order order)

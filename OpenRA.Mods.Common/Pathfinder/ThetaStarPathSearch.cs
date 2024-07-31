@@ -217,7 +217,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		private readonly World thisWorld;
-		public List<Actor> sharedMoveActors;
 		private readonly ThetaStarCache thisThetaCache;
 		public readonly Actor self;
 		private Func<CCPos, CCPos, bool> CCLineOfSightFunc;
@@ -1035,11 +1034,9 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		#region Constructors
-		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos
-								   , List<Actor> sharedMoveActors, int currDelayToRun = 2)
+		public ThetaStarPathSearch(World world, Actor self, WPos sourcePos, WPos destPos, int currDelayToRun = 2)
 		{
 			thisWorld = world;
-			this.sharedMoveActors = sharedMoveActors;
 			this.currDelayToRun = currDelayToRun;
 			thisThetaCache = world.WorldActor.TraitsImplementing<ThetaStarCache>().FirstEnabledTraitOrDefault();
 			if (thisWorld.Map.Grid.Type != MapGridType.Rectangular)

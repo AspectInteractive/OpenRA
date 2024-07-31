@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Mods.Common.Traits;
@@ -91,7 +92,7 @@ namespace OpenRA.Mods.Common.Activities
 		readonly Locomotor locomotor;
 
 		ThetaPathfinderExecutionManager thetaPFexecManager;
-		public List<Actor> actorsSharingMove = new();
+		public List<TraitPair<MobileOffGrid>> ActorsSharingMove = new();
 		bool pathFound = false;
 		List<WPos> pathRemaining = new();
 		WPos currPathTarget;
@@ -135,12 +136,11 @@ namespace OpenRA.Mods.Common.Activities
 
 		public WDist MaxRangeToTarget()
 		{
-			var actorMobileOgs = actorsSharingMove.Where(a => !a.IsDead).Select(a => a.TraitsImplementing<MobileOffGrid>().FirstEnabledTraitOrDefault())
-												  .Where(m => m != null);
+			var actorMobileOgs = ActorsSharingMove.Where(a => !a.Actor.IsDead).Select(a => a.Trait).ToList();
 
-			return actorMobileOgs.Any() ? new WDist(actorMobileOgs.Select(m => m.UnitRadius.Length).Sum()
-														/ Math.Max(actorsSharingMove.Count, 1)
-														* Exts.ISqrt(actorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling)) : WDist.Zero;
+			return actorMobileOgs.Count > 0 ? new WDist(actorMobileOgs.Select(m => m.UnitRadius.Length).Sum()
+														/ Math.Max(ActorsSharingMove.Count, 1)
+														* Exts.ISqrt(ActorsSharingMove.Count, Exts.ISqrtRoundMode.Ceiling)) : WDist.Zero;
 		}
 
 		WPos PopNextTarget()
@@ -309,7 +309,7 @@ namespace OpenRA.Mods.Common.Activities
 			this.targetLineColor = targetLineColor;
 			locomotor = self.World.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 
-			actorsSharingMove = groupedActors;
+			ActorsSharingMove = GetGroupedActorsWithMobileOGs(groupedActors);
 
 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
 			// Moving to any position (even if quite stale) is still better than immediately giving up
@@ -355,7 +355,7 @@ namespace OpenRA.Mods.Common.Activities
 				// being called _before_ any traits are called. This is because all of the actors
 				// must be processed collectively in order for the grouped pathfinding to work.
 				// Otherwise pathfinding will be inefficient and slow.
-				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, actorsSharingMove);
+				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, ActorsSharingMove);
 				thetaPFexecManager.PlayerCirclesLocked = false;
 			}
 
@@ -382,10 +382,9 @@ namespace OpenRA.Mods.Common.Activities
 		public List<WPos> GetThetaPathAndConvert(Actor self)
 		{ return mobileOffGrid.thetaStarSearch.path.ConvertAll(pp => PadCCifCC(self, pp)); }
 
-		public static WPos GetCenterOfUnits(List<Actor> actorsSharingMove)
+		public static WPos GetCenterOfUnits(List<TraitPair<MobileOffGrid>> actorsSharingMove)
 		{
-			return actorsSharingMove.Select(a => a.TraitsImplementing<MobileOffGrid>().FirstOrDefault())
-				.Where(t => t != null).Select(t => t.CenterPosition).Average();
+			return actorsSharingMove.Select(a => a.Trait.CenterPosition).Average();
 		}
 
 		public struct ActorWithMoveProps
@@ -400,7 +399,7 @@ namespace OpenRA.Mods.Common.Activities
 
 		public WPos AdjustedCurrPathTarget(Actor self, WPos currPathTarget)
 		{
-			var centerOfActorsSharingMove = GetCenterOfUnits(actorsSharingMove);
+			var centerOfActorsSharingMove = GetCenterOfUnits(ActorsSharingMove);
 
 			WPos FormationMove()
 			{
@@ -417,18 +416,19 @@ namespace OpenRA.Mods.Common.Activities
 				return currPathTarget;
 			}
 
-			var actorsSharingMoveActivitiesMoveType = actorsSharingMove.Where(a => a.CurrentActivity is MoveOffGrid && a.CurrentActivity.State == ActivityState.Active)
-																		.Select(a => a.CurrentActivity.ActivitiesImplementing<MoveOffGrid>(false).FirstOrDefault().moveType);
+			var actorsSharingMoveActivitiesMoveType = ActorsSharingMove
+				.Where(a => a.Actor.CurrentActivity is MoveOffGrid && a.Actor.CurrentActivity.State == ActivityState.Active)
+				.Select(a => a.Actor.CurrentActivity.ActivitiesImplementing<MoveOffGrid>(false).FirstOrDefault().moveType);
 			if (actorsSharingMoveActivitiesMoveType.Any(t => t == MoveType.NonFormation))
 				return NonFormationMove();
 			// Because we check all actorsSharingMove, any shared actor that has a Formation move type is confirmation that we can move in formation
 			else if (actorsSharingMoveActivitiesMoveType.Any(t => t == MoveType.Formation))
 				return FormationMove();
 
-			var actorsSharingMoveWithProps = actorsSharingMove.Select(a => new ActorWithMoveProps
+			var actorsSharingMoveWithProps = ActorsSharingMove.Select(a => new ActorWithMoveProps
 			{
-				MobOffGrid = a.TraitsImplementing<MobileOffGrid>().FirstOrDefault(),
-				Act = a
+				MobOffGrid = a.Trait,
+				Act = a.Actor
 			}).Select(am => { am.OffsetToCenterOfActors = centerOfActorsSharingMove - am.MobOffGrid.CenterPosition; return am; })
 			.Select(am2 =>
 			{
@@ -469,7 +469,7 @@ namespace OpenRA.Mods.Common.Activities
 			//RenderPointCollDebug(self, new WPos(actorsSharingMoveXYBounds.MaxX, actorsSharingMoveXYBounds.MaxY, 0));
 #endif
 
-			if (actorsSharingMove.Count > 1 && actorsSharingMoveWithProps.All(a => a.IsOffsetTargetObservable && a.IsOffsetCloseEnough)
+			if (ActorsSharingMove.Count > 1 && actorsSharingMoveWithProps.All(a => a.IsOffsetTargetObservable && a.IsOffsetCloseEnough)
 				&& !TargetWithinBounds(actorsSharingMoveXYBounds.MinX, actorsSharingMoveXYBounds.MaxX,
 									  actorsSharingMoveXYBounds.MinY, actorsSharingMoveXYBounds.MaxY, currPathTarget))
 				return FormationMove();
@@ -735,23 +735,16 @@ namespace OpenRA.Mods.Common.Activities
 				yield return new TargetLineNode(useLastVisibleTarget ? lastVisibleTarget : target, targetLineColor.Value);
 		}
 
-		public List<Actor> GetNearbyActorsSharingMove(Actor self, bool excludeSelf = true)
+		public List<TraitPair<MobileOffGrid>> GetNearbyActorsSharingMove(Actor self, bool excludeSelf = true)
 		{
 			var nearbyActors = self.World.FindActorsInCircle(mobileOffGrid.CenterPosition, MaxRangeToTarget());
-			var actorsSharingMoveNearMe = new List<Actor>();
-			foreach (var actor in nearbyActors)
-				if (!actor.IsDead && (actor != self || !excludeSelf) && actor.Owner == self.Owner && actorsSharingMove.Contains(actor) &&
-					actor.CurrentActivity is not ReturnToCellActivity)
-					actorsSharingMoveNearMe.Add(actor); // No need to check if MobileOffGrid exists since all actors in actorsSharingMove
-														// are moving
-			return actorsSharingMoveNearMe;
+			return ActorsSharingMove.Where(a => nearbyActors.Contains(a.Actor) && !a.Actor.IsDead && (a.Actor != self || !excludeSelf)
+				&& a.Actor.Owner == self.Owner && a.Actor.CurrentActivity is not ReturnToCellActivity).ToList();
 		}
 
-		public List<WPos> CompletedTargetsOfActors(List<Actor> actorList)
+		public List<WPos> CompletedTargetsOfActors(List<TraitPair<MobileOffGrid>> actorList)
 		{
-			var actorListMobileOGs = actorList.Where(a => !a.IsDead)
-										.Select(a => a.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled))
-										.Where(m => m != null);
+			var actorListMobileOGs = actorList.Where(a => !a.Actor.IsDead).Select(a => a.Trait).ToList();
 			var completedTargs = actorListMobileOGs.Select(m => m.PathComplete).SelectMany(p => p).Distinct().ToList();
 			completedTargs = completedTargs.Union(actorListMobileOGs.Select(m => m.LastCompletedTarget)).ToList();
 			return completedTargs;
