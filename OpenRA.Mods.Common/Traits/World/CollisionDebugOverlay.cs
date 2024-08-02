@@ -28,7 +28,7 @@ namespace OpenRA.Mods.Common.Traits
 	public class CollisionDebugOverlay : IWorldLoaded, IChatCommand, IRenderAnnotations
 	{
 		public readonly List<Command> Comms;
-		readonly List<(List<WPos>, Color)> linesWithColors = new();
+		readonly List<(List<WPos>, Color, int)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int)> circlesWithColors = new();
 		readonly List<(WPos, Color, int)> pointsWithColors = new();
 		readonly List<(Actor, WPos, Color, int)> actorPointsWithColors = new();
@@ -36,13 +36,14 @@ namespace OpenRA.Mods.Common.Traits
 		readonly List<(WPos, string, Color, string)> textsWithColors = new();
 		readonly List<(Actor, WPos, string, Color, string)> actorTextsWithColors = new();
 		readonly List<List<WPos>> paths = new();
-		readonly List<List<WPos>> lines = new();
+		readonly List<(List<WPos>, int)> linesWithThickness = new();
 
 		// Set this to true to display annotations showing the cost at each cell
 		readonly bool showCosts = true;
 
 		public bool Enabled;
 		const int DefaultThickness = 3;
+		const int LineThickness = 3;
 		float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
 		readonly float pointHue = Color.Red.ToAhsv().H; // 0.0 - 1.0
 		readonly float circleHue = Color.LightGreen.ToAhsv().H; // 0.0 - 1.0
@@ -126,7 +127,6 @@ namespace OpenRA.Mods.Common.Traits
 				yield break;
 
 			var pointRadius = 100;
-			var lineThickness = 3;
 			var endPointRadius = 100;
 			var endPointThickness = 3;
 			var defaultFontName = "TinyBold";
@@ -179,24 +179,24 @@ namespace OpenRA.Mods.Common.Traits
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
 			foreach (var path in paths)
 			{
-				var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
+				var linesToRender = GetPathRenderableSet(path, LineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
 				foreach (var line in linesToRender)
 					yield return line;
 			}
 
 			// Render Lines
 			lineColor = Color.FromAhsv(lineHue, currSat, currLight);
-			foreach (var line in lines)
+			foreach (var (line, thickness) in linesWithThickness)
 			{
-				var linesToRender = GetPathRenderableSet(line, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
+				var linesToRender = GetPathRenderableSet(line, thickness, lineColor, endPointRadius, endPointThickness, lineColor);
 				foreach (var l in linesToRender)
 					yield return l;
 			}
 
 			// Render LinesWithColours
-			foreach (var (line, color) in linesWithColors)
+			foreach (var (line, color, thickness) in linesWithColorsAndThickness)
 			{
-				var linesToRender = GetPathRenderableSet(line, lineThickness, color, endPointRadius, endPointThickness, color);
+				var linesToRender = GetPathRenderableSet(line, thickness, color, endPointRadius, endPointThickness, color);
 				foreach (var l in linesToRender)
 					yield return l;
 			}
@@ -281,18 +281,18 @@ namespace OpenRA.Mods.Common.Traits
 		public void RemoveActorText(Actor self, WPos pos, string text) { actorTextsWithColors.RemoveAll(at => at.Item1 == self && at.Item2 == pos && at.Item3 == text); }
 		public void AddPath(List<WPos> path) { paths.Add(path); }
 		public void RemovePath(List<WPos> path) { paths.RemoveAll(p => p == path); }
-		public void AddLine(List<WPos> line) { lines.Add(line); }
-		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l == line); }
-		public void AddLineWithColor(List<WPos> line, Color color) { linesWithColors.Add((line, color)); }
-		public void RemoveLineWithColor(List<WPos> line) { linesWithColors.RemoveAll(lwc => lwc.Item1 == line); }
+		public void AddLine(List<WPos> line, int thickness = LineThickness) { linesWithThickness.Add((line, thickness)); }
+		public void RemoveLine(List<WPos> line) { linesWithThickness.RemoveAll(l => l.Item1 == line); }
+		public void AddLineWithColor(List<WPos> line, Color color, int thickness = LineThickness) { linesWithColorsAndThickness.Add((line, color, thickness)); }
+		public void RemoveLineWithColor(List<WPos> line) { linesWithColorsAndThickness.RemoveAll(lwc => lwc.Item1 == line); }
 		public void AddCircle((WPos P, WDist D) circle, int thickness = DefaultThickness)
 		{ circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight), DefaultThickness)); }
 		public void AddCircleWithColor((WPos P, WDist D) circle, Color color, int thickness = DefaultThickness) { circlesWithColors.Add((circle, color, DefaultThickness)); }
 		public void RemoveCircle((WPos P, WDist D) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
 		public void ClearIntervals() { statesWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
-		public void ClearLines() { lines.Clear(); }
-		public void ClearLinesWithColors() { linesWithColors.Clear(); }
+		public void ClearLines() { linesWithThickness.Clear(); }
+		public void ClearLinesWithColors() { linesWithColorsAndThickness.Clear(); }
 		public void ClearStates() { statesWithColors.Clear(); }
 		public void ClearPoints() { pointsWithColors.Clear(); }
 		public void ClearActorPoints() { actorPointsWithColors.Clear(); }

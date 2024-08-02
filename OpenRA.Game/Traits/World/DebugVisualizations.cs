@@ -19,6 +19,7 @@ namespace OpenRA.Traits
 	{
 		public bool CombatGeometry;
 		public bool RenderGeometry;
+		public bool MobileOffGridGeometry;
 		public bool ScreenMap;
 		public bool ActorTags;
 

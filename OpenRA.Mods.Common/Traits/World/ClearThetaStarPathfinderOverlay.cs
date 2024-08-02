@@ -76,6 +76,16 @@ namespace OpenRA.Mods.Common.Traits
 				collDebugOverlayTrait.ClearRadiuses();
 				collDebugOverlayTrait.ClearActorTexts();
 				collDebugOverlayTrait.ClearTexts();
+
+				var mobileOffGridOverlays = w.ActorsWithTrait<MobileOffGridOverlay>().Select(a => a.Trait).ToList();
+				foreach (var overlay in mobileOffGridOverlays)
+				{
+					overlay.ClearLines();
+					overlay.ClearPoints();
+					overlay.ClearCircles();
+					overlay.ClearTexts();
+				}
+
 			};
 		}
 

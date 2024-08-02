@@ -30,6 +30,9 @@ namespace OpenRA.Mods.Common.Commands
 		const string RenderGeometryDescription = "description-render-geometry";
 
 		[TranslationReference]
+		const string MobileOffGridGeometryDescription = "description-mobile-off-grid-geometry";
+
+		[TranslationReference]
 		const string ScreenMapOverlayDescription = "description-screen-map-overlay";
 
 		[TranslationReference]
@@ -42,6 +45,7 @@ namespace OpenRA.Mods.Common.Commands
 		{
 			{ "combat-geometry", (CombatGeometryDescription, CombatGeometry) },
 			{ "render-geometry", (RenderGeometryDescription, RenderGeometry) },
+			{ "mogg", (MobileOffGridGeometryDescription, MobileOffGridGeometry) },
 			{ "screen-map", (ScreenMapOverlayDescription, ScreenMap) },
 			{ "depth-buffer", (DepthBufferDescription, DepthBuffer) },
 			{ "actor-tags", (ActorTagsOverlayDescripition, ActorTags) },
@@ -82,6 +86,10 @@ namespace OpenRA.Mods.Common.Commands
 		static void RenderGeometry(DebugVisualizations debugVis, DeveloperMode devMode)
 		{
 			debugVis.RenderGeometry ^= true;
+		}
+		static void MobileOffGridGeometry(DebugVisualizations debugVis, DeveloperMode devMode)
+		{
+			debugVis.MobileOffGridGeometry ^= true;
 		}
 
 		static void ScreenMap(DebugVisualizations debugVis, DeveloperMode devMode)

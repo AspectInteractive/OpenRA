@@ -489,7 +489,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				  Math.Sign((destToTest - sourcePos).X) == Math.Sign((destPos - sourcePos).X) && // if sign has switched we are travesing in the
 				  Math.Sign((destToTest - sourcePos).Y) == Math.Sign((destPos - sourcePos).Y))   // opposite direction which is invalid
 			{
-				MoveOffGrid.RenderPointCollDebug(self, destToTest, Primitives.Color.Yellow);
+				//MoveOffGrid.RenderPointCollDebug(self, destToTest, Primitives.Color.Yellow);
 				// We increment by less than a full cell to ensure all cells are touched at least once
 				destToTest -= new WVec(new WDist(768), WRot.FromYaw((destPos - sourcePos).Yaw));
 				destToTestCell = thisWorld.Map.CellContaining(destToTest);
@@ -497,7 +497,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 			if (!DestIsReachable(destToTest))
 			{
-				MoveOffGrid.RenderPointCollDebug(self, destPos, Primitives.Color.LightBlue);
+				//MoveOffGrid.RenderPointCollDebug(self, destPos, Primitives.Color.LightBlue);
 				EndingActions(true);
 				return;
 			}

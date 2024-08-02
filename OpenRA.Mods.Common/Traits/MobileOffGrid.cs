@@ -14,10 +14,12 @@ using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Linq;
 using Linguini.Syntax.Ast;
+using Microsoft.VisualBasic;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
 using OpenRA.Mods.Common.Pathfinder;
+using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
@@ -344,13 +346,14 @@ namespace OpenRA.Mods.Common.Traits
 		public void AddToTraversedCirclesBuffer(WPos pos)
 		{
 			// We divide UnitRadius by 2 because we allow some overlap, to ensure the space between circles is not skipped.
-			if (!TraversedCirclesBuffer.Where(c => HitShapes.CircleShape.PosIsInsideCircle(c, UnitRadius.Length / 2, pos)).Any())
+			if (!TraversedCirclesBuffer.Any(c => HitShapes.CircleShape.PosIsInsideCircle(c, UnitRadius.Length / 2, pos)))
 				AddToBuffer(ref TraversedCirclesBuffer, TraversedCirclesBufferCapacity, pos);
 		}
 
-		public List<MvVec> SeekVectors = new List<MvVec>();
-		public List<MvVec> FleeVectors = new List<MvVec>();
+		public List<MvVec> SeekVectors = new();
+		public List<MvVec> FleeVectors = new();
 
+		public MobileOffGridOverlay Overlay;
 		Repairable repairable;
 		Rearmable rearmable;
 		IAircraftCenterPositionOffset[] positionOffsets;
@@ -412,10 +415,6 @@ namespace OpenRA.Mods.Common.Traits
 		public bool ForceLanding { get; private set; }
 		public bool AtLandAltitude => self.World.Map.DistanceAboveTerrain(GetPosition()) == LandAltitude;
 
-		/*bool airborne;
-		bool cruising;*/
-		int airborneToken = Actor.InvalidConditionToken;
-		int cruisingToken = Actor.InvalidConditionToken;
 		public WDist LandAltitude
 		{
 			get
@@ -508,7 +507,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected override void Created(Actor self)
 		{
-			UnitRadius = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled).FirstOrDefault().Info.Type.OuterRadius;
+			UnitRadius = self.TraitsImplementing<HitShape>().FirstOrDefault(Exts.IsTraitEnabled).Info.Type.OuterRadius;
 			notifyCustomLayerChanged = self.TraitsImplementing<INotifyCustomLayerChanged>().ToArray();
 			notifyCenterPositionChanged = self.TraitsImplementing<INotifyCenterPositionChanged>().ToArray();
 			notifyMoving = self.TraitsImplementing<INotifyMoving>().ToArray();
@@ -947,13 +946,14 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// Main collision detection against units
-		public WPos? GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
+		public List<WPos> GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
 										   bool attackingUnitsOnly = false, bool includeCellCollision = false)
 		{
-			if (self.CurrentActivity is ReturnToCellActivity)
-				return null;
-
 			var intersections = new List<WPos>();
+
+			if (self.CurrentActivity is ReturnToCellActivity)
+				return intersections;
+
 			var selfCenter = self.CenterPosition;
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
 
@@ -976,8 +976,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// Ray cast to actor collisions
-			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + (selfCenter + new WVec(lookAheadDist, WRot.FromYaw(move.Yaw)) - selfCenter) / 2,
-																	lookAheadDist)
+			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + new WVec(lookAheadDist, WRot.FromYaw(move.Yaw)), lookAheadDist)
 												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 			{
 				var destActorMobileOffGrids = destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
@@ -1000,14 +999,14 @@ namespace OpenRA.Mods.Common.Traits
 									if (intersection != null)
 									{
 #if DEBUGWITHOVERLAY
-										//MoveOffGrid.RenderLineWithColorCollDebug(self, source, (WPos)intersection, Color.OrangeRed);
+										RenderLine(source, (WPos)intersection, CollisionType.LocalAvoidanceHit);
 #endif
 										intersections.Add((WPos)intersection);
 									}
 									else
 									{
 #if DEBUGWITHOVERLAY
-										MoveOffGrid.RenderLineWithColor(self, source, dest, Color.LightBlue);
+										RenderLine(source, dest, CollisionType.LocalAvoidanceMiss);
 #endif
 									}
 								}
@@ -1016,36 +1015,52 @@ namespace OpenRA.Mods.Common.Traits
 				}
 			}
 
-			if (intersections.Count > 0)
-			{
-				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
-#if DEBUGWITHOVERLAY
-				//MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
-#endif
-				return firstIntersection;
-			}
-			else
-				return null;
+			return intersections;
+
+			//			if (intersections.Count > 0)
+			//			{
+			//				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
+			//#if DEBUGWITHOVERLAY
+			//				//MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
+			//#endif
+			//			}
+		}
+
+		public void RenderPathingStats()
+		{
+			const int Persist = (int)PersistConst.Never;
+			const string Key = OverlayKeyStrings.Vectors;
+
+			static string VecToXYstring(WVec v) => $"{v.X},{v.Y}";
+			var seek = GenFinalWVec(WVecTypes.Seek, ignoreTimer: false);
+			var flee = GenFinalWVec(WVecTypes.Flee, ignoreTimer: false);
+
+			Overlay.AddText(CenterPosition,
+				$"cpt:{CurrPathTarget.X},{CurrPathTarget.Y},\nMS:{Enum.GetName(typeof(MovementState), CurrMovementState)}\n" +
+				$"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Orange, Persist, Key);
+			if (CurrPathTarget != WPos.Zero)
+				Overlay.AddPoint(CurrPathTarget, Color.Purple, Persist, key: Key);
+		}
+
+		enum CollisionType { LocalAvoidanceHit, LocalAvoidanceMiss }
+
+		void RenderLine(WPos source, WPos dest, CollisionType colType)
+		{
+			const int Persist = (int)PersistConst.Never;
+			const string Key = OverlayKeyStrings.LocalAvoidance;
+
+			if (colType == CollisionType.LocalAvoidanceHit)
+				Overlay.AddLine(source, dest, Color.OrangeRed, Persist, key: Key);
+			else if (colType == CollisionType.LocalAvoidanceMiss)
+				Overlay.AddLine(source, dest, Color.LightBlue, Persist, key: Key);
 		}
 
 		protected virtual void Tick(Actor self)
 		{
-			static string VecToXYstring(WVec v) => $"{v.X},{v.Y}";
-			var seek = GenFinalWVec(WVecTypes.Seek, ignoreTimer: false);
-			var flee = GenFinalWVec(WVecTypes.Flee, ignoreTimer: false);
-			//MoveOffGrid.RemoveActorTextCollDebug(self, self);
-			//MoveOffGrid.RenderActorTextCollDebug(self, self, CenterPosition, $"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Yellow);
+			//RenderPathingStats();
 
-			MoveOffGrid.RemoveActorTextCollDebug(self, self);
-			MoveOffGrid.RenderActorTextCollDebug(self, self, CenterPosition,
-				$"cpt:{CurrPathTarget.X},{CurrPathTarget.Y},\nMS:{Enum.GetName(typeof(MovementState), CurrMovementState)}\n" +
-				$"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Orange);
-			if (CurrPathTarget != WPos.Zero)
-				{ }
-			//MoveOffGrid.RenderActorPointCollDebug(self, CurrPathTarget, Color.Purple);
-			else
-				{ }
-				//MoveOffGrid.RemoveActorPointCollDebug(self, self);
+			if (SeekVectors.Count > 0)
+				MoveOffGrid.RenderLineWithColorCollDebug(self, CenterPosition, CenterPosition + GenFinalWVec(WVecTypes.All, false), Color.OrangeRed);
 
 			var oldCachedFacing = cachedFacing;
 			cachedFacing = Facing;
@@ -1410,7 +1425,6 @@ namespace OpenRA.Mods.Common.Traits
 
 			protected override void OnFirstRun(Actor self)
 			{
-				//System.Console.WriteLine("MobileOffGrid.OnFirstRun() issued at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
 				pos = self.CenterPosition;
 				if (self.World.Map.DistanceAboveTerrain(pos) > WDist.Zero && self.TraitOrDefault<Parachutable>() != null)
 					QueueChild(new Parachute(self));

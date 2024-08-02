@@ -211,6 +211,8 @@ namespace OpenRA.Mods.Common.Activities
 				self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
 		}
 
+		const int LineThickness = 1;
+
 		public static void RenderLine(Actor self, WPos pos1, WPos pos2)
 		{
 			var renderLine = new List<WPos>() { pos1, pos2 };
@@ -222,16 +224,16 @@ namespace OpenRA.Mods.Common.Activities
 			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault()
 				.AddLineWithColor(renderLine, color);
 		}
-		public static void RenderLineCollDebug(Actor self, WPos pos1, WPos pos2)
+		public static void RenderLineCollDebug(Actor self, WPos pos1, WPos pos2, int thickness = LineThickness)
 		{
 			var renderLine = new List<WPos>() { pos1, pos2 };
-			self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
+			self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine, thickness);
 		}
-		public static void RenderLineWithColorCollDebug(Actor self, WPos pos1, WPos pos2, Color color)
+		public static void RenderLineWithColorCollDebug(Actor self, WPos pos1, WPos pos2, Color color, int thickness = LineThickness)
 		{
 			var renderLine = new List<WPos>() { pos1, pos2 };
 			self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault()
-				.AddLineWithColor(renderLine, color);
+				.AddLineWithColor(renderLine, color, thickness);
 		}
 
 		public static void RenderCircle(Actor self, WPos pos, WDist radius)
@@ -549,7 +551,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
-			bool UnitHasNotCollidedWithUnits(WVec mv) => mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true) == null;
+			bool UnitHasCollidedWithUnits(WVec mv) => mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true).Count > 0;
 
 			// Update SeekVector if there is none
 			var deltaMoveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
@@ -559,13 +561,17 @@ namespace OpenRA.Mods.Common.Activities
 			var moveVec = mobileOffGrid.SeekVectors[0].Vec;
 			// Only change the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
 			// Revert to deltaMoveVec if we are no longer searching for the next target
-			if (!(useLocalAvoidance && !UnitHasNotCollidedWithUnits(moveVec)) && !searchingForNextTarget)
+			if (!(useLocalAvoidance && UnitHasCollidedWithUnits(moveVec)) && !searchingForNextTarget)
 			{
 				mobileOffGrid.SeekVectors = new List<MvVec>() { new(deltaMoveVec) };
 				moveVec = deltaMoveVec;
 			}
+
+			if (UnitHasCollidedWithUnits(moveVec))
+				RenderLineCollDebug(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + moveVec, 3);
+
 			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
-			else if ((useLocalAvoidance && !UnitHasNotCollidedWithUnits(moveVec)) || isBlocked)
+			else if ((useLocalAvoidance && UnitHasCollidedWithUnits(moveVec)) || isBlocked)
 			{
 				var revisedMoveVec = moveVec;
 				int localAvoidanceAngleOffset;
@@ -588,9 +594,9 @@ namespace OpenRA.Mods.Common.Activities
 					// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					i++;
 				}
-				while (!UnitHasNotCollidedWithUnits(revisedMoveVec) && i < localAvoidanceAngleOffsets.Count);
+				while (UnitHasCollidedWithUnits(revisedMoveVec) && i < localAvoidanceAngleOffsets.Count);
 
-				if (UnitHasNotCollidedWithUnits(revisedMoveVec))
+				if (!UnitHasCollidedWithUnits(revisedMoveVec))
 				{
 #if DEBUGWITHOVERLAY
 					//Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
@@ -607,7 +613,7 @@ namespace OpenRA.Mods.Common.Activities
 					isBlocked = false;
 				}
 			}
-			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget && UnitHasNotCollidedWithUnits(pastMoveVec))
+			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && searchingForNextTarget && !UnitHasCollidedWithUnits(pastMoveVec))
 			{
 				pastMoveVec = new WVec(0, 0, 0);
 				currLocalAvoidanceAngleOffset = 0;

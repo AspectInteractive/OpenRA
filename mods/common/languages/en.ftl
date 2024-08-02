@@ -721,6 +721,7 @@ notification-invalid-command = { $name } is not a valid command.
 ## DebugVisualizationCommands
 description-combat-geometry = toggles combat geometry overlay.
 description-render-geometry = toggles render geometry overlay.
+description-mobile-off-grid-geometry = toggles mobile off grid overlay.
 description-screen-map-overlay = toggles screen map overlay.
 description-depth-buffer = toggles depth buffer overlay.
 description-actor-tags-overlay = toggles actor tags overlay.

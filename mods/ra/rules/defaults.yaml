@@ -1,6 +1,7 @@
 ^ExistsInWorld:
 	AppearsOnRadar:
 	CombatDebugOverlay:
+	MobileOffGridOverlay:
 	GivesExperience:
 		PlayerExperienceModifier: 1
 	ScriptTriggers:
