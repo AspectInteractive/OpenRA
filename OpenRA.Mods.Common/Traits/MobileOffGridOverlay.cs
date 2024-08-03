@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Xml.Linq;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Commands;
@@ -32,13 +33,16 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		public readonly List<Command> Comms;
 		const int DefaultThickness = 3;
+		const int DefaultArrowThickness = 2;
+		const int DefaultSharpnessDegrees = 45; // angle in degrees that each side of the arrow head of an arrow should be
+		readonly WDist defaultArrowLength = new(128);
 		readonly DebugVisualizations debugVis;
 		readonly List<string> enabledOverlays = new();
 		bool NoFiltering => enabledOverlays.Count == 0;
 
 		// Note: Key is used for persist condition, so that objects matching the Key (e.g. a specific kind of collision)
 		// can be removed independently from other objects (different collision renders for example)
-		readonly List<(List<WPos> Line, Color C, int Persist, int Thickness, string Key)> lines = new();
+		readonly List<(List<WPos> Line, Color C, int Persist, LineEndPoint EndPoints, int Thickness, string Key)> lines = new();
 		readonly List<((WPos, WDist) Circle, Color C, int Persist, int Thickness, string Key)> circles = new();
 		readonly List<(WPos Point, Color C, int Persist, int Thickness, string Key)> points = new();
 		readonly List<(WPos Pos, string Text, Color C, int Persist, string FontName, string Key)> texts = new();
@@ -54,10 +58,15 @@ namespace OpenRA.Mods.Common.Traits
 			Never = 0
 		}
 
+		public enum LineEndPoint { None, Circle, EndArrow, StartArrow, BothArrows }
+
 		public struct OverlayKeyStrings
 		{
 			public const string LocalAvoidance = "local";
-			public const string Vectors = "vectors";
+			public const string SeekVectors = "seek";
+			public const string FleeVectors = "flee";
+			public const string AllVectors = "allvec";
+			public const string PathingText = "pathingtext";
 		}
 
 		public MobileOffGridOverlay(Actor self)
@@ -65,7 +74,10 @@ namespace OpenRA.Mods.Common.Traits
 			Comms = new List<Command>()
 			{
 				new(OverlayKeyStrings.LocalAvoidance, "toggles local avoidance overlays.", true),
-				new(OverlayKeyStrings.Vectors, "toggles seek/flee vector overlays.", true),
+				new(OverlayKeyStrings.SeekVectors, "toggles flee vector overlays.", true),
+				new(OverlayKeyStrings.FleeVectors, "toggles seek vector overlays.", true),
+				new(OverlayKeyStrings.AllVectors, "toggles combined seek + flee vector overlays.", true),
+				new("vectors", "toggles seek, flee, and combined vector overlays.", true),
 			};
 
 			var console = self.World.WorldActor.TraitOrDefault<ChatCommands>();
@@ -84,8 +96,17 @@ namespace OpenRA.Mods.Common.Traits
 		public void InvokeCommand(string command, string arg)
 		{
 			// If the overlay does not exist and cannot be removed, then we add it
-			if (Comms.Any(comm => comm.Name == command) && !enabledOverlays.Remove(command))
-				enabledOverlays.Add(command);
+			if (Comms.Any(comm => comm.Name == command))
+			{
+				if (command == "vectors")
+				{
+					foreach (var key in new List<string>() { "seek", "flee", "allvec" })
+						if (!enabledOverlays.Remove(key))
+							enabledOverlays.Add(key);
+				}
+				else if (!enabledOverlays.Remove(command))
+					enabledOverlays.Add(command);
+			}
 		}
 
 		void INotifyCreated.Created(Actor self)
@@ -101,6 +122,21 @@ namespace OpenRA.Mods.Common.Traits
 				return Enumerable.Empty<IRenderable>();
 
 			return RenderAnnotations(self, wr);
+		}
+
+		static List<LineAnnotationRenderableWithZIndex> RenderArrowhead(WPos start, WVec directionAndLength, Color color,
+			int thickness = DefaultArrowThickness, int sharpnessDegrees = DefaultSharpnessDegrees)
+		{
+			var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
+			var end = start - directionAndLength;
+			var endOfLeftSide = start + directionAndLength.Rotate(WRot.FromYaw(WAngle.FromDegrees(sharpnessDegrees + 180)));
+			var endOfRightSide = start + directionAndLength.Rotate(WRot.FromYaw(WAngle.FromDegrees(-sharpnessDegrees + 180)));
+
+			linesToRender.Add(new(start, end, thickness, color));
+			linesToRender.Add(new(start, endOfLeftSide, thickness, color));
+			linesToRender.Add(new(start, endOfRightSide, thickness, color));
+
+			return linesToRender;
 		}
 
 		IEnumerable<IRenderable> RenderAnnotations(Actor self, WorldRenderer wr)
@@ -124,8 +160,27 @@ namespace OpenRA.Mods.Common.Traits
 				return new(font, p, 0, color, text);
 			}
 
-			LineAnnotationRenderableWithZIndex LineRenderFunc(WPos start, WPos end, Color color, int thickness = DefaultThickness) =>
-				new(start, end, thickness, color, color, (EndPointRadius, EndPointThickness, color));
+			List<LineAnnotationRenderableWithZIndex> LineRenderFunc(WPos start, WPos end, Color color,
+				LineEndPoint endPoints = LineEndPoint.None, int thickness = DefaultThickness)
+			{
+				var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
+
+				if (endPoints == LineEndPoint.None)
+					linesToRender.Add(new(start, end, thickness, color, color, (0, 0, color)));
+				else if (endPoints == LineEndPoint.Circle)
+					linesToRender.Add(new(start, end, thickness, color, color, (EndPointRadius, EndPointThickness, color)));
+				else if (endPoints == LineEndPoint.StartArrow || endPoints == LineEndPoint.EndArrow || endPoints == LineEndPoint.BothArrows)
+				{
+					var arrowVec = new WVec(defaultArrowLength, WRot.FromYaw((end - start).Yaw));
+					linesToRender.Add(new(start, end, thickness, color, color, (0, 0, color)));
+					if (endPoints == LineEndPoint.StartArrow || endPoints == LineEndPoint.BothArrows)
+						linesToRender = linesToRender.Union(RenderArrowhead(start, -arrowVec, color)).ToList();
+					if (endPoints == LineEndPoint.EndArrow || endPoints == LineEndPoint.BothArrows)
+						linesToRender = linesToRender.Union(RenderArrowhead(end, arrowVec, color)).ToList();
+				}
+
+				return linesToRender;
+			}
 
 			// Render Texts
 			foreach (var (pos, text, color, persist, fontname, key) in texts.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
@@ -140,8 +195,9 @@ namespace OpenRA.Mods.Common.Traits
 				yield return CircleRenderFunc(circle, color, thickness);
 
 			// Render Lines
-			foreach (var (line, color, persist, thickness, key) in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
-				yield return LineRenderFunc(line[0], line[1], color, thickness);
+			foreach (var (line, color, persist, endPoints, thickness, key) in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
+				foreach (var renderLine in LineRenderFunc(line[0], line[1], color, endPoints, thickness))
+					yield return renderLine;
 		}
 
 		public void AddPoint(WPos pos, Color color, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null)
@@ -169,23 +225,36 @@ namespace OpenRA.Mods.Common.Traits
 		public void RemoveText(WPos pos) { texts.RemoveAll(t => t.Pos == pos); }
 		public void RemoveText(string text) { texts.RemoveAll(t => t.Text == text); }
 		public void RemoveText(WPos pos, string text) { texts.RemoveAll(t => t.Pos == pos && t.Text == text); }
-		public void AddLine(List<WPos> line, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null) =>
-			AddLine(line, defaultColor, persist, thickness, key);
-		public void AddLine(List<WPos> line, Color color, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null)
+		public void AddLine(List<WPos> line, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
+			int thickness = DefaultThickness, string key = null)
+		{
+			AddLine(line, defaultColor, persist, endPoints, thickness, key);
+		}
+
+		public void AddLine(List<WPos> line, Color color, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
+			int thickness = DefaultThickness, string key = null)
 		{
 			if (persist == (int)PersistConst.Never || persist == 0)
 				lines.RemoveAll(l => l.Key == key);
 			else
 				for (var i = 0; i < lines.Count; i++)
 					if (lines[i].Key == key)
-						lines[i] = (line, color, persist--, thickness, key);
-			lines.Add((line, color, persist, thickness, key));
+						lines[i] = (line, color, persist--, endPoints, thickness, key);
+			lines.Add((line, color, persist, endPoints, thickness, key));
 		}
 
-		public void AddLine(WPos start, WPos end, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null) =>
-			AddLine(start, end, defaultColor, persist, thickness, key);
-		public void AddLine(WPos start, WPos end, Color color, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null) =>
-			AddLine(new List<WPos>() { start, end }, color, persist, thickness, key);
+		public void AddLine(WPos start, WPos end, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
+			int thickness = DefaultThickness, string key = null)
+		{
+			AddLine(start, end, defaultColor, persist, endPoints, thickness, key);
+		}
+
+		public void AddLine(WPos start, WPos end, Color color, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
+			int thickness = DefaultThickness, string key = null)
+		{
+			AddLine(new List<WPos>() { start, end }, color, persist, endPoints, thickness, key);
+		}
+
 		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l.Line == line); }
 		public void AddCircle((WPos P, WDist D) circle, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null) =>
 			AddCircle(circle, defaultColor, persist, thickness, key);

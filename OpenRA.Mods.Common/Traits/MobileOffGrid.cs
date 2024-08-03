@@ -704,6 +704,14 @@ namespace OpenRA.Mods.Common.Traits
 			   )
 				return;
 
+			if (SeekVectors.Count > 0)
+				RenderLine(CenterPosition, CenterPosition + GenFinalWVec(WVecTypes.Seek, true) * 5, LineType.SeekVector);
+			if (FleeVectors.Count > 0)
+				RenderLine(CenterPosition, CenterPosition + GenFinalWVec(WVecTypes.Flee, true) * 5, LineType.FleeVector);
+			if (SeekVectors.Count > 0 && FleeVectors.Count > 0)
+				RenderLine(CenterPosition, CenterPosition + GenFinalWVec(WVecTypes.All, true) * 5, LineType.AllVector);
+
+
 			DecrementTickFleeVectors();
 			DecrementTickSeekVectors();
 
@@ -999,14 +1007,14 @@ namespace OpenRA.Mods.Common.Traits
 									if (intersection != null)
 									{
 #if DEBUGWITHOVERLAY
-										RenderLine(source, (WPos)intersection, CollisionType.LocalAvoidanceHit);
+										RenderLine(source, (WPos)intersection, LineType.LocalAvoidanceHit);
 #endif
 										intersections.Add((WPos)intersection);
 									}
 									else
 									{
 #if DEBUGWITHOVERLAY
-										RenderLine(source, dest, CollisionType.LocalAvoidanceMiss);
+										RenderLine(source, dest, LineType.LocalAvoidanceMiss);
 #endif
 									}
 								}
@@ -1029,7 +1037,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void RenderPathingStats()
 		{
 			const int Persist = (int)PersistConst.Never;
-			const string Key = OverlayKeyStrings.Vectors;
+			const string Key = OverlayKeyStrings.PathingText;
 
 			static string VecToXYstring(WVec v) => $"{v.X},{v.Y}";
 			var seek = GenFinalWVec(WVecTypes.Seek, ignoreTimer: false);
@@ -1042,25 +1050,27 @@ namespace OpenRA.Mods.Common.Traits
 				Overlay.AddPoint(CurrPathTarget, Color.Purple, Persist, key: Key);
 		}
 
-		enum CollisionType { LocalAvoidanceHit, LocalAvoidanceMiss }
+		enum LineType { LocalAvoidanceHit, LocalAvoidanceMiss, SeekVector, FleeVector, AllVector }
 
-		void RenderLine(WPos source, WPos dest, CollisionType colType)
+		void RenderLine(WPos source, WPos dest, LineType colType)
 		{
 			const int Persist = (int)PersistConst.Never;
-			const string Key = OverlayKeyStrings.LocalAvoidance;
 
-			if (colType == CollisionType.LocalAvoidanceHit)
-				Overlay.AddLine(source, dest, Color.OrangeRed, Persist, key: Key);
-			else if (colType == CollisionType.LocalAvoidanceMiss)
-				Overlay.AddLine(source, dest, Color.LightBlue, Persist, key: Key);
+			if (colType == LineType.LocalAvoidanceHit)
+				Overlay.AddLine(source, dest, Color.DarkRed, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
+			else if (colType == LineType.LocalAvoidanceMiss)
+				Overlay.AddLine(source, dest, Color.LightBlue, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
+			else if (colType == LineType.SeekVector)
+				Overlay.AddLine(source, dest, Color.Cyan, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.SeekVectors);
+			else if (colType == LineType.FleeVector)
+				Overlay.AddLine(source, dest, Color.Orange, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.FleeVectors);
+			else if (colType == LineType.AllVector)
+				Overlay.AddLine(source, dest, Color.HotPink, Persist, endPoints: LineEndPoint.EndArrow, thickness: 3, key: OverlayKeyStrings.AllVectors);
 		}
 
 		protected virtual void Tick(Actor self)
 		{
 			//RenderPathingStats();
-
-			if (SeekVectors.Count > 0)
-				MoveOffGrid.RenderLineWithColorCollDebug(self, CenterPosition, CenterPosition + GenFinalWVec(WVecTypes.All, false), Color.OrangeRed);
 
 			var oldCachedFacing = cachedFacing;
 			cachedFacing = Facing;
