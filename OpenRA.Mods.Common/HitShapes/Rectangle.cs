@@ -154,8 +154,6 @@ namespace OpenRA.Mods.Common.HitShapes
 
 		bool IntersectsWithHitShape(int2 selfCenter, int2 polygonCenter, PolygonShape polygonHitShape) { return false; } // to be implemented
 		bool IntersectsWithHitShape(int2 selfCenter, int2 capsuleCenter, CapsuleShape capsuleHitShape) { return false; } // to be implemented
-		public WPos? FirstIntersectingPosFromLine(WPos shapeCenterPos, WPos p1, WPos p2) { throw new NotImplementedException(); }
-		public List<WPos> IntersectingPosesFromLine(WPos shapeCenterPos, WPos p1, WPos p2) { throw new NotImplementedException(); }
 
 		WPos[] IHitShape.GetCorners(int2 selfCenter)
 		{
@@ -200,6 +198,26 @@ namespace OpenRA.Mods.Common.HitShapes
 			yield return new PolygonAnnotationRenderable(side1, origin, 1, shapeColor);
 			yield return new PolygonAnnotationRenderable(side2, origin, 1, shapeColor);
 			yield return new CircleAnnotationRenderable(origin, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
+		}
+
+		public bool PosIsInsideRectangle(WPos selfCenter, WPos pos) => PosIsInsideRectangle(selfCenter.XYToInt2(), pos);
+
+		public bool PosIsInsideRectangle(int2 selfCenter, WPos pos) =>
+			Rectangle.FromTLBR(selfCenter + TopLeft, selfCenter + BottomRight).Contains(pos.XYToInt2());
+
+		public bool LineIntersectsOrIsInside(WPos selfCenter, WPos p1, WPos p2) => LineIntersectsOrIsInside(selfCenter.XYToInt2(), p1, p2);
+		public bool LineIntersectsOrIsInside(int2 selfCenter, WPos p1, WPos p2)
+		{
+			if (PosIsInsideRectangle(selfCenter, p1) || PosIsInsideRectangle(selfCenter, p2))
+				return true;
+
+			return Rectangle.FromTLBR(selfCenter + TopLeft, selfCenter + BottomRight)
+				.IntersectsWith(Rectangle.FromTLBR(p1.XYToInt2(), p2.XYToInt2())); // creates a rectangle with 0 height which is equivalent to a line
+		}
+
+		public bool LineIsColliding(WPos selfCEnter, WPos p1, WPos p2)
+		{
+			throw new NotImplementedException();
 		}
 	}
 }

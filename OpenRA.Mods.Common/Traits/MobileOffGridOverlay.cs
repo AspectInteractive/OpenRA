@@ -62,23 +62,16 @@ namespace OpenRA.Mods.Common.Traits
 
 		public struct OverlayKeyStrings
 		{
-			public const string LocalAvoidance = "local";
-			public const string SeekVectors = "seek";
-			public const string FleeVectors = "flee";
-			public const string AllVectors = "allvec";
-			public const string PathingText = "pathingtext";
+			public const string LocalAvoidance = "local";  // toggles local avoidance overlays.
+			public const string SeekVectors = "seek"; // toggles flee vector overlays.
+			public const string FleeVectors = "flee"; // toggles seek vector overlays.
+			public const string AllVectors = "allvec"; // toggles combined seek + flee vector overlays.
+			public const string PathingText = "pathingtext"; // toggles seek, flee, and combined vector overlays.
 		}
 
 		public MobileOffGridOverlay(Actor self)
 		{
-			Comms = new List<Command>()
-			{
-				new(OverlayKeyStrings.LocalAvoidance, "toggles local avoidance overlays.", true),
-				new(OverlayKeyStrings.SeekVectors, "toggles flee vector overlays.", true),
-				new(OverlayKeyStrings.FleeVectors, "toggles seek vector overlays.", true),
-				new(OverlayKeyStrings.AllVectors, "toggles combined seek + flee vector overlays.", true),
-				new("vectors", "toggles seek, flee, and combined vector overlays.", true),
-			};
+			Comms = new List<Command>() { new("mogg", "toggles the mobile off grid overlay.", true) };
 
 			var console = self.World.WorldActor.TraitOrDefault<ChatCommands>();
 			var help = self.World.WorldActor.TraitOrDefault<HelpCommand>();
@@ -93,19 +86,47 @@ namespace OpenRA.Mods.Common.Traits
 			debugVis = self.World.WorldActor.TraitOrDefault<DebugVisualizations>();
 		}
 
-		public void InvokeCommand(string command, string arg)
+		readonly List<string> validChatCommandArgs =
+			new()
+			{
+				OverlayKeyStrings.LocalAvoidance,
+				OverlayKeyStrings.SeekVectors,
+				OverlayKeyStrings.FleeVectors,
+				OverlayKeyStrings.AllVectors,
+			};
+
+
+		readonly List<string> validVectorArgs =
+			new()
+			{
+				OverlayKeyStrings.SeekVectors,
+				OverlayKeyStrings.FleeVectors,
+				OverlayKeyStrings.AllVectors,
+			};
+
+		void IChatCommand.InvokeCommand(string command, string arg)
 		{
 			// If the overlay does not exist and cannot be removed, then we add it
-			if (Comms.Any(comm => comm.Name == command))
+			if (validChatCommandArgs.Any(validArg => arg == validArg))
 			{
-				if (command == "vectors")
+				if (command == OverlayKeyStrings.AllVectors)
 				{
-					foreach (var key in new List<string>() { "seek", "flee", "allvec" })
-						if (!enabledOverlays.Remove(key))
+					if (enabledOverlays.Any(o => validVectorArgs.Any(a => a == o)))
+					{
+						foreach (var key in validVectorArgs)
+							enabledOverlays.Remove(key);
+					}
+					else
+					{
+						foreach (var key in validVectorArgs)
+						{
+							enabledOverlays.Remove(key);
 							enabledOverlays.Add(key);
+						}
+					}
 				}
-				else if (!enabledOverlays.Remove(command))
-					enabledOverlays.Add(command);
+				else if (!enabledOverlays.Remove(arg))
+					enabledOverlays.Add(arg);
 			}
 		}
 

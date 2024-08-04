@@ -243,6 +243,8 @@ namespace OpenRA.Mods.Common.Activities
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
 		public static void RenderCircleCollDebug(Actor self, WPos pos, WDist radius, int thickness)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius), thickness); }
+		public static void RenderCircleColorCollDebug(Actor self, WPos pos, WDist radius, Color color, int thickness)
+		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircleWithColor((pos, radius), color, thickness); }
 
 		public static void RenderCircleWithColor(Actor self, WPos pos, WDist radius, Color color)
 		{
@@ -551,7 +553,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 			}
 
-			bool UnitHasCollidedWithUnits(WVec mv) => mobileOffGrid.GetFirstMoveCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true).Count > 0;
+			bool UnitHasCollidedWithUnits(WVec mv) => mobileOffGrid.HasCollision(self, mv, localAvoidanceDist, locomotor, attackingUnitsOnly: true);
 
 			// Update SeekVector if there is none
 			var deltaMoveVec = mobileOffGrid.MovementSpeed * new WVec(new WDist(1024), WRot.FromYaw(Delta.Yaw)) / 1024;
@@ -587,10 +589,10 @@ namespace OpenRA.Mods.Common.Activities
 					var propActorMove = mobileOffGrid.GenFinalWVec(new List<MvVec>() { new(testMoveVec) },
 																	   mobileOffGrid.FleeVectors);
 					var propActorPos = self.CenterPosition + propActorMove;
-					if (!mobileOffGrid.TraversedCirclesBuffer.Any(c =>
-								HitShapes.CircleShape.PosIsInsideCircle(c, mobileOffGrid.UnitRadius.Length, propActorPos))
-						|| i == localAvoidanceAngleOffsets.Count - 1)
-						revisedMoveVec = actualMoveVec;
+					//if (!mobileOffGrid.TraversedCirclesBuffer.Any(c =>
+					//			HitShapes.CircleShape.PosIsInsideCircle(c, mobileOffGrid.UnitRadius.Length, propActorPos))
+					//	|| i == localAvoidanceAngleOffsets.Count - 1)
+					revisedMoveVec = actualMoveVec;
 					// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					i++;
 				}
@@ -604,8 +606,9 @@ namespace OpenRA.Mods.Common.Activities
 					//RenderPoint(self, mobileOffGrid.CenterPosition + revisedMoveVec, Color.LightGreen);
 #endif
 					mobileOffGrid.AddToTraversedCirclesBuffer(self.CenterPosition + revisedMoveVec);
-					RenderCircleWithColor(self, mobileOffGrid.CenterPosition + revisedMoveVec, mobileOffGrid.UnitRadius, Color.LightGreen);
+					RenderCircleColorCollDebug(self, mobileOffGrid.CenterPosition + revisedMoveVec, mobileOffGrid.UnitRadius, Color.LightGreen, 3);
 					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
+					mobileOffGrid.RenderLine(mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec, LineType.LocalAvoidanceDirection);
 					pastMoveVec = moveVec;
 					moveVec = revisedMoveVec;
 					mobileOffGrid.SeekVectors = new List<MvVec>() { new(moveVec) };

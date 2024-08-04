@@ -154,99 +154,33 @@ namespace OpenRA.Mods.Common.HitShapes
 			return getC(checkPoint) < getC(lineP1) ^ getC(checkPoint) <= getC(lineP2); // if this does not work use checkPoint.X or checkPoint.Y etc.
 		}
 
-		/*public bool LineIntersectsCircle(WPos circleCenter, WPos p1, WPos p2) { return LineIntersectsCircle(circleCenter, Radius.Length, p1, p2); }
-		public static bool LineIntersectsCircle(WPos circleCenter, int radius, WPos p1, WPos p2)
+		bool IHitShape.LineIntersectsOrIsInside(WPos circleCenter, WPos p1, WPos p2)
 		{
-			var circleLeft = circleCenter.X - radius;
-			var circleRight = circleCenter.X + radius;
-			var circleTop = circleCenter.Y - radius;
-			var circleBottom = circleCenter.Y + radius;
-			return ((p1.X < circleLeft ^ p2.X < circleLeft) ||
-				    (p1.X > circleRight ^ p2.X > circleRight)) &&
-				   ((p1.Y < circleTop ^ p2.Y < circleTop) ||
-				    (p1.Y > circleBottom ^ p2.Y > circleBottom));
-		}*/
+			if (PosIsInsideCircle(circleCenter, Radius.Length, p1) || PosIsInsideCircle(circleCenter, Radius.Length, p2))
+				return true;
 
-		WPos? IHitShape.FirstIntersectingPosFromLine(WPos circleCenter, WPos p1, WPos p2)
-		{
-			//var intersectingPosesFromLineOrig = IntersectingPosesFromLineOrig(circleCenter, Radius.Length, p1, p2);
-			var intersectingPosesFromLine = IntersectingPosesFromLine(circleCenter, Radius.Length, p1, p2);
-			if (intersectingPosesFromLine.Count > 0)
-				return intersectingPosesFromLine.ElementAt(0);
-			return null;
+			return LineIsCollidingLogic(circleCenter, p1, p2);
 		}
 
-		List<WPos> IHitShape.IntersectingPosesFromLine(WPos shapeCenterPos, WPos p1, WPos p2)
-		{ return IntersectingPosesFromLine(shapeCenterPos, Radius.Length, p1, p2); }
-
-		#pragma warning disable SA1312
-		static List<WPos> IntersectingPosesFromLine(WPos circleCenter, int radius, WPos p1, WPos p2)
+		bool LineIsCollidingLogic(WPos circleCenter, WPos p1, WPos p2)
 		{
-			var poses = new List<WPos>();
-			var p1InCircle = PosIsInsideCircle(circleCenter, radius, p1);
-			var p2InCircle = PosIsInsideCircle(circleCenter, radius, p2);
-			var p1X = (Fix64)p1.X;
-			var p1Y = (Fix64)p1.Y;
-			var p2X = (Fix64)p2.X;
-			var p2Y = (Fix64)p2.Y;
-			if (!(p1InCircle && p2InCircle))
-			{
-				if (p1X == p2X) // since we cannot have a slope for a vertical line, we add 1, or 0.1% the width of a cell to the ray cast
-					p2X += 1;
-				if (p1Y == p2Y)
-					p2Y += 1;
-				var a1 = (p2Y - p1Y) / (p2X - p1X); // could be an issue for floating point
-				var b1 = (p2X * p1Y - p1X * p2Y) / (p2X - p1X);
-				var a2 = (Fix64)(-1) / a1;
-				var b2 = (Fix64)circleCenter.Y + (Fix64)circleCenter.X / a1;
-				var Px = (b2 - b1) / (a1 - a2); // could be an issue for floating point
-				var Py = (a1 * b2 - b1 * a2) / (a1 - a2);
-				var LenCP = (new WPos((int)Px, (int)Py, 0) - circleCenter).Length;
-				if (LenCP <= radius) // true if there is an intersection between the circle and the infinite line
-				{
-					var LenIPsq = Fix64.Abs(Sq((Fix64)radius) - Sq((Fix64)LenCP));
-					// var A = Sq(a1) + 1;
-					// var B = 2 * (a1 * (b1 - (int)Py) - 1);
-					// var C = Sq((int)Px) + Sq(b1 - (int)Py) - LenIPsq;
-					var A = Sq(a1) + 1;
-					var B = (Fix64)(-2) * Px + (Fix64)2 * a1 * b1 - (Fix64)2 * a1 * Py;
-					var C = Sq((double)Px) - 2 * (double)b1 * (double)Py + Sq((double)b1) + Sq((double)Py) - (double)LenIPsq;
-					var discr = Sq((double)B) - 4 * (double)A * (double)C; // discriminant
-					if (discr > 0) // No roots found if this is less than 0
-					{
-						var sqrtDiscr = (Fix64)(double)Sqrt(discr);
-						var root1 = (-B + sqrtDiscr) / ((Fix64)2 * A);
-						var root2 = (-B - sqrtDiscr) / ((Fix64)2 * A);
-						var I1 = new WPos((int)root1, (int)(a1 * root1 + b1), 0);
-						var I2 = new WPos((int)root2, (int)(a1 * root2 + b1), 0);
-						var newP2 = new WPos((int)p2X, (int)p2Y, p2.Z);
-						var I1isOnLine = PointIsWithinLineSegment(I1, p1, newP2);
-						var I2isOnLine = PointIsWithinLineSegment(I2, p1, newP2);
-						// Check that line segment is long enough to intersect, and that it is the nearest point
-						if (I1isOnLine)
-						{
-							if (I2isOnLine && !p1InCircle && !p2InCircle) // this guarantees both points are valid
-								if ((p1 - I1).Length <= (p1 - I2).Length)
-								{
-									poses.Add(I1);
-									poses.Add(I2);
-								}
-								else // I2 is closer, so add it first
-								{
-									poses.Add(I2);
-									poses.Add(I1);
-								}
-							else // I2 is not valid, so we only add I1
-								poses.Add(I1);
-						}
-						else if (I2isOnLine) // I1 is not valid, so we only add I2
-							poses.Add(I2);
-					}
-				}
-			}
-			return poses;
+			var minimumDistance = (Fix64)2 * (Fix64)TriangleArea(circleCenter, p1, p2) / (Fix64)(p1 - p2).Length;
+
+			if (minimumDistance <= (Fix64)Radius.Length)
+				return true;
+			else
+				return false;
 		}
-		#pragma warning restore SA1312 // Variable names should begin with lower-case letter
+
+		static int TriangleArea(WPos a, WPos b, WPos c)
+		{
+			var ab = b - a;
+			var ac = c - a;
+			var crossProduct = ab.X * ac.Y - ab.Y * ac.X;
+			return (int)((Fix64)Math.Abs(crossProduct) / (Fix64)2);
+		}
+
+		bool IHitShape.LineIsColliding(WPos circleCenter, WPos p1, WPos p2) => LineIsCollidingLogic(circleCenter, p1, p2);
 
 		bool IHitShape.IntersectsWithHitShape(int2 selfCenter, int2 secondCenter, HitShape hitShape)
 		{

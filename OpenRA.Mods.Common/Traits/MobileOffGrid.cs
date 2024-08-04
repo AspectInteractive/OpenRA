@@ -581,44 +581,10 @@ namespace OpenRA.Mods.Common.Traits
 		public bool ActorIsAiming(Actor actor)
 		{
 			if (!actor.IsDead)
-			{
-				var actorAttacks = actor.TraitsImplementing<AttackTurreted>().Where(Exts.IsTraitEnabled).ToArray();
-				if (actorAttacks.Any(at => at.IsAiming))
-					return true;
-			}
+				return actor.TraitsImplementing<AttackTurreted>().Where(Exts.IsTraitEnabled).Any(at => at.IsAiming);
 			return false;
 		}
 
-		public void CreateRepelNearbyUnitsVectorsTick2(Actor self)
-		{
-			var nearbyActorRange = UnitRadius * 2;
-			var nearbyActors = self.World.FindActorsInCircle(CenterPosition, nearbyActorRange);
-			var repelFleeVectors = new List<MvVec>();
-
-			foreach (var nearbyActor in nearbyActors)
-			{
-				if (!nearbyActor.IsDead && nearbyActor != self)
-				{
-					var nearbyActorMobileOGs = nearbyActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
-					if (nearbyActorMobileOGs.Any() && nearbyActor.CurrentActivity is not ReturnToCellActivity)
-					{
-						var nearbyActorMobileOG = nearbyActorMobileOGs.FirstOrDefault();
-						var repulsionMvVec = new MvVec(RepulsionVecFunc(nearbyActorMobileOGs.FirstOrDefault().MovementSpeed,
-							CenterPosition, nearbyActorMobileOG.CenterPosition), 1);
-						repelFleeVectors = repelFleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList();
-					}
-				}
-			}
-
-			// Do not add the new flee vectors if it leads to being blocked by cell.
-			var proposedFleeVectors = FleeVectors.Union(repelFleeVectors).ToList();
-			if (!CellsCollidingWithPosBool(self, self.CenterPosition, GenFinalWVec(SeekVectors, proposedFleeVectors), 3, Locomotor) &&
-				!ActorIsAiming(self)) // we do not repel Attacking actors, we repel against them
-				FleeVectors = proposedFleeVectors;
-		}
-
-
-		//NEW SEMI WORKING INDIVIDUAL REPEL VERSION: TO BE COMPLETED
 		public void CreateRepelNearbyUnitsVectorsTick(Actor self)
 		{
 			var nearbyActorRange = UnitRadius * 2;
@@ -634,8 +600,7 @@ namespace OpenRA.Mods.Common.Traits
 						if (nearbyActorMobileOGs.Any() && nearbyActor.CurrentActivity is not ReturnToCellActivity)
 						{
 							var nearbyActorMobileOG = nearbyActorMobileOGs.FirstOrDefault();
-							var repulsionMvVec = new MvVec(RepulsionVecFunc(nearbyActorMobileOGs.FirstOrDefault().MovementSpeed,
-								CenterPosition, nearbyActorMobileOG.CenterPosition), 1);
+							var repulsionMvVec = new MvVec(RepulsionVecFunc(MovementSpeed, CenterPosition, nearbyActorMobileOG.CenterPosition), 1);
 
 							// Create hypothetical movement using flee vector to test if intersecting
 							var proposedWVec = GenFinalWVec(SeekVectors, FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
@@ -954,13 +919,11 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// Main collision detection against units
-		public List<WPos> GetFirstMoveCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
+		public bool HasCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
 										   bool attackingUnitsOnly = false, bool includeCellCollision = false)
 		{
-			var intersections = new List<WPos>();
-
 			if (self.CurrentActivity is ReturnToCellActivity)
-				return intersections;
+				return false;
 
 			var selfCenter = self.CenterPosition;
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
@@ -978,20 +941,20 @@ namespace OpenRA.Mods.Common.Traits
 					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
 					foreach (var cell in cellsToCheck)
 						if (CellIsBlocked(self, locomotor, cell))
-							intersections = intersections.Union(self.World.Map.CellEdgeIntersectionsWithLine(cell, source, dest))
-														 .ToList();
+							return true;
 				}
 			}
 
 			// Ray cast to actor collisions
-			foreach (var destActor in self.World.FindActorsInCircle(selfCenter + new WVec(lookAheadDist, WRot.FromYaw(move.Yaw)), lookAheadDist)
+			// First get all actors surrounding the unit by the appropriate movement amount
+			foreach (var destActor in self.World.FindActorsInCircle(selfCenter, UnitRadius + new WDist(move.Length) + lookAheadDist)
 												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 			{
-				var destActorMobileOffGrids = destActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
-				if (!destActor.IsDead && ValidCollisionActor(destActor) && destActorMobileOffGrids.Any())
+				var destActorMobileOffGrid = destActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled);
+				if (!destActor.IsDead && ValidCollisionActor(destActor) && destActorMobileOffGrid != null)
 				{
 					// adding move to use future pos
-					var destActorCenter = destActor.CenterPosition + destActorMobileOffGrids.FirstOrDefault().GenFinalWVec();
+					var destActorCenter = destActor.CenterPosition + destActorMobileOffGrid.GenFinalWVec();
 					if (destActorCenter != WPos.Zero)
 					{
 #if DEBUGWITHOVERLAY
@@ -1000,16 +963,16 @@ namespace OpenRA.Mods.Common.Traits
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
 							if (destShape.Info.Type is HitShapes.CircleShape)
 							{
-								var newMoveVec = new WVec(lookAheadDist, WRot.FromYaw(move.Yaw));
+								var newMoveVec = new WVec(new WDist(move.Length) + lookAheadDist, WRot.FromYaw(move.Yaw));
 								foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, UnitRadius))
 								{
-									var intersection = destShape.Info.Type.FirstIntersectingPosFromLine(destActorCenter, source, dest);
-									if (intersection != null)
+									var collision = destShape.Info.Type.LineIntersectsOrIsInside(destActor.CenterPosition, source, dest);
+									if (collision)
 									{
 #if DEBUGWITHOVERLAY
-										RenderLine(source, (WPos)intersection, LineType.LocalAvoidanceHit);
+										RenderLine(source, dest, LineType.LocalAvoidanceHit);
 #endif
-										intersections.Add((WPos)intersection);
+										return true;
 									}
 									else
 									{
@@ -1023,7 +986,7 @@ namespace OpenRA.Mods.Common.Traits
 				}
 			}
 
-			return intersections;
+			return false;
 
 			//			if (intersections.Count > 0)
 			//			{
@@ -1050,9 +1013,17 @@ namespace OpenRA.Mods.Common.Traits
 				Overlay.AddPoint(CurrPathTarget, Color.Purple, Persist, key: Key);
 		}
 
-		enum LineType { LocalAvoidanceHit, LocalAvoidanceMiss, SeekVector, FleeVector, AllVector }
+		public enum LineType
+		{
+			LocalAvoidanceHit,
+			LocalAvoidanceMiss,
+			LocalAvoidanceDirection,
+			SeekVector,
+			FleeVector,
+			AllVector,
+		}
 
-		void RenderLine(WPos source, WPos dest, LineType colType)
+		public void RenderLine(WPos source, WPos dest, LineType colType)
 		{
 			const int Persist = (int)PersistConst.Never;
 
@@ -1060,6 +1031,8 @@ namespace OpenRA.Mods.Common.Traits
 				Overlay.AddLine(source, dest, Color.DarkRed, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
 			else if (colType == LineType.LocalAvoidanceMiss)
 				Overlay.AddLine(source, dest, Color.LightBlue, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
+			else if (colType == LineType.LocalAvoidanceDirection)
+				Overlay.AddLine(source, dest, Color.Yellow, 10, endPoints: LineEndPoint.EndArrow, thickness: 3, key: OverlayKeyStrings.LocalAvoidance);
 			else if (colType == LineType.SeekVector)
 				Overlay.AddLine(source, dest, Color.Cyan, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.SeekVectors);
 			else if (colType == LineType.FleeVector)

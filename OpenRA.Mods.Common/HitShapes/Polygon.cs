@@ -132,8 +132,6 @@ namespace OpenRA.Mods.Common.HitShapes
 		bool IntersectsWithHitShape(int2 selfCenter, int2 circleCenter, CircleShape circleHitShape) { return false; } // to be implemented
 		bool IntersectsWithHitShape(int2 selfCenter, int2 polygonCenter, PolygonShape polygonHitShape) { return false; } // to be implemented
 		bool IntersectsWithHitShape(int2 selfCenter, int2 capsuleCenter, CapsuleShape capsuleHitShape) { return false; } // to be implemented
-		public WPos? FirstIntersectingPosFromLine(WPos shapeCenterPos, WPos p1, WPos p2) { throw new NotImplementedException(); }
-		public List<WPos> IntersectingPosesFromLine(WPos shapeCenterPos, WPos p1, WPos p2) { throw new NotImplementedException(); }
 
 		IEnumerable<IRenderable> IHitShape.RenderDebugOverlay(HitShape hs, WorldRenderer wr, WPos actorPos, WRot orientation)
 		{
@@ -146,6 +144,16 @@ namespace OpenRA.Mods.Common.HitShapes
 			yield return new PolygonAnnotationRenderable(vertsTop, actorPos, 1, shapeColor);
 			yield return new PolygonAnnotationRenderable(vertsBottom, actorPos, 1, shapeColor);
 			yield return new CircleAnnotationRenderable(actorPos, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
+		}
+
+		public bool LineIntersectsOrIsInside(WPos selfCenter, WPos p1, WPos p2)
+		{
+			throw new NotImplementedException();
+		}
+
+		public bool LineIsColliding(WPos selfCEnter, WPos p1, WPos p2)
+		{
+			throw new NotImplementedException();
 		}
 	}
 }
