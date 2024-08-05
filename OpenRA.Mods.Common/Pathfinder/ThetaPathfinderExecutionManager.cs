@@ -312,7 +312,7 @@ namespace OpenRA.Mods.Common.Traits
 							{
 								var actorMobileOffGrid = actor.Trait<MobileOffGrid>();
 								if (ThetaStarPathSearch.IsPathObservable(world, actor, locomotor, actor.CenterPosition, thetaSourcePos,
-									actorMobileOffGrid.UnitRadius))
+									actorMobileOffGrid.UnitHitShape))
 									actorMobileOffGrid.thetaStarSearch = newAvgThetaStarSearch;
 								else
 								{

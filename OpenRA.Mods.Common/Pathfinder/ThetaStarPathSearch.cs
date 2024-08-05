@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Mods.Common.Activities;
+using OpenRA.Mods.Common.HitShapes;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
@@ -464,7 +465,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		public bool IsPathObsCached(CCPos rootCC, CCPos destCC)
-		{ return GetOrCreatePathObs((rootCC, destCC), () => IsPathObservable(rootCC, destCC, mobileOffGrid.UnitRadius)); }
+			=> GetOrCreatePathObs((rootCC, destCC), () => IsPathObservable(rootCC, destCC, mobileOffGrid.UnitHitShape));
 
 		public void Initialize(WPos sourcePos, WPos destPos)
 		{
@@ -524,7 +525,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			}
 
 			// We first check if we can move to the target directly. If so, skip all pathfinding and return the list (sourcePos, destPos)
-			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos, mobileOffGrid.UnitRadius))
+			if (!skipInitialLOSCheck && IsPathObservable(sourcePos, destPos, mobileOffGrid.UnitHitShape))
 			{
 				// path.Add(sourcePos);
 				path.Add(new PathPos(destPos));
@@ -866,10 +867,11 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return false;
 		}
 
-		public bool IsPathObservable(WPos rootPos, WPos destPos, WDist unitRadius) { return IsPathObservable(thisWorld, self, locomotor, rootPos, destPos, unitRadius); }
-		public static bool IsPathObservable(World world, Actor self, Locomotor locomotor, WPos rootPos, WPos destPos, WDist unitRadius)
+		public bool IsPathObservable(WPos rootPos, WPos destPos, IHitShape unitHitShape)
+			=> IsPathObservable(thisWorld, self, locomotor, rootPos, destPos, unitHitShape);
+		public static bool IsPathObservable(World world, Actor self, Locomotor locomotor, WPos rootPos, WPos destPos, IHitShape unitHitShape)
 		{
-			foreach (var (source, dest) in MobileOffGrid.GenSDPairs(rootPos, destPos - rootPos, unitRadius))
+			foreach (var (source, dest) in MobileOffGrid.GenSDPairs(rootPos, destPos - rootPos, unitHitShape))
 			{
 				var cellsUnderneathLine = GetAllCellsUnderneathALine(world, source, dest, 1);
 				if (AreCellsIntersectingPath(world, self, locomotor, cellsUnderneathLine, rootPos, destPos))
@@ -879,47 +881,49 @@ namespace OpenRA.Mods.Common.Pathfinder
 			return true;
 		}
 
-		public bool IsPathObservable(CCPos rootCC, CCPos destCC, WDist unitRadius)
-		{ return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), thisWorld.Map.WPosFromCCPos(destCC), unitRadius); }
-		public bool IsPathObservable(WPos rootPos, CCPos destCC, WDist unitRadius) { return IsPathObservable(rootPos, thisWorld.Map.WPosFromCCPos(destCC), unitRadius); }
-		public bool IsPathObservable(CCPos rootCC, WPos destPos, WDist unitRadius) { return IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), destPos, unitRadius); }
+		public bool IsPathObservable(CCPos rootCC, CCPos destCC, IHitShape unitHitShape)
+			=> IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), thisWorld.Map.WPosFromCCPos(destCC), unitHitShape);
+		public bool IsPathObservable(WPos rootPos, CCPos destCC, IHitShape unitHitShape)
+			=> IsPathObservable(rootPos, thisWorld.Map.WPosFromCCPos(destCC), unitHitShape);
+		public bool IsPathObservable(CCPos rootCC, WPos destPos, IHitShape unitHitShape)
+			=> IsPathObservable(thisWorld.Map.WPosFromCCPos(rootCC), destPos, unitHitShape);
 
-		private static int HeuristicFunction(CCPos cc, WPos goalPos, World world)
+		static int HeuristicFunction(CCPos cc, WPos goalPos, World world)
 		{
 			var ccPos = world.Map.WPosFromCCPos(cc);
 			return (int)(goalPos - ccPos).HorizontalLength;
 		}
-		private static int HeuristicFunction(WPos startPos, WPos goalPos)
+		static int HeuristicFunction(WPos startPos, WPos goalPos)
 		{
 			return (int)(goalPos - startPos).HorizontalLength;
 		}
 
-		private bool CcXinMap(int x) { return x >= ccPosMinSizeX && x <= ccPosMaxSizeX; } // 1 larger than CPos bounds which is MapSize.X - 1
-		private bool CcYinMap(int y) { return y >= ccPosMinSizeY && y <= ccPosMaxSizeY; } // 1 larger than CPos bounds which is MapSize.Y - 1
+		bool CcXinMap(int x) { return x >= ccPosMinSizeX && x <= ccPosMaxSizeX; } // 1 larger than CPos bounds which is MapSize.X - 1
+		bool CcYinMap(int y) { return y >= ccPosMinSizeY && y <= ccPosMaxSizeY; } // 1 larger than CPos bounds which is MapSize.Y - 1
 		public static bool CcinMap(CCPos ccPos, World world) // These must be static to allow the HueristicFunction to be static
 		{
 			return ccPos.X >= 0 && ccPos.X <= world.Map.MapSize.X
 				&& ccPos.Y >= 0 && ccPos.Y <= world.Map.MapSize.Y;
 		}
-		private bool CcinMap(CCPos ccPos) { return CcinMap(ccPos, thisWorld); }
+		bool CcinMap(CCPos ccPos) { return CcinMap(ccPos, thisWorld); }
 
-		private bool CPosinMap(CPos cPos)
+		bool CPosinMap(CPos cPos)
 		{
 			return cPos.X >= cPosMinSizeX && cPos.X <= cPosMaxSizeX &&
 				   cPos.Y >= cPosMinSizeY && cPos.Y <= cPosMaxSizeY;
 		}
-		private static bool CPosinMap(CPos cPos, World world)
+		static bool CPosinMap(CPos cPos, World world)
 		{
 			return cPos.X >= 0 && cPos.X <= world.Map.MapSize.X - 1 &&
 				   cPos.Y >= 0 && cPos.Y <= world.Map.MapSize.Y - 1;
 		}
 
-		private static CCPos ClosestCCPosInMap(CCPos ccPos, World world) // These must be static to allow the HueristicFunction to be static
+		static CCPos ClosestCCPosInMap(CCPos ccPos, World world) // These must be static to allow the HueristicFunction to be static
 		{
 			return new CCPos(Math.Max(Math.Min(ccPos.X, world.Map.MapSize.X), 0),
 			                 Math.Max(Math.Min(ccPos.Y, world.Map.MapSize.Y), 0));
 		}
-		private CCPos ClosestCCPosInMap(CCPos ccPos) { return ClosestCCPosInMap(ccPos, thisWorld); }
+		CCPos ClosestCCPosInMap(CCPos ccPos) { return ClosestCCPosInMap(ccPos, thisWorld); }
 
 		// need to use this func to clamp to cell to ensure compatibility with isometric grids
 		public static CCPos GetNearestCCPos(World world, WPos pos)

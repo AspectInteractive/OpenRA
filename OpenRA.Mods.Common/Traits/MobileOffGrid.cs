@@ -24,6 +24,7 @@ using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
 using TagLib.Riff;
+using OpenRA.Mods.Common.HitShapes;
 
 
 #pragma warning disable SA1513 // Closing brace should be followed by blank line
@@ -396,6 +397,9 @@ namespace OpenRA.Mods.Common.Traits
 		public WPos CenterPosition { get; private set; }
 
 		public WDist UnitRadius;
+
+		public IHitShape UnitHitShape;
+
 		public WAngle TurnSpeed => IsTraitDisabled || IsTraitPaused ? WAngle.Zero : Info.TurnSpeed;
 		public WAngle? IdleTurnSpeed => IsTraitDisabled || IsTraitPaused ? null : Info.IdleTurnSpeed;
 		public WAngle GetTurnSpeed(bool isIdleTurn)
@@ -507,7 +511,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected override void Created(Actor self)
 		{
-			UnitRadius = self.TraitsImplementing<HitShape>().FirstOrDefault(Exts.IsTraitEnabled).Info.Type.OuterRadius;
+			UnitHitShape = self.TraitsImplementing<HitShape>().FirstOrDefault(Exts.IsTraitEnabled).Info.Type;
+			UnitRadius = UnitHitShape.OuterRadius;
 			notifyCustomLayerChanged = self.TraitsImplementing<INotifyCustomLayerChanged>().ToArray();
 			notifyCenterPositionChanged = self.TraitsImplementing<INotifyCenterPositionChanged>().ToArray();
 			notifyMoving = self.TraitsImplementing<INotifyMoving>().ToArray();
@@ -725,28 +730,11 @@ namespace OpenRA.Mods.Common.Traits
 			return cPos.X >= 0 && cPos.X <= self.World.Map.MapSize.X - 1 &&
 				   cPos.Y >= 0 && cPos.Y <= self.World.Map.MapSize.Y - 1;
 		}
-		public static List<WPos> GetPointsSurroundingCircleUnit(WPos centerPos, WDist unitRadius) => GetPointsSurroundingCircleUnit(centerPos, unitRadius, WAngle.Zero);
 
-		public static List<WPos> GetPointsSurroundingCircleUnit(WPos centerPos, WDist unitRadius, WAngle initialRotation, int angleIncAmount = 128)
+		public static List<(WPos Source, WPos Dest)> GenSDPairs(WPos selfCenter, WVec move, IHitShape unitHitShape)
 		{
-			var radiusVec = new WVec(unitRadius, WRot.FromYaw(initialRotation));
-			var points = new List<WPos>(); // Points surrounding circle
-			for (var a = 0; a < 1024; a += angleIncAmount) // 128 = 45 degrees,
-				points.Add(centerPos + radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(angleIncAmount))));
-			return points;
-		}
-
-		public static List<(WPos Source, WPos Dest)> GenSDPairs(WPos selfCenter, WAngle moveAngle, WDist moveDist, WDist unitRadius)
-		{
-			var distToDest = new WVec(moveDist, WRot.FromYaw(moveAngle));
-			return GetPointsSurroundingCircleUnit(selfCenter, unitRadius)
-					.Zip(GetPointsSurroundingCircleUnit(selfCenter + distToDest, unitRadius)).ToList();
-		}
-
-		public static List<(WPos Source, WPos Dest)> GenSDPairs(WPos selfCenter, WVec move, WDist unitRadius)
-		{
-			return GetPointsSurroundingCircleUnit(selfCenter, unitRadius)
-					.Zip(GetPointsSurroundingCircleUnit(selfCenter + move, unitRadius)).ToList();
+			return unitHitShape.GetCorners(selfCenter.XYToInt2())
+					.Zip(unitHitShape.GetCorners((selfCenter + move).XYToInt2())).ToList();
 		}
 
 		public static bool CellIsBlocked(Actor self, Locomotor locomotor, CPos cell, BlockedByActor check = BlockedByActor.Immovable)
@@ -796,64 +784,35 @@ namespace OpenRA.Mods.Common.Traits
 
 		// This is a look ahead repel from cells that the unit is about to move into - hence the 'lookAhead' parameter
 		// It returns the list of cells that collide with the actor, for use with repulsion
-		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0)
-		{ return CellsCollidingWithPos(self, self.CenterPosition, move, lookAhead, locomotor, incOrigin, skipLookAheadAmt); }
+		public List<CPos> CellsCollidingWithActor(Actor self, WVec move, int lookAhead, Locomotor locomotor)
+			=> CellsCollidingWithPos(self, self.CenterPosition, move, lookAhead, locomotor);
 
-		public List<CPos> CellsCollidingWithPos(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0)
+		public List<CPos> CellsCollidingWithPos(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor)
+			=> GetCollidingCellsAfterUnitMovement(selfPos, move, locomotor, lookAhead, BlockedByActor.Immovable).ToList();
+
+		// Main cell collision method, do not touch!
+		public IEnumerable<CPos> GetCollidingCellsAfterUnitMovement(WPos selfPos, WVec move, Locomotor locomotor, int lookAhead = 1,
+			BlockedByActor check = BlockedByActor.Immovable, int neighboursToCount = 0)
 		{
 			var cellsColliding = new List<CPos>();
-			var selfCenterPos = selfPos.XYToInt2();
-			var selfCenterPosWithMoves = new List<int2>();
-			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			// for each actor we are potentially colliding with
-			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-
-			foreach (var selfShape in selfShapes)
+			foreach (var (source, dest) in GenSDPairs(selfPos, move * lookAhead, UnitHitShape))
 			{
-				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
-				foreach (var corner in hitShapeCorners)
+				var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
+				foreach (var cell in cellsToCheck)
 				{
-					var cellContainingCorner = self.World.Map.CellContaining(corner);
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, corner, corner + move * lookAhead, 0);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell, BlockedByActor.Immovable) && !cellsColliding.Contains(cell))
-							cellsColliding.Add(cell);
-					if (incOrigin && CellIsBlocked(self, locomotor, cellContainingCorner, BlockedByActor.Immovable) && !cellsColliding.Contains(cellContainingCorner))
-						cellsColliding.Add(self.World.Map.CellContaining(corner));
+					if (CellIsBlocked(self, locomotor, cell, check) && !cellsColliding.Contains(cell))
+					{
+						cellsColliding.Add(cell);
+						yield return cell;
+					}
 				}
 			}
-
-			return cellsColliding;
 		}
 
 		// This is used for detecting if any cell has collided
 		// Unlike CellsCollidingWithPos, it does not need to keep a list of cells and can exit early
-		public bool CellsCollidingWithPosBool(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor,
-											bool incOrigin = false, int skipLookAheadAmt = 0)
-		{
-			var cellsColliding = new List<CPos>();
-			var selfCenterPos = selfPos.XYToInt2();
-			var selfCenterPosWithMoves = new List<int2>();
-			var startI = skipLookAheadAmt == 0 ? 0 : skipLookAheadAmt - 1;
-			// for each actor we are potentially colliding with
-			var selfShapes = self.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
-			foreach (var selfShape in selfShapes)
-			{
-				var hitShapeCorners = selfShape.Info.Type.GetCorners(selfCenterPos);
-				foreach (var corner in hitShapeCorners)
-				{
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, corner, corner + move * lookAhead, 0);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell))
-							return true;
-					if (incOrigin && CellIsBlocked(self, locomotor, self.World.Map.CellContaining(corner)))
-						return true;
-				}
-			}
-			return false;
-		}
+		public bool CellsCollidingWithPosBool(Actor self, WPos selfPos, WVec move, int lookAhead, Locomotor locomotor)
+			=> GetCollidingCellsAfterUnitMovement(selfPos, move, locomotor, lookAhead, BlockedByActor.Immovable).Any();
 
 		public static bool ValidCollisionActor(Actor actor)
 		{
@@ -866,10 +825,9 @@ namespace OpenRA.Mods.Common.Traits
 		public List<Map.CellEdge> GetIntersectingEdges(WPos checkPos, WVec move, int lookAhead, Locomotor locomotor)
 		{
 			var intersectingEdges = new List<Map.CellEdge>();
-			var selfCenter = checkPos;
 
 			// Ray cast to cell collisions
-			foreach (var (source, dest) in GenSDPairs(selfCenter, move * lookAhead, UnitRadius))
+			foreach (var (source, dest) in GenSDPairs(checkPos, move * lookAhead, UnitHitShape))
 			{
 				//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
 				//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
@@ -899,23 +857,11 @@ namespace OpenRA.Mods.Common.Traits
 		// Only used for detecting collisions for the purpose of slices in the ThetaPF Exec Manager
 		public bool DoesUnitMoveCollideWithCell(WPos sourcePos, WVec move, Locomotor locomotor)
 		{
+			if (self.CurrentActivity is ReturnToCellActivity)
+				return false;
+
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
-
-			// Ray cast to cell collisions
-			if (self.CurrentActivity is not ReturnToCellActivity)
-			{
-				foreach (var (source, dest) in GenSDPairs(sourcePos, move, UnitRadius))
-				{
-					//MoveOffGrid.RenderPoint(self, source, Color.LightGreen);
-					//MoveOffGrid.RenderPoint(self, dest, Color.LightGreen);
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell))
-							return true;
-				}
-			}
-
-			return false;
+			return GetCollidingCellsAfterUnitMovement(sourcePos, move, locomotor, 1, BlockedByActor.Immovable, neighboursToCount).Any();
 		}
 
 		// Main collision detection against units
@@ -927,23 +873,12 @@ namespace OpenRA.Mods.Common.Traits
 
 			var selfCenter = self.CenterPosition;
 			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
+			var cellMoveVec = new WVec(UnitRadius * 2, WRot.FromYaw(move.Yaw));
+			var cellCollision = GetCollidingCellsAfterUnitMovement(selfCenter, cellMoveVec, locomotor, 1,
+				BlockedByActor.Immovable, neighboursToCount).Any();
 
-			// Ray cast to cell collisions
-			if (includeCellCollision)
-			{
-				var newMoveVec = new WVec(UnitRadius * 2, WRot.FromYaw(move.Yaw));
-				foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, UnitRadius))
-				{
-#if DEBUGWITHOVERLAY
-					//MoveOffGrid.RenderPointCollDebug(self, source, Color.LightGreen);
-					//MoveOffGrid.RenderPointCollDebug(self, dest, Color.LightGreen);
-#endif
-					var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest, neighboursToCount);
-					foreach (var cell in cellsToCheck)
-						if (CellIsBlocked(self, locomotor, cell))
-							return true;
-				}
-			}
+			if (cellCollision)
+				return true;
 
 			// Ray cast to actor collisions
 			// First get all actors surrounding the unit by the appropriate movement amount
@@ -961,10 +896,10 @@ namespace OpenRA.Mods.Common.Traits
 						//MoveOffGrid.RenderPointCollDebug(self, destActorCenter, Color.LightGreen);
 #endif
 						foreach (var destShape in destActor.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled))
-							if (destShape.Info.Type is HitShapes.CircleShape)
+							if (destShape.Info.Type is CircleShape shape)
 							{
-								var newMoveVec = new WVec(new WDist(move.Length) + lookAheadDist, WRot.FromYaw(move.Yaw));
-								foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, UnitRadius))
+								var newMoveVec = new WVec(lookAheadDist, WRot.FromYaw(move.Yaw));
+								foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, shape))
 								{
 									var collision = destShape.Info.Type.LineIntersectsOrIsInside(destActor.CenterPosition, source, dest);
 									if (collision)
@@ -987,14 +922,6 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			return false;
-
-			//			if (intersections.Count > 0)
-			//			{
-			//				var firstIntersection = intersections.OrderBy(x => (x - selfCenter).HorizontalLengthSquared).FirstOrDefault();
-			//#if DEBUGWITHOVERLAY
-			//				//MoveOffGrid.RenderLineWithColor(self, selfCenter, firstIntersection, Color.Orange);
-			//#endif
-			//			}
 		}
 
 		public void RenderPathingStats()

@@ -63,41 +63,20 @@ namespace OpenRA.Mods.Common.HitShapes
 			return DistanceFromEdge(pos - new WPos(origin.X, origin.Y, pos.Z));
 		}
 
-		public static WPos[] GetCornersOfCircle(int2 selfCenter, int radius)
+		static List<WPos> GetPointsSurroundingCircleUnit(int2 selfCenter, WDist unitRadius) =>
+			GetPointsSurroundingCircleUnit(selfCenter, unitRadius, WAngle.Zero);
+
+		static List<WPos> GetPointsSurroundingCircleUnit(int2 selfCenter, WDist unitRadius, WAngle initialRotation, int angleIncAmount = 128)
 		{
-			var corners = new WPos[9];
-			var wvec = new WVec(radius, 0, 0);
-			corners[0] = new WPos(selfCenter.X, selfCenter.Y, 0); // center
-			corners[1] = new WPos(selfCenter.X - radius, selfCenter.Y, 0); // left-center
-			corners[2] = new WPos(selfCenter.X + radius, selfCenter.Y, 0); // right-center
-			corners[3] = new WPos(selfCenter.X, selfCenter.Y - radius, 0); // top-center
-			corners[4] = new WPos(selfCenter.X, selfCenter.Y + radius, 0); // bottom-center
-			corners[5] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(45))); // bottom-right
-			corners[6] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(135))); // bot-left
-			corners[7] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(225))); // top-left
-			corners[8] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(315))); // top-right
-			return corners;
+			var radiusVec = new WVec(unitRadius, WRot.FromYaw(initialRotation));
+			var points = new List<WPos>(); // Points surrounding circle
+			for (var a = 0; a < 1024; a += angleIncAmount) // 128 = 45 degrees,
+				points.Add(new WPos(selfCenter.X, selfCenter.Y, 0) + radiusVec.Rotate(new WRot(WAngle.Zero, WAngle.Zero, new WAngle(a))));
+			return points;
 		}
 
-		WPos[] IHitShape.GetCorners(int2 selfCenter)
-		{
-			var corners = new WPos[9];
-			var wvec = new WVec(Radius.Length, 0, 0);
-			corners[0] = new WPos(selfCenter.X, selfCenter.Y, 0); // center
-			corners[1] = new WPos(selfCenter.X - Radius.Length, selfCenter.Y, 0); // left-center
-			corners[2] = new WPos(selfCenter.X + Radius.Length, selfCenter.Y, 0); // right-center
-			corners[3] = new WPos(selfCenter.X, selfCenter.Y - Radius.Length, 0); // top-center
-			corners[4] = new WPos(selfCenter.X, selfCenter.Y + Radius.Length, 0); // bottom-center
-			corners[5] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(45))); // bottom-right
-			corners[6] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(135))); // bot-left
-			corners[7] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(225))); // top-left
-			corners[8] = new WPos(selfCenter.X, selfCenter.Y, 0) + wvec.Rotate(WRot.FromYaw(WAngle.FromDegrees(315))); // top-right
-			/*System.Console.WriteLine($"corners[5] is now {corners[5]}");
-			System.Console.WriteLine($"corners[6] is now {corners[6]}");
-			System.Console.WriteLine($"corners[7] is now {corners[7]}");
-			System.Console.WriteLine($"corners[8] is now {corners[8]}");*/
-			return corners;
-		}
+		WPos[] IHitShape.GetCorners(int2 selfCenter) => GetPointsSurroundingCircleUnit(selfCenter, Radius).ToArray();
+
 		public static Fix64 Sq(Fix64 i) { return i * i; }
 		public static Fix64 Sqrt(Fix64 i) { return Fix64.Sqrt(i); }
 		public static double Sq(double i) { return i * i; }

@@ -439,7 +439,7 @@ namespace OpenRA.Mods.Common.Activities
 				am2.OffsetTarget = currPathTarget - am2.OffsetToCenterOfActors;
 				am2.IsOffsetCloseEnough = am2.OffsetToCenterOfActors.HorizontalLengthSquared < 1024 * 1024 * 40;
 				am2.IsOffsetTargetObservable = IsPathObservable(am2.Act.World, am2.Act, am2.MobOffGrid.Locomotor,
-					currPathTarget - am2.OffsetToCenterOfActors, mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius);
+					currPathTarget - am2.OffsetToCenterOfActors, mobileOffGrid.CenterPosition, mobileOffGrid.UnitHitShape);
 				return am2;
 			}).ToList();
 			var actorsSharingMoveXYBounds = actorsSharingMoveWithProps.Select(a => new { a.MobOffGrid.CenterPosition, a.MobOffGrid.UnitRadius })
@@ -589,9 +589,9 @@ namespace OpenRA.Mods.Common.Activities
 					var propActorMove = mobileOffGrid.GenFinalWVec(new List<MvVec>() { new(testMoveVec) },
 																	   mobileOffGrid.FleeVectors);
 					var propActorPos = self.CenterPosition + propActorMove;
-					//if (!mobileOffGrid.TraversedCirclesBuffer.Any(c =>
-					//			HitShapes.CircleShape.PosIsInsideCircle(c, mobileOffGrid.UnitRadius.Length, propActorPos))
-					//	|| i == localAvoidanceAngleOffsets.Count - 1)
+					if (!mobileOffGrid.TraversedCirclesBuffer.Any(c =>
+								HitShapes.CircleShape.PosIsInsideCircle(c, mobileOffGrid.UnitRadius.Length, propActorPos))
+						|| i == localAvoidanceAngleOffsets.Count - 1)
 					revisedMoveVec = actualMoveVec;
 					// RenderLine(self, mobileOffGrid.CenterPosition, mobileOffGrid.CenterPosition + revisedMoveVec);
 					i++;
