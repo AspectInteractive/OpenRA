@@ -120,8 +120,9 @@ namespace OpenRA
 								{
 									var actorID = r.ReadUInt32();
 									var actorGeneration = r.ReadInt32();
+									var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
 									if (world != null && TryGetActorFromUInt(world, actorID, out var targetActor))
-										target = Target.FromSerializedActor(targetActor, actorGeneration);
+										target = Target.FromSerializedActor(targetActor, actorGeneration, pos);
 
 									break;
 								}
@@ -146,14 +147,6 @@ namespace OpenRA
 
 								case TargetType.Terrain:
 								{
-									if (flags.HasField(OrderFields.TargetIsCell))
-									{
-										var cell = new CPos(r.ReadInt32());
-										var subCell = (SubCell)r.ReadByte();
-										if (world != null)
-											target = Target.FromCell(world, cell, subCell);
-									}
-
 									// We write the pos regardless of whether the target is a cell so that MoveOffGrid can use it
 									var pos = new WPos(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
 
@@ -385,6 +378,10 @@ namespace OpenRA
 							{
 								w.Write(UIntFromActor(targetState.Actor));
 								w.Write(targetState.Generation);
+
+								w.Write(targetState.TerrainPositions[0].X);
+								w.Write(targetState.TerrainPositions[0].Y);
+								w.Write(targetState.TerrainPositions[0].Z);
 								break;
 							}
 
@@ -397,16 +394,10 @@ namespace OpenRA
 
 							case TargetType.Terrain:
 							{
-								if (fields.HasField(OrderFields.TargetIsCell))
-								{
-									w.Write(targetState.Cell.Value.Bits);
-									w.Write((byte)targetState.SubCell);
-								}
-
 								// We write the target pos regardless of whether the target is a cell so that MoveOffGrid can use it
-								w.Write(targetState.Pos.X);
-								w.Write(targetState.Pos.Y);
-								w.Write(targetState.Pos.Z);
+								w.Write(targetState.TerrainPositions[0].X);
+								w.Write(targetState.TerrainPositions[0].Y);
+								w.Write(targetState.TerrainPositions[0].Z);
 
 								// Don't send extra data over the network that will be restored by the Target ctor
 								var terrainPositions = targetState.TerrainPositions.Length;
@@ -415,7 +406,7 @@ namespace OpenRA
 								else
 								{
 									w.Write((short)terrainPositions);
-									foreach (var position in targetState.TerrainPositions)
+									foreach (var position in targetState.TerrainPositions[1..])
 									{
 										w.Write(position.X);
 										w.Write(position.Y);

@@ -196,7 +196,7 @@ namespace OpenRA.Mods.Common.Orders
 				}
 
 				// No valid orders, so check for orders against the cell
-				target = Target.FromCell(self.World, xy);
+				target = Target.FromCellWithTerrainPos(xy);
 			}
 
 			return null;

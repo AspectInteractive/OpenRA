@@ -24,7 +24,7 @@ namespace OpenRA.Traits
 		public FrozenActor FrozenActor { get; }
 
 		readonly TargetType type;
-		readonly WPos terrainCenterPosition;
+		public readonly WPos TerrainCenterPosition;
 		readonly WPos[] terrainPositions;
 		readonly CPos? cell;
 		readonly SubCell? subCell;
@@ -33,7 +33,7 @@ namespace OpenRA.Traits
 		Target(WPos terrainCenterPosition, WPos[] terrainPositions = null)
 		{
 			type = TargetType.Terrain;
-			this.terrainCenterPosition = terrainCenterPosition;
+			TerrainCenterPosition = terrainCenterPosition;
 			this.terrainPositions = terrainPositions ?? new[] { terrainCenterPosition };
 
 			Actor = null;
@@ -46,8 +46,8 @@ namespace OpenRA.Traits
 		Target(World w, CPos c, SubCell subCell)
 		{
 			type = TargetType.Terrain;
-			terrainCenterPosition = w.Map.CenterOfSubCell(c, subCell);
-			terrainPositions = new[] { terrainCenterPosition };
+			TerrainCenterPosition = w.Map.CenterOfSubCell(c, subCell);
+			terrainPositions = new[] { TerrainCenterPosition };
 			cell = c;
 			this.subCell = subCell;
 
@@ -55,15 +55,16 @@ namespace OpenRA.Traits
 			FrozenActor = null;
 			generation = 0;
 		}
-		
-		Target(Actor a, int generation)
+
+		Target(Actor a, int generation, WPos? centerPosition = null)
 		{
 			type = TargetType.Actor;
 			Actor = a;
 			this.generation = generation;
 
-			terrainCenterPosition = WPos.Zero;
-			terrainPositions = null;
+			TerrainCenterPosition = centerPosition ?? WPos.Zero;
+
+			terrainPositions = new[] { TerrainCenterPosition };
 			FrozenActor = null;
 			cell = null;
 			subCell = null;
@@ -72,7 +73,7 @@ namespace OpenRA.Traits
 		Target(CPos c, SubCell subCell, WPos terrainCenterPosition)
 		{
 			type = TargetType.Terrain;
-			this.terrainCenterPosition = terrainCenterPosition;
+			TerrainCenterPosition = terrainCenterPosition;
 			terrainPositions = new[] { terrainCenterPosition };
 			cell = c;
 			this.subCell = subCell;
@@ -87,8 +88,8 @@ namespace OpenRA.Traits
 			type = TargetType.Actor;
 			Actor = a;
 			generation = a.Generation;
-			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
-			terrainPositions = null;
+			TerrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
+			terrainPositions = new[] { TerrainCenterPosition };
 			FrozenActor = null;
 			cell = null;
 			subCell = null;
@@ -99,7 +100,7 @@ namespace OpenRA.Traits
 			type = TargetType.FrozenActor;
 			FrozenActor = fa;
 
-			terrainCenterPosition = WPos.Zero;
+			TerrainCenterPosition = WPos.Zero;
 			terrainPositions = null;
 			Actor = null;
 			cell = null;
@@ -112,7 +113,7 @@ namespace OpenRA.Traits
 			type = TargetType.FrozenActor;
 			FrozenActor = fa;
 
-			terrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
+			TerrainCenterPosition = terrainPos != WPos.Zero ? terrainPos : WPos.Zero;
 			terrainPositions = null;
 			Actor = null;
 			cell = null;
@@ -201,11 +202,9 @@ namespace OpenRA.Traits
 				switch (Type)
 				{
 					case TargetType.Actor:
-						return Actor.CenterPosition;
 					case TargetType.FrozenActor:
-						return FrozenActor.CenterPosition;
 					case TargetType.Terrain:
-						return terrainCenterPosition;
+						return TerrainCenterPosition;
 					case TargetType.Invalid:
 					default:
 						throw new InvalidOperationException("Attempting to query the position of an invalid Target");
@@ -255,7 +254,7 @@ namespace OpenRA.Traits
 					return FrozenActor.ToString();
 
 				case TargetType.Terrain:
-					return terrainCenterPosition.ToString();
+					return TerrainCenterPosition.ToString();
 
 				case TargetType.Invalid:
 				default:
@@ -297,7 +296,7 @@ namespace OpenRA.Traits
 			switch (type)
 			{
 				case TargetType.Terrain:
-					var hash = terrainCenterPosition.GetHashCode() ^ terrainPositions.GetHashCode();
+					var hash = TerrainCenterPosition.GetHashCode() ^ terrainPositions.GetHashCode();
 					if (cell != null)
 						hash ^= cell.GetHashCode();
 
@@ -329,9 +328,9 @@ namespace OpenRA.Traits
 		}
 
 		// Expose internal state for serialization by the orders code *only*
-		internal static Target FromSerializedActor(Actor a, int generation) { return a != null ? new Target(a, generation) : Invalid; }
+		internal static Target FromSerializedActor(Actor a, int generation, WPos centerPosition) { return a != null ? new Target(a, generation, centerPosition) : Invalid; }
 		internal static Target FromSerializedTerrainPosition(WPos centerPosition, WPos[] terrainPositions) { return new Target(centerPosition, terrainPositions); }
 		internal (TargetType Type, Actor Actor, int Generation, CPos? Cell, SubCell? SubCell, WPos Pos, WPos[] TerrainPositions) SerializableState =>
-			(type, Actor, generation, cell, subCell, terrainCenterPosition, terrainPositions);
+			(type, Actor, generation, cell, subCell, TerrainCenterPosition, terrainPositions);
 	}
 }
