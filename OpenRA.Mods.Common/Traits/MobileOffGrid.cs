@@ -864,25 +864,19 @@ namespace OpenRA.Mods.Common.Traits
 			return GetCollidingCellsAfterUnitMovement(sourcePos, move, locomotor, 1, BlockedByActor.Immovable, neighboursToCount).Any();
 		}
 
-		// Main collision detection against units
-		public bool HasCollision(Actor self, WVec move, WDist lookAheadDist, Locomotor locomotor,
-										   bool attackingUnitsOnly = false, bool includeCellCollision = false)
+		public List<Actor> ActorsCollidingWithActor(WPos selfPos, WVec move, WDist lookAheadDist, Locomotor locomotor, bool attackingUnitsOnly = true)
+			=> GetCollidingActorsAfterUnitMovement(selfPos, move, lookAheadDist, locomotor, attackingUnitsOnly).ToList();
+
+		public bool ActorsCollidingWithActorBool(WPos selfPos, WVec move, WDist lookAheadDist, Locomotor locomotor, bool attackingUnitsOnly = true)
+			=> GetCollidingActorsAfterUnitMovement(selfPos, move, lookAheadDist, locomotor, attackingUnitsOnly).Any();
+
+		public IEnumerable<Actor> GetCollidingActorsAfterUnitMovement(WPos selfPos, WVec move, WDist lookAheadDist, Locomotor locomotor, bool attackingUnitsOnly = true)
 		{
-			if (self.CurrentActivity is ReturnToCellActivity)
-				return false;
-
-			var selfCenter = self.CenterPosition;
-			var neighboursToCount = (int)Fix64.Ceiling((Fix64)UnitRadius.Length / (Fix64)1024);
-			var cellMoveVec = new WVec(UnitRadius * 2, WRot.FromYaw(move.Yaw));
-			var cellCollision = GetCollidingCellsAfterUnitMovement(selfCenter, cellMoveVec, locomotor, 1,
-				BlockedByActor.Immovable, neighboursToCount).Any();
-
-			if (cellCollision)
-				return true;
+			var actorsColliding = new List<Actor>();
 
 			// Ray cast to actor collisions
 			// First get all actors surrounding the unit by the appropriate movement amount
-			foreach (var destActor in self.World.FindActorsInCircle(selfCenter, UnitRadius + new WDist(move.Length) + lookAheadDist)
+			foreach (var destActor in self.World.FindActorsInCircle(selfPos, UnitRadius + new WDist(move.Length) + lookAheadDist)
 												.Where(a => a != self && (!attackingUnitsOnly || ActorIsAiming(a))))
 			{
 				var destActorMobileOffGrid = destActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled);
@@ -899,15 +893,16 @@ namespace OpenRA.Mods.Common.Traits
 							if (destShape.Info.Type is CircleShape shape)
 							{
 								var newMoveVec = new WVec(lookAheadDist, WRot.FromYaw(move.Yaw));
-								foreach (var (source, dest) in GenSDPairs(selfCenter, newMoveVec, shape))
+								foreach (var (source, dest) in GenSDPairs(selfPos, newMoveVec, shape))
 								{
 									var collision = destShape.Info.Type.LineIntersectsOrIsInside(destActor.CenterPosition, source, dest);
-									if (collision)
+									if (collision && !actorsColliding.Contains(destActor))
 									{
 #if DEBUGWITHOVERLAY
 										RenderLine(source, dest, LineType.LocalAvoidanceHit);
 #endif
-										return true;
+										actorsColliding.Add(destActor);
+										yield return destActor;
 									}
 									else
 									{
@@ -920,8 +915,6 @@ namespace OpenRA.Mods.Common.Traits
 					}
 				}
 			}
-
-			return false;
 		}
 
 		public void RenderPathingStats()
@@ -954,11 +947,11 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			const int Persist = (int)PersistConst.Never;
 
-			if (colType == LineType.LocalAvoidanceHit)
-				Overlay.AddLine(source, dest, Color.DarkRed, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
-			else if (colType == LineType.LocalAvoidanceMiss)
-				Overlay.AddLine(source, dest, Color.LightBlue, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
-			else if (colType == LineType.LocalAvoidanceDirection)
+			//if (colType == LineType.LocalAvoidanceHit)
+			//	Overlay.AddLine(source, dest, Color.DarkRed, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
+			//else if (colType == LineType.LocalAvoidanceMiss)
+			//	Overlay.AddLine(source, dest, Color.LightBlue, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.LocalAvoidance);
+			if (colType == LineType.LocalAvoidanceDirection)
 				Overlay.AddLine(source, dest, Color.Yellow, 10, endPoints: LineEndPoint.EndArrow, thickness: 3, key: OverlayKeyStrings.LocalAvoidance);
 			else if (colType == LineType.SeekVector)
 				Overlay.AddLine(source, dest, Color.Cyan, Persist, endPoints: LineEndPoint.EndArrow, thickness: 2, key: OverlayKeyStrings.SeekVectors);
@@ -1616,7 +1609,7 @@ namespace OpenRA.Mods.Common.Traits
 				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(order.Target.CenterPosition))
 					return;
 
-				var target = Target.FromPos(order.Target.CenterPosition);
+				var target = Target.FromPos(order.Target.TerrainCenterPosition);
 				self.QueueActivity(order.Queued, new MoveOffGrid(self, order.GroupedActors.ToList(), target, targetLineColor: Info.TargetLineColor));
 #if DEBUG
 				System.Console.WriteLine("ResolveOrder() with 'Move' to (" + order.Target.CenterPosition.X.ToString() + "," + order.Target.CenterPosition.Y.ToString() + ") called at " + (System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond));
@@ -1808,7 +1801,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			public virtual bool CanTarget(Actor self, in Target target, ref TargetModifiers modifiers, ref string cursor)
 			{
-				if (target.Type != TargetType.Terrain || (mobileOffGrid.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
+				if ((target.Type != TargetType.Terrain && target.Type != TargetType.Actor) || (mobileOffGrid.requireForceMove && !modifiers.HasModifier(TargetModifiers.ForceMove)))
 					return false;
 
 				var location = self.World.Map.CellContaining(target.CenterPosition);
