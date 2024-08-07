@@ -15,6 +15,7 @@ using System.Linq;
 using System.Net;
 using System.Xml.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Effects;
 using OpenRA.Mods.Common.Graphics;
@@ -31,6 +32,10 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class MobileOffGridOverlay : IRenderAnnotations, INotifyCreated, IChatCommand
 	{
+		[TranslationReference]
+		const string MobileOffGridGeometryDescription = "description-mobile-off-grid-geometry";
+
+		World world;
 		public readonly List<Command> Comms;
 		const int DefaultThickness = 3;
 		const int DefaultArrowThickness = 2;
@@ -67,11 +72,12 @@ namespace OpenRA.Mods.Common.Traits
 			public const string FleeVectors = "flee"; // toggles seek vector overlays.
 			public const string AllVectors = "allvec"; // toggles combined seek + flee vector overlays.
 			public const string PathingText = "pathingtext"; // toggles seek, flee, and combined vector overlays.
+			public const string PFNumber = "pfnum"; // toggles the index of the Theta PF used
 		}
 
 		public MobileOffGridOverlay(Actor self)
 		{
-			Comms = new List<Command>() { new("mogg", "toggles the mobile off grid overlay.", true) };
+			Comms = new List<Command>() { new("mogg", MobileOffGridGeometryDescription, true) };
 
 			var console = self.World.WorldActor.TraitOrDefault<ChatCommands>();
 			var help = self.World.WorldActor.TraitOrDefault<HelpCommand>();
@@ -93,8 +99,8 @@ namespace OpenRA.Mods.Common.Traits
 				OverlayKeyStrings.SeekVectors,
 				OverlayKeyStrings.FleeVectors,
 				OverlayKeyStrings.AllVectors,
+				OverlayKeyStrings.PFNumber,
 			};
-
 
 		readonly List<string> validVectorArgs =
 			new()
@@ -132,6 +138,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		void INotifyCreated.Created(Actor self)
 		{
+			world = self.World;
 			var mobileOffGrid = self.TraitsImplementing<MobileOffGrid>().FirstOrDefault();
 			if (mobileOffGrid != null)
 				mobileOffGrid.Overlay = this;
@@ -204,19 +211,19 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// Render Texts
-			foreach (var (pos, text, color, persist, fontname, key) in texts.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
+			foreach (var (pos, text, color, persist, fontname, _) in texts.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 				yield return TextRenderFunc(pos, text, color, fontname);
 
 			// Render Points
-			foreach (var (point, color, persist, thickness, key) in points.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
+			foreach (var (point, color, persist, thickness, _) in points.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 				yield return PointRenderFunc(point, color, thickness);
 
 			// Render Circles
-			foreach (var (circle, color, persist, thickness, key) in circles.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
+			foreach (var (circle, color, persist, thickness, _) in circles.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 				yield return CircleRenderFunc(circle, color, thickness);
 
 			// Render Lines
-			foreach (var (line, color, persist, endPoints, thickness, key) in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
+			foreach (var (line, color, persist, endPoints, thickness, _) in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 				foreach (var renderLine in LineRenderFunc(line[0], line[1], color, endPoints, thickness))
 					yield return renderLine;
 		}

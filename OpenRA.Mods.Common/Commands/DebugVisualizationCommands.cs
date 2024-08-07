@@ -41,14 +41,15 @@ namespace OpenRA.Mods.Common.Commands
 		[TranslationReference]
 		const string ActorTagsOverlayDescripition = "description-actor-tags-overlay";
 
-		readonly IDictionary<string, (string Description, Action<DebugVisualizations, DeveloperMode> Handler)> commandHandlers = new Dictionary<string, (string Description, Action<DebugVisualizations, DeveloperMode> Handler)>
+		readonly IDictionary<string, (string Description, Action<DebugVisualizations, DeveloperMode> Handler, bool AllowArgs)> commandHandlers =
+			new Dictionary<string, (string Description, Action<DebugVisualizations, DeveloperMode> Handler, bool AllowArgs)>
 		{
-			{ "combat-geometry", (CombatGeometryDescription, CombatGeometry) },
-			{ "render-geometry", (RenderGeometryDescription, RenderGeometry) },
-			{ "mogg", (MobileOffGridGeometryDescription, MobileOffGridGeometry) },
-			{ "screen-map", (ScreenMapOverlayDescription, ScreenMap) },
-			{ "depth-buffer", (DepthBufferDescription, DepthBuffer) },
-			{ "actor-tags", (ActorTagsOverlayDescripition, ActorTags) },
+			{ "combat-geometry", (CombatGeometryDescription, CombatGeometry, true) },
+			{ "render-geometry", (RenderGeometryDescription, RenderGeometry, true) },
+			{ "mogg", (MobileOffGridGeometryDescription, MobileOffGridGeometry, false) },
+			{ "screen-map", (ScreenMapOverlayDescription, ScreenMap, true) },
+			{ "depth-buffer", (DepthBufferDescription, DepthBuffer, true) },
+			{ "actor-tags", (ActorTagsOverlayDescripition, ActorTags, true) },
 		};
 
 		DebugVisualizations debugVis;
@@ -87,7 +88,7 @@ namespace OpenRA.Mods.Common.Commands
 		{
 			debugVis.RenderGeometry ^= true;
 		}
-		static void MobileOffGridGeometry(DebugVisualizations debugVis, DeveloperMode devMode)
+		public static void MobileOffGridGeometry(DebugVisualizations debugVis, DeveloperMode devMode)
 		{
 			debugVis.MobileOffGridGeometry ^= true;
 		}
@@ -111,7 +112,8 @@ namespace OpenRA.Mods.Common.Commands
 		public void InvokeCommand(string name, string arg)
 		{
 			if (commandHandlers.TryGetValue(name, out var command))
-				command.Handler(debugVis, devMode);
+				if (command.AllowArgs || string.IsNullOrEmpty(arg))
+					command.Handler(debugVis, devMode);
 		}
 	}
 }

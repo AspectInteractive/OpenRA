@@ -8,6 +8,8 @@ using OpenRA.Mods.Common.HitShapes;
 using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Traits;
+using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
+
 
 #pragma warning disable SA1108 // Block statements should not contain embedded comments
 
@@ -154,7 +156,11 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 																 targetPos)
-				{ running = true };
+				{
+					running = true,
+					ActorsSharingPF = new List<Actor>() { actor }
+				};
+
 				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
 				AddPF(rawThetaStarSearch);
 			}
@@ -162,7 +168,11 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var rawThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 																 targetPos, 0)
-				{ running = true };
+				{
+					running = true,
+					ActorsSharingPF = new List<Actor>() { actor }
+				};
+
 				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
 				AddPF(rawThetaStarSearch);
 			}
@@ -188,11 +198,11 @@ namespace OpenRA.Mods.Common.Traits
 						!actor.Trait<MobileOffGrid>().HasCollidedWithCell(actor.CenterPosition, circle.CircleCenter, locomotor))
 					{
 #if DEBUGWITHOVERLAY
-						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
+						MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius, ThetaStarPathfinderOverlay.OverlayKeyStrings.Circles);
 						//Slice Line is the standard sliceAngle * index to get the slice
 						var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
 						MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
-														Color.DarkBlue);
+														Color.DarkBlue, ThetaStarPathfinderOverlay.OverlayKeyStrings.Circles);
 #endif
 
 						var circleSliceIndex = new CircleSliceIndex(playerCircleGroupIndex, circleIndex, sliceIndex);
@@ -210,7 +220,7 @@ namespace OpenRA.Mods.Common.Traits
 					playerCircleGroups[playerCircleGroupIndex].Add(new ThetaCircle(actor.CenterPosition, new WDist(radiusForSharedThetas)));
 					var circle = playerCircleGroups[playerCircleGroupIndex].Last();
 #if DEBUGWITHOVERLAY
-					MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius);
+					MoveOffGrid.RenderCircle(actor, circle.CircleCenter, circle.CircleRadius, ThetaStarPathfinderOverlay.OverlayKeyStrings.Circles);
 #endif
 					var circleIndex = playerCircleGroups[playerCircleGroupIndex].Count - 1;
 					var sliceIndex = CircleShape.CalcCircleSliceIndex(circle.CircleCenter, circle.CircleRadius.Length,
@@ -219,7 +229,7 @@ namespace OpenRA.Mods.Common.Traits
 					//Slice Line is the standard sliceAngle * index to get the slice
 					var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
 					MoveOffGrid.RenderLineWithColor(actor, sliceLine[0], sliceLine[1],
-													Color.DarkBlue);
+													Color.DarkBlue, ThetaStarPathfinderOverlay.OverlayKeyStrings.Circles);
 #endif
 					var circleSliceIndex = new CircleSliceIndex(playerCircleGroupIndex, circleIndex, sliceIndex);
 					if (!ActorOrdersInCircleSlices.ContainsKey(circleSliceIndex))
@@ -313,13 +323,22 @@ namespace OpenRA.Mods.Common.Traits
 								var actorMobileOffGrid = actor.Trait<MobileOffGrid>();
 								if (ThetaStarPathSearch.IsPathObservable(world, actor, locomotor, actor.CenterPosition, thetaSourcePos,
 									actorMobileOffGrid.UnitHitShape))
+								{
+									if (newAvgThetaStarSearch.ActorsSharingPF != null)
+										newAvgThetaStarSearch.ActorsSharingPF.Add(actor);
+									else
+										newAvgThetaStarSearch.ActorsSharingPF = new List<Actor> { actor };
 									actorMobileOffGrid.thetaStarSearch = newAvgThetaStarSearch;
+								}
 								else
 								{
 									individualPFUsed++;
 									var individualAvgThetaStarSearch = new ThetaStarPathSearch(actor.World, actor, actor.CenterPosition,
 										targetPos)
-									{ running = true };
+									{
+										running = true,
+										ActorsSharingPF = new List<Actor> { actor }
+									};
 
 									actorMobileOffGrid.thetaStarSearch = individualAvgThetaStarSearch;
 									AddPF(individualAvgThetaStarSearch);
@@ -360,6 +379,13 @@ namespace OpenRA.Mods.Common.Traits
 			for (var i = ThetaPFsToRun.Count; i > 0; i--) // Iterate backwards since we may remove PFs that are no longer expanding
 			{
 				var thetaPF = ThetaPFsToRun[i - 1];
+				foreach (var actor in thetaPF.ActorsSharingPF)
+				{
+					var actorMobileOG = actor.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled);
+					actorMobileOG.Overlay.AddText(actorMobileOG.CenterPosition, i.ToString(), Color.Yellow, (int)PersistConst.Never,
+						key: OverlayKeyStrings.PFNumber);
+				}
+
 				if (thetaPF.running && !thetaPF.pathFound)
 				{
 					if (thetaPF.currDelayToRun == 0)

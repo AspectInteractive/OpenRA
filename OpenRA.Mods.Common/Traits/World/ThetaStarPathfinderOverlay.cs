@@ -27,13 +27,23 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class ThetaStarPathfinderOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
 	{
+		World world;
 		public readonly List<Command> Comms;
-		private List<(List<WPos>, Color)> linesWithColors = new List<(List<WPos>, Color)>();
-		private List<((WPos, WDist), Color)> circlesWithColors = new List<((WPos, WDist), Color)>();
-		private List<(WPos, Color)> pointsWithColors = new List<(WPos, Color)>();
-		private List<(CCState, Color)> statesWithColors = new List<(CCState, Color)>();
-		private List<List<WPos>> paths = new List<List<WPos>>();
-		private List<List<WPos>> lines = new List<List<WPos>>();
+		readonly List<(List<WPos>, Color C, string Key)> linesWithColors = new();
+		readonly List<((WPos Pos, WDist Dist), Color C, string Key)> circlesWithColors = new();
+		readonly List<(WPos Pos, Color C, string Key)> pointsWithColors = new();
+		List<(CCState, Color)> statesWithColors = new();
+		readonly List<string> enabledOverlays = new();
+		bool NoFiltering => enabledOverlays.Count == 0;
+		readonly List<List<WPos>> paths = new();
+		readonly List<(List<WPos> Line, string Key)> lines = new();
+
+		public struct OverlayKeyStrings
+		{
+			public const string Path = "path";  // toggles the theta path
+			public const string HeatMap = "heatmap"; // toggles the theta path heat map
+			public const string Circles = "circles"; // toggles the circles and slices in the theta PF execution manager
+		}
 
 		// Set this to true to display annotations showing the cost at each cell
 		private readonly bool showCosts = true;
@@ -49,17 +59,26 @@ namespace OpenRA.Mods.Common.Traits
 		private float lineColorIncrement = 0.05F;
 		public Action<string> ToggleVisibility;
 
+		readonly List<string> validChatCommandArgs =
+			new()
+			{
+				OverlayKeyStrings.Path,
+				OverlayKeyStrings.HeatMap,
+				OverlayKeyStrings.Circles,
+			};
+
 		public ThetaStarPathfinderOverlay()
 		{
 			Comms = new List<Command>()
 			{
-				new Command("theta", "toggles the theta star pathfinder overlay.", true),
-				new Command("thetall", "toggles all theta star pathfinder overlays.", true)
+				new("theta", "toggles the theta star pathfinder overlay.", true),
+				new("thetall", "toggles all theta star pathfinder overlays.", true)
 			};
 		}
 
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
+			world = w;
 			var console = w.WorldActor.TraitOrDefault<ChatCommands>();
 			var help = w.WorldActor.TraitOrDefault<HelpCommand>();
 
@@ -78,16 +97,21 @@ namespace OpenRA.Mods.Common.Traits
 
 		void IChatCommand.InvokeCommand(string name, string arg)
 		{
-			if (Comms.Where(comm => comm.Name == name).Any())
+			// Only enable/disable if no argument is passed
+			if (Comms.Any(comm => comm.Name == name) && string.IsNullOrEmpty(arg))
 			{
 				Enabled ^= true;
 				ToggleVisibility("");
 			}
+
+			// If the overlay does not exist and cannot be removed, then we add it
+			if (validChatCommandArgs.Any(validArg => arg == validArg) && !enabledOverlays.Remove(arg))
+				enabledOverlays.Add(arg);
 		}
 
 		public static void GenericLinkedPointsFunc<T1>(List<T1> pointList, int pointListLen, Action<T1, T1> funcOnLinkedPoints)
 		{
-			for (var i = 0; i < (pointListLen - 1); i++)
+			for (var i = 0; i < pointListLen - 1; i++)
 			{
 				var currItem = pointList[i];
 				var nextItem = pointList[i + 1];
@@ -97,7 +121,7 @@ namespace OpenRA.Mods.Common.Traits
 		public static void GenericLinkedPointsFunc<T1, T2>(List<T1> pointList, int pointListLen, Func<T1, T2> pointUnpacker,
 														Action<T2, T2> funcOnLinkedPoints)
 		{
-			for (var i = 0; i < (pointListLen - 1); i++)
+			for (var i = 0; i < pointListLen - 1; i++)
 			{
 				var currItem = pointUnpacker(pointList[i]);
 				var nextItem = pointUnpacker(pointList[i + 1]);
@@ -109,10 +133,10 @@ namespace OpenRA.Mods.Common.Traits
 																	int endPointThickness, Color endPointColor)
 		{
 			var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
-			Action<WPos, WPos> funcOnLinkedPoints = (wpos1, wpos2) => linesToRender.Add(new LineAnnotationRenderableWithZIndex(wpos1, wpos2,
+			void FuncOnLinkedPoints(WPos wpos1, WPos wpos2) => linesToRender.Add(new LineAnnotationRenderableWithZIndex(wpos1, wpos2,
 																			lineThickness, lineColor, lineColor,
 																			(endPointRadius, endPointThickness, endPointColor)));
-			GenericLinkedPointsFunc(path, path.Count, funcOnLinkedPoints);
+			GenericLinkedPointsFunc(path, path.Count, FuncOnLinkedPoints);
 			return linesToRender;
 		}
 
@@ -130,40 +154,44 @@ namespace OpenRA.Mods.Common.Traits
 			var font = Game.Renderer.Fonts[fontName];
 			Color lineColor;
 
-			Func<WPos, Color, CircleAnnotationRenderable> pointRenderFunc = (p, color) =>
-			{ return new CircleAnnotationRenderable(p, new WDist(pointRadius), pointThickness, color, true); };
-			Func<(WPos, WDist), Color, CircleAnnotationRenderable> circleRenderFunc = (c, color) =>
-			{ return new CircleAnnotationRenderable(c.Item1, c.Item2, pointThickness, color, false); };
+			CircleAnnotationRenderable PointRenderFunc(WPos p, Color color)	=> new(p, new WDist(pointRadius), pointThickness, color, true);
+			CircleAnnotationRenderable CircleRenderFunc((WPos, WDist) c, Color color) => new(c.Item1, c.Item2, pointThickness, color, false);
 
 			// Render States
-			foreach (var (ccState, color) in statesWithColors)
+			if (NoFiltering || enabledOverlays.Contains(OverlayKeyStrings.HeatMap))
 			{
-				yield return pointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
-				if (showCosts)
-					yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
-															color, $"({ccState.Gval})");
+				foreach (var (ccState, color) in statesWithColors)
+				{
+					yield return PointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
+					if (showCosts)
+						yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
+																color, $"({ccState.Gval})");
+				}
 			}
 
 			// Render Points
-			foreach (var (point, color) in pointsWithColors)
-				yield return pointRenderFunc(point, color);
+			foreach (var (point, color, _) in pointsWithColors.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
+				yield return PointRenderFunc(point, color);
 
 			// Render Circles
-			foreach (var (circle, color) in circlesWithColors)
-				yield return circleRenderFunc(circle, color);
+			foreach (var (circle, color, _) in circlesWithColors.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
+				yield return CircleRenderFunc(circle, color);
 
 			// Render Paths
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
-			foreach (var path in paths)
+			if (NoFiltering || enabledOverlays.Contains(OverlayKeyStrings.Path))
 			{
-				var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
-				foreach (var line in linesToRender)
-					yield return line;
+				foreach (var path in paths)
+				{
+					var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
+					foreach (var line in linesToRender)
+						yield return line;
+				}
 			}
 
 			// Render Lines
 			lineColor = Color.FromAhsv(lineHue, currSat, currLight);
-			foreach (var line in lines)
+			foreach (var (line, _) in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 			{
 				var linesToRender = GetPathRenderableSet(line, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
 				foreach (var l in linesToRender)
@@ -171,7 +199,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// Render LinesWithColours
-			foreach (var (line, color) in linesWithColors)
+			foreach (var (line, color, _) in linesWithColors.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 			{
 				var linesToRender = GetPathRenderableSet(line, lineThickness, color, endPointRadius, endPointThickness, color);
 				foreach (var l in linesToRender)
@@ -188,7 +216,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			for (var i = 0; i < statesWithColors.Count; i++)
 			{
-				newPointsWithColor.Add((statesWithColors.ElementAt(i).Item1, currColor));
+				newPointsWithColor.Add((statesWithColors[i].Item1, currColor));
 				currHue = (currHue + lineColorIncrement) % (1.0F + float.Epsilon);
 				currColor = Color.FromAhsv(currHue, currSat, currLight);
 			}
@@ -208,35 +236,33 @@ namespace OpenRA.Mods.Common.Traits
 			UpdatePointColors();
 		}
 
-		public void AddPoint(WPos pos)
+		public void AddPoint(WPos pos, string key)
 		{
-			pointsWithColors.Add((pos, Color.FromAhsv(pointHue, currSat, currLight)));
+			pointsWithColors.Add((pos, Color.FromAhsv(pointHue, currSat, currLight), key));
 			UpdatePointColors();
 		}
 
-		public void AddPoint(WPos pos, Color color)
+		public void AddPoint(WPos pos, Color color, string key)
 		{
-			pointsWithColors.Add((pos, color));
+			pointsWithColors.Add((pos, color, key));
 			UpdatePointColors();
 		}
 
 		public void RemovePoint(WPos pos)
 		{
-			foreach (var (currPos, currColor) in pointsWithColors)
-				if (currPos == pos)
-					pointsWithColors.Remove((pos, currColor));
+			pointsWithColors.RemoveAll(p => p.Pos == pos);
 			UpdatePointColors();
 		}
 
 		public void AddPath(List<WPos> path) { paths.Add(path); }
 		public void RemovePath(List<WPos> path)	{ paths.RemoveAll(p => p == path); }
-		public void AddLine(List<WPos> line) { lines.Add(line); }
-		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l == line); }
-		public void AddLineWithColor(List<WPos> line, Color color) { linesWithColors.Add((line, color)); }
+		public void AddLine(List<WPos> line, string key) { lines.Add((line, key)); }
+		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l.Line == line); }
+		public void AddLineWithColor(List<WPos> line, Color color, string key) { linesWithColors.Add((line, color, key)); }
 		public void RemoveLineWithColor(List<WPos> line) { linesWithColors.RemoveAll(lwc => lwc.Item1 == line); }
-		public void AddCircle((WPos, WDist) circle) { circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight))); }
-		public void AddCircleWithColor((WPos, WDist) circle, Color color) { circlesWithColors.Add((circle, color)); }
-		public void RemoveCircle((WPos, WDist) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
+		public void AddCircle((WPos Pos, WDist Dist) circle, string key) { circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight), key)); }
+		public void AddCircleWithColor((WPos Pos, WDist Dist) circle, Color color, string key) { circlesWithColors.Add((circle, color, key)); }
+		public void RemoveCircle((WPos Pos, WDist Dist) circle) { circlesWithColors.RemoveAll(c => c.Item1 == circle); }
 		public void ClearIntervals() { statesWithColors.Clear(); }
 		public void ClearPaths() { paths.Clear(); }
 		public void ClearLines() { lines.Clear(); }

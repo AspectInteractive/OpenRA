@@ -217,27 +217,28 @@ namespace OpenRA.Mods.Common.Activities
 			return (pos - origin).HorizontalLengthSquared <= range.LengthSquared;
 		}
 
-		public static void RenderLine(Actor self, List<WPos> line)
+		public static void RenderLine(Actor self, List<WPos> line, string key)
 		{
 			var renderLine = new List<WPos>();
 			renderLine.AddRange(line);
 
 			if (line.Count > 1) // cannot render a path of length 1
-				self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
+				self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine, key);
 		}
 
 		const int LineThickness = 1;
 
-		public static void RenderLine(Actor self, WPos pos1, WPos pos2)
+		public static void RenderLine(Actor self, WPos pos1, WPos pos2, string key)
 		{
 			var renderLine = new List<WPos>() { pos1, pos2 };
-			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine);
+			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine, key);
 		}
-		public static void RenderLineWithColor(Actor self, WPos pos1, WPos pos2, Color color)
+
+		public static void RenderLineWithColor(Actor self, WPos pos1, WPos pos2, Color color, string key)
 		{
 			var renderLine = new List<WPos>() { pos1, pos2 };
 			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault()
-				.AddLineWithColor(renderLine, color);
+				.AddLineWithColor(renderLine, color, key);
 		}
 		public static void RenderLineCollDebug(Actor self, WPos pos1, WPos pos2, int thickness = LineThickness)
 		{
@@ -251,8 +252,8 @@ namespace OpenRA.Mods.Common.Activities
 				.AddLineWithColor(renderLine, color, thickness);
 		}
 
-		public static void RenderCircle(Actor self, WPos pos, WDist radius)
-		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
+		public static void RenderCircle(Actor self, WPos pos, WDist radius, string key)
+		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius), key); }
 
 		public static void RenderCircleCollDebug(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircle((pos, radius)); }
@@ -261,19 +262,19 @@ namespace OpenRA.Mods.Common.Activities
 		public static void RenderCircleColorCollDebug(Actor self, WPos pos, WDist radius, Color color, int thickness)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddCircleWithColor((pos, radius), color, thickness); }
 
-		public static void RenderCircleWithColor(Actor self, WPos pos, WDist radius, Color color)
+		public static void RenderCircleWithColor(Actor self, WPos pos, WDist radius, Color color, string key)
 		{
 			self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>()
-				.FirstEnabledTraitOrDefault().AddCircleWithColor((pos, radius), color);
+				.FirstEnabledTraitOrDefault().AddCircleWithColor((pos, radius), color, key);
 		}
 		public static void RemoveCircle(Actor self, WPos pos, WDist radius)
 		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
 		public static void RemoveCircle(World world, WPos pos, WDist radius)
 		{ world.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().RemoveCircle((pos, radius)); }
-		public static void RenderPoint(Actor self, WPos pos)
-		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
-		public static void RenderPoint(Actor self, WPos pos, Color color)
-		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color); }
+		public static void RenderPoint(Actor self, WPos pos, string key)
+		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, key); }
+		public static void RenderPoint(Actor self, WPos pos, Color color, string key)
+		{ self.World.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos, color, key); }
 		public static void RenderPointCollDebug(Actor self, WPos pos)
 		{ self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddPoint(pos); }
 		public static void RenderPointCollDebug(Actor self, WPos pos, Color color)

@@ -68,6 +68,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 			}
 		}
 
+		public List<Actor> ActorsSharingPF;
 		public bool AtStart = true;
 		public WPos Source;
 		public WPos Dest;
