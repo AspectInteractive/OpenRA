@@ -25,6 +25,8 @@ using OpenRA.Support;
 using OpenRA.Traits;
 using TagLib.Riff;
 using OpenRA.Mods.Common.HitShapes;
+using static OpenRA.Mods.Common.Traits.MobileOffGrid;
+
 
 
 #pragma warning disable SA1513 // Closing brace should be followed by blank line
@@ -538,27 +540,48 @@ namespace OpenRA.Mods.Common.Traits
 			Tick(self);
 		}
 
-		public enum WVecTypes { Seek, Flee, All }
-		public WVec GenFinalWVec(WVecTypes wvecTypes = WVecTypes.All, bool ignoreTimer = false)
+		public void AddUnique(WVecTypes wvecTypes, MvVec newMvVec) => AddUnique(SeekVectors, FleeVectors, wvecTypes, newMvVec);
+
+		public void AddUnique(List<MvVec> seekVectors, List<MvVec> fleeVectors, WVecTypes wvecTypes, MvVec newMvVec)
 		{
-			var finalVec = WVec.Zero;
-			if (wvecTypes == WVecTypes.Seek || wvecTypes == WVecTypes.All)
-				foreach (var mvVec in SeekVectors)
-					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
-			if (wvecTypes == WVecTypes.Flee || wvecTypes == WVecTypes.All)
-				foreach (var mvVec in FleeVectors)
-					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
-			return finalVec;
+			if (wvecTypes == WVecTypes.Seek && !seekVectors.Any(v => v.Vec == newMvVec.Vec))
+				seekVectors.Add(newMvVec);
+			if (wvecTypes == WVecTypes.Flee && !fleeVectors.Any(v => v.Vec == newMvVec.Vec))
+				fleeVectors.Add(newMvVec);
 		}
-		public WVec GenFinalWVec(List<MvVec> seekVectors, List<MvVec> fleeVectors, WVecTypes wvecTypes = WVecTypes.All, bool ignoreTimer = false)
+
+		public enum WVecTypes { Seek, Flee, All }
+		public WVec GenFinalWVec(WVecTypes wvecTypes = WVecTypes.All, bool ignoreTimer = false, bool capAtMoveSpeed = true)
+			=> GenFinalWVec(SeekVectors, FleeVectors, new List<WVec>(), wvecTypes, ignoreTimer, capAtMoveSpeed);
+
+		public WVec GenFinalWVec(WVec testVec, WVecTypes wvecTypes = WVecTypes.All, bool ignoreTimer = false, bool capAtMoveSpeed = true)
+			=> GenFinalWVec(SeekVectors, FleeVectors, new List<WVec> { testVec }, wvecTypes, ignoreTimer, capAtMoveSpeed);
+
+		public WVec GenFinalWVec(List<WVec> testVecs, WVecTypes wvecTypes = WVecTypes.All, bool ignoreTimer = false, bool capAtMoveSpeed = true)
+			=> GenFinalWVec(SeekVectors, FleeVectors, testVecs, wvecTypes, ignoreTimer, capAtMoveSpeed);
+
+		public WVec GenFinalWVec(List<MvVec> seekVectors, List<MvVec> fleeVectors, WVecTypes wvecTypes = WVecTypes.All,
+			bool ignoreTimer = false, bool capAtMoveSpeed = true)
+			=> GenFinalWVec(SeekVectors, FleeVectors, new List<WVec>(), wvecTypes, ignoreTimer, capAtMoveSpeed);
+
+		public WVec GenFinalWVec(List<MvVec> seekVectors, List<MvVec> fleeVectors, List<WVec> testVecs, WVecTypes wvecTypes = WVecTypes.All,
+			bool ignoreTimer = false, bool capAtMoveSpeed = true)
 		{
 			var finalVec = WVec.Zero;
+
 			if (wvecTypes == WVecTypes.Seek || wvecTypes == WVecTypes.All)
 				foreach (var mvVec in seekVectors)
 					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
 			if (wvecTypes == WVecTypes.Flee || wvecTypes == WVecTypes.All)
 				foreach (var mvVec in fleeVectors)
 					finalVec = mvVec.TickTimer != 0 || ignoreTimer ? finalVec + mvVec.Vec : finalVec;
+
+			foreach (var vec in testVecs)
+				finalVec += vec;
+
+			if (capAtMoveSpeed)
+				finalVec = new WVec(new WDist(Math.Min(MovementSpeed, finalVec.Length)), WRot.FromYaw(finalVec.Yaw));
+
 			return finalVec;
 		}
 
@@ -599,7 +622,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				foreach (var nearbyActor in nearbyActors)
 				{
-					if (!nearbyActor.IsDead && nearbyActor != self)
+					if (!nearbyActor.IsDead && nearbyActor != self) // && !ActorIsAiming(nearbyActor))
 					{
 						var nearbyActorMobileOGs = nearbyActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
 						if (nearbyActorMobileOGs.Any() && nearbyActor.CurrentActivity is not ReturnToCellActivity)
@@ -665,6 +688,8 @@ namespace OpenRA.Mods.Common.Traits
 		public void MobileOffGridMoveTick(Actor self)
 		{
 			var move = ForcedMove == WVec.Zero ? GenFinalWVec() : ForcedMove;
+
+			// Remove vectors if unit is blocked
 			if (self.CurrentActivity is not ReturnToCellActivity)
 				move = RemoveBlockedVectors(move, BlockedByCells);
 
@@ -829,8 +854,6 @@ namespace OpenRA.Mods.Common.Traits
 			// Ray cast to cell collisions
 			foreach (var (source, dest) in GenSDPairs(checkPos, move * lookAhead, UnitHitShape))
 			{
-				//MoveOffGrid.RenderPoint(self, sdPair.Item1, Color.LightGreen);
-				//MoveOffGrid.RenderPoint(self, sdPair.Item2, Color.LightGreen);
 				var cellsToCheck = ThetaStarPathSearch.GetAllCellsUnderneathALine(self.World, source, dest);
 				foreach (var cell in cellsToCheck)
 					if (CellIsBlocked(self, locomotor, cell))
@@ -893,13 +916,14 @@ namespace OpenRA.Mods.Common.Traits
 							if (destShape.Info.Type is CircleShape shape)
 							{
 								var newMoveVec = new WVec(lookAheadDist, WRot.FromYaw(move.Yaw));
+
 								foreach (var (source, dest) in GenSDPairs(selfPos, newMoveVec, shape))
 								{
 									var collision = destShape.Info.Type.LineIntersectsOrIsInside(destActor.CenterPosition, source, dest);
 									if (collision && !actorsColliding.Contains(destActor))
 									{
 #if DEBUGWITHOVERLAY
-										RenderLine(source, dest, LineType.LocalAvoidanceHit);
+										//Overlay.AddLine(source, dest, Color.LightSalmon, persist: 32, LineEndPoint.EndArrow, key: OverlayKeyStrings.LocalAvoidance);
 #endif
 										actorsColliding.Add(destActor);
 										yield return destActor;
@@ -907,7 +931,7 @@ namespace OpenRA.Mods.Common.Traits
 									else
 									{
 #if DEBUGWITHOVERLAY
-										RenderLine(source, dest, LineType.LocalAvoidanceMiss);
+										//Overlay.AddLine(source, dest, Color.LightGreen, persist: 32, LineEndPoint.EndArrow, key: OverlayKeyStrings.LocalAvoidance);
 #endif
 									}
 								}
