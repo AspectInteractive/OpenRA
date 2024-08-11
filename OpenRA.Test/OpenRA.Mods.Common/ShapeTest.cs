@@ -125,7 +125,7 @@ namespace OpenRA.Test
 				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(-3000, -500, 0), new WPos(3000, -500, 0), true)
 				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -3000, 0), new WPos(10, 2000, 0), true)
 				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(-1200, -1200, 0), new WPos(1200, 1800, 0), true)
-				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(500, -800, 0), new WPos(200, -100, 0), false)
+				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(500, -800, 0), new WPos(200, -100, 0), true)
 				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -1000, 0), new WPos(50, 2000, 0), true)
 				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(30, -3000, 0), new WPos(0, 2000, 0), true)
 				, new(new WDist(1234), new WPos(426, 0, 0), new WPos(0, -3000, 0), new WPos(0, 2000, 0), true)
@@ -137,7 +137,7 @@ namespace OpenRA.Test
 			{
 				shape = new CircleShape(ctc.CircleRadius);
 				shape.Initialize();
-				return shape.LineIsColliding(ctc.CircleCenter, ctc.P1, ctc.P2);
+				return shape.LineIntersectsOrIsInside(ctc.CircleCenter, ctc.P1, ctc.P2);
 			}
 
 			var lineCollisions = new List<bool>();
