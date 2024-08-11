@@ -685,6 +685,10 @@ namespace OpenRA.Mods.Common.Traits
 			return new WVec(newMoveX, newMoveY, move.Z);
 		}
 
+		public void GetBestNonCollidingMovement()
+		{
+		}
+
 		public void MobileOffGridMoveTick(Actor self)
 		{
 			var move = ForcedMove == WVec.Zero ? GenFinalWVec() : ForcedMove;
@@ -692,6 +696,9 @@ namespace OpenRA.Mods.Common.Traits
 			// Remove vectors if unit is blocked
 			if (self.CurrentActivity is not ReturnToCellActivity)
 				move = RemoveBlockedVectors(move, BlockedByCells);
+
+			if (ActorsCollidingWithActorBool(CenterPosition, move, UnitRadius * 2, Locomotor, attackingUnitsOnly: true))
+				GetBestNonCollidingMovement();
 
 			if (move == WVec.Zero &&
 			   (GenFinalWVec(WVecTypes.Seek, false) != -GenFinalWVec(WVecTypes.Flee, false) ||
@@ -705,7 +712,6 @@ namespace OpenRA.Mods.Common.Traits
 				RenderLine(CenterPosition, CenterPosition + GenFinalWVec(WVecTypes.Flee, true) * 5, LineType.FleeVector);
 			if (SeekVectors.Count > 0 && FleeVectors.Count > 0)
 				RenderLine(CenterPosition, CenterPosition + GenFinalWVec(WVecTypes.All, true) * 5, LineType.AllVector);
-
 
 			DecrementTickFleeVectors();
 			DecrementTickSeekVectors();
