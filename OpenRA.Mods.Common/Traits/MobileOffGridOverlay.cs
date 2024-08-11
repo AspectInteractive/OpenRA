@@ -45,12 +45,82 @@ namespace OpenRA.Mods.Common.Traits
 		readonly List<string> enabledOverlays = new();
 		bool NoFiltering => enabledOverlays.Count == 0;
 
+		public class RenderObject
+		{
+			public readonly Color color;
+			public int persist;
+			public readonly int thickness;
+			public readonly string key;
+
+			public RenderObject(Color color, int persist, int thickness, string key)
+			{
+				this.color = color;
+				this.persist = persist;
+				this.thickness = thickness;
+				this.key = key;
+			}
+		}
+
+		public class Line : RenderObject
+		{
+			public readonly List<WPos> line;
+			public readonly LineEndPoint endPoints;
+
+			public Line(List<WPos> line, Color color, int persist, LineEndPoint endPoints, int thickness, string key)
+				: base(color, persist, thickness, key)
+			{
+				this.line = line;
+				this.endPoints = endPoints;
+			}
+		}
+
+		public class Circle : RenderObject
+		{
+			public readonly WPos center;
+			public readonly WDist radius;
+
+			public Circle(WPos center, WDist radius, Color color, int persist, int thickness, string key)
+				: base(color, persist, thickness, key)
+			{
+				this.center = center;
+				this.radius = radius;
+			}
+		}
+
+		public class Point : RenderObject
+		{
+			public readonly WPos pos;
+			public readonly int radius = 32;
+
+			public Point(WPos pos, int radius, Color color, int persist, int thickness, string key)
+				: base(color, persist, thickness, key)
+			{
+				this.pos = pos;
+				this.radius = radius;
+			}
+		}
+
+		public class Text : RenderObject
+		{
+			public readonly WPos pos;
+			public readonly string text;
+			public readonly string fontname;
+
+			public Text(WPos pos, string text, Color color, int persist, string fontname, string key)
+				: base(color, persist, 0, key)
+			{
+				this.pos = pos;
+				this.text = text;
+				this.fontname = fontname;
+			}
+		}
+
 		// Note: Key is used for persist condition, so that objects matching the Key (e.g. a specific kind of collision)
 		// can be removed independently from other objects (different collision renders for example)
-		readonly List<(List<WPos> Line, Color C, int Persist, LineEndPoint EndPoints, int Thickness, string Key)> lines = new();
-		readonly List<((WPos, WDist) Circle, Color C, int Persist, int Thickness, string Key)> circles = new();
-		readonly List<(WPos Point, Color C, int Persist, int Thickness, string Key)> points = new();
-		readonly List<(WPos Pos, string Text, Color C, int Persist, string FontName, string Key)> texts = new();
+		readonly List<Line> lines = new();
+		readonly List<Circle> circles = new();
+		readonly List<Point> points = new();
+		readonly List<Text> texts = new();
 		readonly Color defaultColor = Color.White;
 
 		// PersistCount determines how many times the object can be rendered before old versions are removed.
@@ -71,6 +141,7 @@ namespace OpenRA.Mods.Common.Traits
 			public const string SeekVectors = "seek"; // toggles flee vector overlays.
 			public const string FleeVectors = "flee"; // toggles seek vector overlays.
 			public const string AllVectors = "allvec"; // toggles combined seek + flee vector overlays.
+			public const string Collision = "coll"; // toggles visual of collisions
 			public const string PathingText = "pathingtext"; // toggles seek, flee, and combined vector overlays.
 			public const string PFNumber = "pfnum"; // toggles the index of the Theta PF used
 		}
@@ -99,6 +170,7 @@ namespace OpenRA.Mods.Common.Traits
 				OverlayKeyStrings.SeekVectors,
 				OverlayKeyStrings.FleeVectors,
 				OverlayKeyStrings.AllVectors,
+				OverlayKeyStrings.Collision,
 				OverlayKeyStrings.PFNumber,
 			};
 
@@ -169,17 +241,16 @@ namespace OpenRA.Mods.Common.Traits
 
 		IEnumerable<IRenderable> RenderAnnotations(Actor self, WorldRenderer wr)
 		{
-			const int PointRadius = 100;
 			const int EndPointRadius = 100;
 			const int EndPointThickness = 3;
 			const string DefaultFontName = "TinyBold";
 			var lineColor = Color.Red;
 
-			CircleAnnotationRenderable PointRenderFunc(WPos p, Color color, int thickness = DefaultThickness) =>
-				new(p, new WDist(PointRadius), thickness, color, true);
+			CircleAnnotationRenderable PointRenderFunc(WPos p, int radius, Color color, int thickness = DefaultThickness) =>
+				new(p, new WDist(radius), thickness, color, true);
 
-			static CircleAnnotationRenderable CircleRenderFunc((WPos, WDist) c, Color color, int thickness = DefaultThickness) =>
-				new(c.Item1, c.Item2, thickness, color, false);
+			static CircleAnnotationRenderable CircleRenderFunc(WPos center, WDist radius, Color color, int thickness = DefaultThickness) =>
+				new(center, radius, thickness, color, false);
 
 			TextAnnotationRenderable TextRenderFunc(WPos p, string text, Color color, string fontname)
 			{
@@ -211,48 +282,53 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// Render Texts
-			foreach (var (pos, text, color, persist, fontname, _) in texts.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
-				yield return TextRenderFunc(pos, text, color, fontname);
+			foreach (var obj in texts.Where(o => NoFiltering || enabledOverlays.Contains(o.key)))
+				yield return TextRenderFunc(obj.pos, obj.text, obj.color, obj.fontname);
 
 			// Render Points
-			foreach (var (point, color, persist, thickness, _) in points.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
-				yield return PointRenderFunc(point, color, thickness);
+			foreach (var obj in points.Where(o => NoFiltering || enabledOverlays.Contains(o.key)))
+				yield return PointRenderFunc(obj.pos, obj.radius, obj.color, obj.thickness);
 
 			// Render Circles
-			foreach (var (circle, color, persist, thickness, _) in circles.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
-				yield return CircleRenderFunc(circle, color, thickness);
+			foreach (var obj in circles.Where(o => NoFiltering || enabledOverlays.Contains(o.key)))
+				yield return CircleRenderFunc(obj.center, obj.radius, obj.color, obj.thickness);
 
 			// Render Lines
-			foreach (var (line, color, persist, endPoints, thickness, _) in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
-				foreach (var renderLine in LineRenderFunc(line[0], line[1], color, endPoints, thickness))
+			foreach (var obj in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.key)))
+				foreach (var renderLine in LineRenderFunc(obj.line[0], obj.line[1], obj.color, obj.endPoints, obj.thickness))
 					yield return renderLine;
 		}
 
-		public void AddPoint(WPos pos, Color color, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null)
+		public void AddPoint(WPos pos, Color color, int persist = (int)PersistConst.Always, int radius = 32, int thickness = DefaultThickness, string key = null)
 		{
 			if (persist == (int)PersistConst.Never || persist == 0)
-				points.RemoveAll(p => p.Key == key);
+				points.RemoveAll(p => p.key == key);
 			else
 				for (var i = 0; i < points.Count; i++)
-					if (points[i].Key == key)
-						points[i] = (pos, color, persist--, thickness, key);
-			points.Add((pos, color, persist, thickness, key));
+					if (points[i].key == key && points[i].persist != (int)PersistConst.Always)
+						points[i].persist--;
+
+			points.RemoveAll(o => o.persist <= 0 && o.persist != (int)PersistConst.Always);
+			points.Add(new(pos, radius, color, persist, thickness, key));
 		}
-		public void RemovePoint(WPos pos) { points.RemoveAll(ap => ap.Point == pos); }
+
+		public void RemovePoint(WPos pos) { points.RemoveAll(ap => ap.pos == pos); }
 		public void AddText(WPos pos, string text, Color color, int persist = (int)PersistConst.Always, string fontname = null, string key = null)
 		{
 			if (persist == (int)PersistConst.Never || persist == 0)
-				texts.RemoveAll(l => l.Key == key);
+				texts.RemoveAll(l => l.key == key);
 			else
 				for (var i = 0; i < texts.Count; i++)
-					if (texts[i].Key == key)
-						texts[i] = (pos, text, color, persist--, fontname, key);
-			texts.Add((pos, text, color, persist, fontname, key));
+					if (texts[i].key == key && texts[i].persist != (int)PersistConst.Always)
+						texts[i].persist--;
+
+			texts.RemoveAll(o => o.persist <= 0 && o.persist != (int)PersistConst.Always);
+			texts.Add(new(pos, text, color, persist, fontname, key));
 		}
 
-		public void RemoveText(WPos pos) { texts.RemoveAll(t => t.Pos == pos); }
-		public void RemoveText(string text) { texts.RemoveAll(t => t.Text == text); }
-		public void RemoveText(WPos pos, string text) { texts.RemoveAll(t => t.Pos == pos && t.Text == text); }
+		public void RemoveText(WPos pos) { texts.RemoveAll(t => t.pos == pos); }
+		public void RemoveText(string text) { texts.RemoveAll(t => t.text == text); }
+		public void RemoveText(WPos pos, string text) { texts.RemoveAll(t => t.pos == pos && t.text == text); }
 		public void AddLine(List<WPos> line, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
 			int thickness = DefaultThickness, string key = null)
 		{
@@ -263,12 +339,14 @@ namespace OpenRA.Mods.Common.Traits
 			int thickness = DefaultThickness, string key = null)
 		{
 			if (persist == (int)PersistConst.Never || persist == 0)
-				lines.RemoveAll(l => l.Key == key);
+				lines.RemoveAll(l => l.key == key);
 			else
 				for (var i = 0; i < lines.Count; i++)
-					if (lines[i].Key == key)
-						lines[i] = (line, color, persist--, endPoints, thickness, key);
-			lines.Add((line, color, persist, endPoints, thickness, key));
+					if (lines[i].key == key && lines[i].persist != (int)PersistConst.Always)
+						lines[i].persist--;
+
+			lines.RemoveAll(o => o.persist <= 0 && o.persist != (int)PersistConst.Always);
+			lines.Add(new(line, color, persist, endPoints, thickness, key));
 		}
 
 		public void AddLine(WPos start, WPos end, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
@@ -283,21 +361,23 @@ namespace OpenRA.Mods.Common.Traits
 			AddLine(new List<WPos>() { start, end }, color, persist, endPoints, thickness, key);
 		}
 
-		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l.Line == line); }
-		public void AddCircle((WPos P, WDist D) circle, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null) =>
-			AddCircle(circle, defaultColor, persist, thickness, key);
-		public void AddCircle((WPos P, WDist D) circle, Color color, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null)
+		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l.line == line); }
+		public void AddCircle(WPos pos, WDist dist, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null) =>
+			AddCircle(pos, dist, defaultColor, persist, thickness, key);
+		public void AddCircle(WPos pos, WDist dist, Color color, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null)
 		{
 			if (persist == (int)PersistConst.Never || persist == 0)
-				circles.RemoveAll(c => c.Key == key);
+				circles.RemoveAll(c => c.key == key);
 			else
 				for (var i = 0; i < lines.Count; i++)
-					if (circles[i].Key == key)
-						circles[i] = (circle, color, persist--, thickness, key);
-			circles.Add((circle, color, persist, DefaultThickness, key));
+					if (circles[i].key == key && circles[i].persist != (int)PersistConst.Always)
+						circles[i].persist--;
+
+			circles.RemoveAll(o => o.persist <= 0 && o.persist != (int)PersistConst.Always);
+			circles.Add(new(pos, dist, color, persist, DefaultThickness, key));
 		}
 
-		public void RemoveCircle((WPos P, WDist D) circle) { circles.RemoveAll(c => c.Circle == circle); }
+		public void RemoveCircle(WPos center, WDist radius) { circles.RemoveAll(c => c.center == center && c.radius == radius); }
 		public void ClearLines() { lines.Clear(); }
 		public void ClearPoints() { points.Clear(); }
 		public void ClearCircles() { circles.Clear(); }
