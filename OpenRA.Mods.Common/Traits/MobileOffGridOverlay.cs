@@ -106,7 +106,7 @@ namespace OpenRA.Mods.Common.Traits
 			public readonly string text;
 			public readonly string fontname;
 
-			public Text(WPos pos, string text, Color color, int persist, string fontname, string key)
+			public Text(WPos pos, string text, Color color, int persist, string key, string fontname)
 				: base(color, persist, 0, key)
 			{
 				this.pos = pos;
@@ -143,6 +143,7 @@ namespace OpenRA.Mods.Common.Traits
 			public const string AllVectors = "allvec"; // toggles combined seek + flee vector overlays.
 			public const string Collision = "coll"; // toggles visual of collisions
 			public const string PathingText = "pathingtext"; // toggles seek, flee, and combined vector overlays.
+			public const string Pathing = "pathing"; // toggles current path
 			public const string PFNumber = "pfnum"; // toggles the index of the Theta PF used
 		}
 
@@ -171,6 +172,8 @@ namespace OpenRA.Mods.Common.Traits
 				OverlayKeyStrings.FleeVectors,
 				OverlayKeyStrings.AllVectors,
 				OverlayKeyStrings.Collision,
+				OverlayKeyStrings.PathingText,
+				OverlayKeyStrings.Pathing,
 				OverlayKeyStrings.PFNumber,
 			};
 
@@ -313,17 +316,17 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public void RemovePoint(WPos pos) { points.RemoveAll(ap => ap.pos == pos); }
-		public void AddText(WPos pos, string text, Color color, int persist = (int)PersistConst.Always, string fontname = null, string key = null)
+		public void AddText(WPos pos, string text, Color color, int persist = (int)PersistConst.Always, string key = null, string fontname = null)
 		{
 			if (persist == (int)PersistConst.Never || persist == 0)
-				texts.RemoveAll(l => l.key == key);
+				texts.RemoveAll(t => t.key == key);
 			else
 				for (var i = 0; i < texts.Count; i++)
 					if (texts[i].key == key && texts[i].persist != (int)PersistConst.Always)
 						texts[i].persist--;
 
 			texts.RemoveAll(o => o.persist <= 0 && o.persist != (int)PersistConst.Always);
-			texts.Add(new(pos, text, color, persist, fontname, key));
+			texts.Add(new(pos, text, color, persist, key, fontname));
 		}
 
 		public void RemoveText(WPos pos) { texts.RemoveAll(t => t.pos == pos); }
@@ -351,15 +354,11 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void AddLine(WPos start, WPos end, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
 			int thickness = DefaultThickness, string key = null)
-		{
-			AddLine(start, end, defaultColor, persist, endPoints, thickness, key);
-		}
+			=> AddLine(start, end, defaultColor, persist, endPoints, thickness, key);
 
 		public void AddLine(WPos start, WPos end, Color color, int persist = (int)PersistConst.Always, LineEndPoint endPoints = LineEndPoint.Circle,
 			int thickness = DefaultThickness, string key = null)
-		{
-			AddLine(new List<WPos>() { start, end }, color, persist, endPoints, thickness, key);
-		}
+			=> AddLine(new List<WPos>() { start, end }, color, persist, endPoints, thickness, key);
 
 		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l.line == line); }
 		public void AddCircle(WPos pos, WDist dist, int persist = (int)PersistConst.Always, int thickness = DefaultThickness, string key = null) =>

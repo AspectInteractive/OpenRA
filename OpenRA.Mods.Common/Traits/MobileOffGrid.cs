@@ -321,20 +321,23 @@ namespace OpenRA.Mods.Common.Traits
 
 		IEnumerable<int> speedModifiers;
 
-		public Color debugColor = Color.RandomColor();
+		public Color DebugColor = Color.RandomColor();
 		WPos cachedPosition;
 		WAngle cachedFacing;
 
 		public WPos CurrPathTarget;
+		public WPos LastPathTarget;
 		public WPos LastCompletedTarget;
-		public ThetaStarPathSearch thetaStarSearch;
-
-		public WVec Delta => CurrPathTarget - CenterPosition;
-		public List<WPos> PathComplete = new List<WPos>();
-		public List<WPos> PositionBuffer = new List<WPos>();
+		public ThetaStarPathSearch CurrThetaSearch;
+		public bool SearchingForNextTarget = false;
+		public bool IsBlocked = false;
+		bool useLocalAvoidance = true; // determines whether the local avoidance algorithm should be used to avoid nearby units
+		public List<WPos> PathComplete = new();
+		public List<WPos> PositionBuffer = new();
 		public int PositionBufferCapacity = 20;
 		public int TraversedCirclesBufferCapacity = 10;
-		public List<WPos> TraversedCirclesBuffer = new List<WPos>();
+		public WDist LocalAvoidanceDist => UnitRadius * 2;
+		public List<WPos> TraversedCirclesBuffer = new();
 
 		public List<BlockedByCell> BlockedByCells = new();
 
@@ -349,7 +352,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void AddToTraversedCirclesBuffer(WPos pos)
 		{
 			// We divide UnitRadius by 2 because we allow some overlap, to ensure the space between circles is not skipped.
-			if (!TraversedCirclesBuffer.Any(c => HitShapes.CircleShape.PosIsInsideCircle(c, UnitRadius.Length / 2, pos)))
+			if (!TraversedCirclesBuffer.Any(c => CircleShape.PosIsInsideCircle(c, UnitRadius.Length / 2, pos)))
 				AddToBuffer(ref TraversedCirclesBuffer, TraversedCirclesBufferCapacity, pos);
 		}
 
@@ -357,6 +360,9 @@ namespace OpenRA.Mods.Common.Traits
 		public List<MvVec> FleeVectors = new();
 
 		public MobileOffGridOverlay Overlay;
+		WVec Delta => CurrPathTarget - CenterPosition;
+		WVec pastMoveVec;
+		int currLocalAvoidanceAngleOffset = 0;
 		Repairable repairable;
 		Rearmable rearmable;
 		IAircraftCenterPositionOffset[] positionOffsets;
@@ -689,9 +695,200 @@ namespace OpenRA.Mods.Common.Traits
 		{
 		}
 
+		// This is the default movement to the current path target
+		// Delta = currPathTarget - CenterPosition
+		// It needs to be scaled by MovementSpeed before being used
+		public WVec GetDeltaMovement() => new(new WDist(MovementSpeed), WRot.FromYaw(Delta.Yaw));
+
+		bool UnitHasCollidedWithUnits(WVec mv) => ActorsCollidingWithActorBool(CenterPosition, mv,
+			LocalAvoidanceDist, Locomotor, attackingUnitsOnly: true);
+
+		public void UpdateSeekVecWithLocalAvoidance()
+		{
+
+#pragma warning disable SA1137 // Elements should have the same indentation
+			List<int> localAvoidanceAngleOffsetsLeft = new()
+			{
+				 0, -64, -128, -192,
+				-256, -320, -384,
+				-448, -512, -576,
+				-640, -704, -768,
+				-832, -896, -960,
+				-1024
+			};
+
+			List<int> localAvoidanceAngleOffsetsRight = new()
+			{
+				 0, 64,  128,  192,
+				 256,  320,  384,
+				 448,  512,  576,
+				 640,  704,  768,
+				 832,  896,  960,
+				 1024
+			};
+#pragma warning restore SA1137 // Elements should have the same indentation*/
+
+			if (SeekVectors.Count == 0)
+				return;
+
+			// moveVec is equal to the Seekector
+			var moveVec = SeekVectors[0].Vec;
+
+			static bool PosIsToTheLeft(WPos p1, WPos p2, WPos checkPos)
+				=> (p2.X - p1.X) * (checkPos.Y - p1.Y) - (p2.Y - p1.Y) * (checkPos.X - p1.X) > 0;
+
+			// Only change the SeekVector if either we are not searching for the next target, or we are colliding with an object, otherwise continue
+			// Revert to deltaMoveVec if we are no longer searching for the next target
+			//if (!(useLocalAvoidance && UnitHasCollidedWithUnits(moveVec)) && !mobileOffGrid.SearchingForNextTarget)
+			//{
+			//	mobileOffGrid.SeekVectors = new List<MvVec>() { new(deltaMoveVec) };
+			//	moveVec = deltaMoveVec;
+			//}
+			// Since the pathfinder avoids map obstacles, this must be a unit obstacle, so we employ our local avoidance strategy
+			if (useLocalAvoidance && UnitHasCollidedWithUnits(moveVec))
+			{
+				var avoidanceVec = WVec.Zero;
+				var revisedMoveVec = moveVec;
+				var localAvoidanceAngleOffset = 0;
+				var i = 0;
+				do
+				{
+					var actorUnitIsCollidingWith = ActorsCollidingWithActor(CenterPosition, moveVec,
+						LocalAvoidanceDist, Locomotor, attackingUnitsOnly: true).FirstOrDefault();
+					MobileOffGrid collidingMobileOG;
+
+					if (actorUnitIsCollidingWith != null)
+					{
+						var localAvoidanceMove = new WVec(LocalAvoidanceDist, WRot.FromYaw(moveVec.Yaw));
+						collidingMobileOG = actorUnitIsCollidingWith.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled);
+						Overlay.AddCircle(collidingMobileOG.CenterPosition, collidingMobileOG.UnitRadius,
+							(int)PersistConst.Never, 1, OverlayKeyStrings.LocalAvoidance);
+
+						// We take the angle from the unit's current _movement destination_ NOT from the unit's current center position.
+						// This gives us the offset that we need
+						var angleDistToCollidingActor = collidingMobileOG.CenterPosition - (CenterPosition + localAvoidanceMove);
+						var checkLeft = PosIsToTheLeft(CenterPosition,
+										 CenterPosition + new WVec(LocalAvoidanceDist, WRot.FromYaw(moveVec.Yaw)),
+										 LastPathTarget);
+
+						if (checkLeft)
+							localAvoidanceAngleOffset = localAvoidanceAngleOffsetsLeft[i];
+						else
+							localAvoidanceAngleOffset = localAvoidanceAngleOffsetsRight[i];
+
+						//var p1 = CenterPosition;
+						//var p2 = CenterPosition + moveVec * 3;
+						//Overlay.AddLine(p1, p2, Color.Orange, 16, LineEndPoint.EndArrow, key: OverlayKeyStrings.LocalAvoidance);
+
+						//p1 = CenterPosition + moveVec * 3;
+						//p2 = p1 + angleDistToCollidingActor;
+						//Overlay.AddLine(p1, p2, Color.BlueViolet, 16, LineEndPoint.EndArrow, key: OverlayKeyStrings.LocalAvoidance);
+
+						//p1 = CenterPosition + moveVec * 3;
+						//p2 = p1 + new WVec(new WDist((moveVec * 3).Length), WRot.FromYaw(moveVec.Yaw + angleDistToCollidingActor.Yaw));
+						//Overlay.AddLine(p1, p2, Color.Green, 16, LineEndPoint.EndArrow, key: OverlayKeyStrings.LocalAvoidance);
+
+						// NOTE: localAvoidanceAngleOffset is initially 0, ensuring that the normal collision is tested first.
+						// TO DO: Identify why going up does not cause change, most likely has something to do with Yaw being very small
+
+						avoidanceVec = new WVec(new WDist(moveVec.Length),
+													  WRot.FromYaw(angleDistToCollidingActor.Yaw +
+														new WAngle(checkLeft ? 256 : -256) +
+														new WAngle(localAvoidanceAngleOffset)));
+						//var newMoveVec = new WVec(new WDist(moveVec.Length),
+						//						  WRot.FromYaw(moveVec.Yaw
+						//						  + angleDistToCollidingActor.Yaw
+						//						  //+ angleDistToCollidingActor.Yaw
+						//						  //+ new WAngle(localAvoidanceAngleOffset)
+						//						  ));
+
+						var p1 = CenterPosition;
+						var p2 = CenterPosition + avoidanceVec * 3;
+						Overlay.AddLine(p1, p2, Color.Green, 16, LineEndPoint.EndArrow, key: OverlayKeyStrings.LocalAvoidance);
+
+						//Overlay.AddText(CenterPosition, checkLeft.ToString(), Color.LightCyan, (int)PersistConst.Never, key: OverlayKeyStrings.LocalAvoidance);
+						//revisedMoveVec = newMoveVec;
+					}
+
+					i++;
+				}
+				while (UnitHasCollidedWithUnits(revisedMoveVec) && i < localAvoidanceAngleOffsetsLeft.Count);
+
+				if (!UnitHasCollidedWithUnits(revisedMoveVec))
+				{
+#if DEBUGWITHOVERLAY
+					//Console.WriteLine($"move.Yaw {moveVec.Yaw}, revisedMove.Yaw: {revisedMoveVec.Yaw}");
+					//RenderLine(self, CenterPosition, CenterPosition + revisedMoveVec);
+					//RenderPoint(self, CenterPosition + revisedMoveVec, Color.LightGreen);
+#endif
+					AddToTraversedCirclesBuffer(self.CenterPosition + revisedMoveVec);
+					MoveOffGrid.RenderCircleColorCollDebug(self, CenterPosition + revisedMoveVec, UnitRadius, Color.LightGreen, 3);
+					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
+					//RenderLine(CenterPosition, CenterPosition + revisedMoveVec * 4, LineType.LocalAvoidanceDirection);
+					pastMoveVec = moveVec;
+					SeekVectors = new List<MvVec>() { new(revisedMoveVec, 6) };
+					SearchingForNextTarget = true;
+					IsBlocked = false;
+				}
+				//else // since we cannot move without colliding, we stop trying
+				//{
+				//	EndingActions();
+				//	return Complete();
+				//}
+			}
+			else if (useLocalAvoidance && currLocalAvoidanceAngleOffset != 0 && SearchingForNextTarget && !UnitHasCollidedWithUnits(pastMoveVec))
+			{
+				SetForcedFacing(-WAngle.ArcTan(CenterPosition.Y - CurrPathTarget.Y, CenterPosition.X - CurrPathTarget.X) + new WAngle(256));
+				pastMoveVec = new WVec(0, 0, 0);
+				currLocalAvoidanceAngleOffset = 0;
+				SearchingForNextTarget = false;
+			}
+		}
+
+		public void AddCellCollisionFleeVectors()
+		{
+			if (SeekVectors.Count == 0)
+				return;
+
+			WVec RepulsionVecFunc(WPos selfPos, WPos cellPos)
+			{
+				var repulsionDelta = cellPos - selfPos;
+				var distToMove = Math.Min(repulsionDelta.Length, MovementSpeed);
+				return -new WVec(new WDist(distToMove), WRot.FromYaw(repulsionDelta.Yaw));
+			}
+
+			//// Check collision with walls
+			var cellsCollidingSet = new List<CPos>();
+			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, Locomotor));
+			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, Locomotor));
+			cellsCollidingSet.AddRange(CellsCollidingWithActor(self, SeekVectors[0].Vec, 1, Locomotor));
+
+			// Used by MobileOffGrid to suppress movement in the direction that the unit is being blocked
+			BlockedByCells = DirectionOfCellsBlockingPos(self, CenterPosition, cellsCollidingSet);
+
+			var fleeVecToUse = cellsCollidingSet.Distinct().Select(c => self.World.Map.CenterOfCell(c))
+														   .Select(wp => RepulsionVecFunc(CenterPosition, wp)).ToList();
+
+			FleeVectors.AddRange(fleeVecToUse.ConvertAll(v => new MvVec(v, 1)));
+		}
+
 		public void MobileOffGridMoveTick(Actor self)
 		{
+			CreateRepelNearbyUnitsVectorsTick(self);
+
 			var move = ForcedMove == WVec.Zero ? GenFinalWVec() : ForcedMove;
+
+			if (!SearchingForNextTarget && CurrPathTarget != WPos.Zero && SeekVectors.Count == 0)
+			{
+				Console.WriteLine($"CURRPATHTARGET: {CurrPathTarget}");
+				SeekVectors = new List<MvVec>() { new(GetDeltaMovement()) };
+			}
+
+			RenderPathingStats();
+			RenderCurrPathTarget();
+
+			UpdateSeekVecWithLocalAvoidance();
+			AddCellCollisionFleeVectors();
 
 			// Remove vectors if unit is blocked
 			if (self.CurrentActivity is not ReturnToCellActivity)
@@ -958,9 +1155,16 @@ namespace OpenRA.Mods.Common.Traits
 
 			Overlay.AddText(CenterPosition,
 				$"cpt:{CurrPathTarget.X},{CurrPathTarget.Y},\nMS:{Enum.GetName(typeof(MovementState), CurrMovementState)}\n" +
-				$"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Orange, Persist, Key);
+				$"S:{VecToXYstring(seek)}, F:{VecToXYstring(flee)}", Color.Orange, Persist, key: Key);
 			if (CurrPathTarget != WPos.Zero)
 				Overlay.AddPoint(CurrPathTarget, Color.Purple, Persist, key: Key);
+		}
+
+		public void RenderCurrPathTarget()
+		{
+			if (CurrPathTarget != WPos.Zero)
+				Overlay.AddLine(CenterPosition, CurrPathTarget, Color.Orange, 16, LineEndPoint.EndArrow,
+					thickness: 3, key: OverlayKeyStrings.Pathing);
 		}
 
 		public enum LineType
@@ -993,8 +1197,6 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected virtual void Tick(Actor self)
 		{
-			//RenderPathingStats();
-
 			var oldCachedFacing = cachedFacing;
 			cachedFacing = Facing;
 
@@ -1022,7 +1224,6 @@ namespace OpenRA.Mods.Common.Traits
 					Pitch = Util.TickFacing(Pitch, WAngle.Zero, Info.PitchSpeed);
 			}
 
-			CreateRepelNearbyUnitsVectorsTick(self);
 			MobileOffGridMoveTick(self); // Update unit position
 
 			// Update unit's cell as it moves

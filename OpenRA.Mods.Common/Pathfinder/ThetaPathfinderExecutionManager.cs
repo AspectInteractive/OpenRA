@@ -161,7 +161,7 @@ namespace OpenRA.Mods.Common.Traits
 					ActorsSharingPF = new List<Actor>() { actor }
 				};
 
-				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
+				actor.Trait<MobileOffGrid>().CurrThetaSearch = rawThetaStarSearch;
 				AddPF(rawThetaStarSearch);
 			}
 			else if (secondThetaRun || actor.CurrentActivity is MobileOffGrid.ReturnToCellActivity)
@@ -173,7 +173,7 @@ namespace OpenRA.Mods.Common.Traits
 					ActorsSharingPF = new List<Actor>() { actor }
 				};
 
-				actor.Trait<MobileOffGrid>().thetaStarSearch = rawThetaStarSearch;
+				actor.Trait<MobileOffGrid>().CurrThetaSearch = rawThetaStarSearch;
 				AddPF(rawThetaStarSearch);
 			}
 			else
@@ -328,7 +328,7 @@ namespace OpenRA.Mods.Common.Traits
 										newAvgThetaStarSearch.ActorsSharingPF.Add(actor);
 									else
 										newAvgThetaStarSearch.ActorsSharingPF = new List<Actor> { actor };
-									actorMobileOffGrid.thetaStarSearch = newAvgThetaStarSearch;
+									actorMobileOffGrid.CurrThetaSearch = newAvgThetaStarSearch;
 								}
 								else
 								{
@@ -340,7 +340,7 @@ namespace OpenRA.Mods.Common.Traits
 										ActorsSharingPF = new List<Actor> { actor }
 									};
 
-									actorMobileOffGrid.thetaStarSearch = individualAvgThetaStarSearch;
+									actorMobileOffGrid.CurrThetaSearch = individualAvgThetaStarSearch;
 									AddPF(individualAvgThetaStarSearch);
 								}
 							}
