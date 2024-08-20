@@ -88,7 +88,7 @@ namespace OpenRA.Mods.Common.Activities
 		WPos lastPathTarget;
 		bool firstMove = false;
 		int thetaIters = 0;
-		readonly int maxThetaIters = 1;
+		readonly int maxThetaIters = 3;
 
 		WPos FinalPathTarget => pathRemaining.Count > 0 ? pathRemaining.Last() : currPathTarget;
 
@@ -140,7 +140,8 @@ namespace OpenRA.Mods.Common.Activities
 
 		bool GetNextTargetOrComplete(Actor self, bool completeCurrTarg = true)
 		{
-			//RenderTextCollDebug(self, mobileOffGrid.CenterPosition, pathRemaining.Count.ToString(), Color.Yellow);
+			//mobileOffGrid.Overlay.AddText(mobileOffGrid.CenterPosition, pathRemaining.Count.ToString(), Color.Yellow,
+			//	(int)3, MobileOffGridOverlay.OverlayKeyStrings.Pathing);
 			if (completeCurrTarg)
 			{
 				mobileOffGrid.PathComplete.Add(currPathTarget);
@@ -424,7 +425,7 @@ namespace OpenRA.Mods.Common.Activities
 				am2.OffsetTarget = currPathTarget - am2.OffsetToCenterOfActors;
 				am2.IsOffsetCloseEnough = am2.OffsetToCenterOfActors.HorizontalLengthSquared < 1024 * 1024 * 40;
 				am2.IsOffsetTargetObservable = IsPathObservable(am2.Act.World, am2.Act, am2.MobOffGrid.Locomotor,
-					currPathTarget - am2.OffsetToCenterOfActors, mobileOffGrid.CenterPosition, mobileOffGrid.UnitHitShape);
+					currPathTarget - am2.OffsetToCenterOfActors, mobileOffGrid.CenterPosition, mobileOffGrid.UnitHitShape, true);
 				return am2;
 			}).ToList();
 			var actorsSharingMoveXYBounds = actorsSharingMoveWithProps.Select(a => new { a.MobOffGrid.CenterPosition, a.MobOffGrid.UnitRadius })
@@ -562,11 +563,13 @@ namespace OpenRA.Mods.Common.Activities
 								EndingActions();
 								Complete();
 								thetaPFexecManager.AddMoveOrder(self, target.CenterPosition);
+								RenderCircleColorCollDebug(self, mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius, Color.Purple, 3);
 								thetaPFexecManager.PlayerCirclesLocked = false;
 								thetaIters++;
 							}
 							else
 							{
+								mobileOffGrid.CurrMovementState = MovementState.FailedStuckButNotLastTarget;
 								mobileOffGrid.IsBlocked = false;
 								mobileOffGrid.PositionBuffer.Clear();
 								EndingActions();
@@ -577,6 +580,7 @@ namespace OpenRA.Mods.Common.Activities
 				}
 				else if (nearbyActorsSharingMove.Count <= 1 && deltaLast.LengthSquared + 512 * 512 > deltaFirst.LengthSquared)
 				{
+					mobileOffGrid.CurrMovementState = MovementState.FailedStuck;
 					EndingActions();
 					mobileOffGrid.PositionBuffer.Clear();
 				}
@@ -598,12 +602,16 @@ namespace OpenRA.Mods.Common.Activities
 			if (hasReachedGoal)
 			{
 #if DEBUG || DEBUGWITHOVERLAY
+				mobileOffGrid.Overlay.AddCircle(mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius, Color.Pink,
+					(int)MobileOffGridOverlay.PersistConst.Never, 3, MobileOffGridOverlay.OverlayKeyStrings.Pathing);
 				// System.Console.WriteLine($"if (delta.HorizontalLengthSquared < move.HorizontalLengthSquared) = {Delta.HorizontalLengthSquared < move.HorizontalLengthSquared}");
 #endif
 
 				if (Delta.HorizontalLengthSquared != 0 && selfHasReachedGoal)
 				{
 					// Ensure we don't include a non-zero vertical component here that would move us away from CruiseAltitude
+					mobileOffGrid.Overlay.AddCircle(mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius, Color.HotPink,
+						(int)MobileOffGridOverlay.PersistConst.Never, 3, MobileOffGridOverlay.OverlayKeyStrings.Pathing);
 					mobileOffGrid.SeekVectors.Clear();
 					mobileOffGrid.SetForcedAltitude(dat);
 					mobileOffGrid.SetForcedMove(mobileOffGrid.GenFinalWVec()); // we may be able to get rid of this as it seems redundant

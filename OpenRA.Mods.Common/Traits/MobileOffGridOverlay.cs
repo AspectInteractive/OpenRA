@@ -368,7 +368,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (persist == (int)PersistConst.Never || persist == 0)
 				circles.RemoveAll(c => c.key == key);
 			else
-				for (var i = 0; i < lines.Count; i++)
+				for (var i = 0; i < circles.Count; i++)
 					if (circles[i].key == key && circles[i].persist != (int)PersistConst.Always)
 						circles[i].persist--;
 

@@ -290,7 +290,7 @@ namespace OpenRA.Mods.Common.Traits
 		readonly int creationActivityDelay;
 		readonly bool notify = true;
 
-		public enum MovementState { Undefined, Blocked, Seeking, Starting, Stopped, Repathing, FinishedTarget, Ending }
+		public enum MovementState { Undefined, Blocked, Seeking, Starting, Stopped, Repathing, FinishedTarget, Ending, FailedStuck, FailedStuckButNotLastTarget }
 
 		public MovementState CurrMovementState = MovementState.Undefined;
 
@@ -631,25 +631,11 @@ namespace OpenRA.Mods.Common.Traits
 					if (!nearbyActor.IsDead && nearbyActor != self) // && !ActorIsAiming(nearbyActor))
 					{
 						var nearbyActorMobileOGs = nearbyActor.TraitsImplementing<MobileOffGrid>().Where(Exts.IsTraitEnabled);
-						if (nearbyActorMobileOGs.Any() && nearbyActor.CurrentActivity is not ReturnToCellActivity)
+						if (nearbyActorMobileOGs.Any())
 						{
 							var nearbyActorMobileOG = nearbyActorMobileOGs.FirstOrDefault();
 							var repulsionMvVec = new MvVec(RepulsionVecFunc(MovementSpeed, CenterPosition, nearbyActorMobileOG.CenterPosition), 1);
-
-							// Create hypothetical movement using flee vector to test if intersecting
-							var proposedWVec = GenFinalWVec(SeekVectors, FleeVectors.Union(new List<MvVec>() { repulsionMvVec }).ToList());
-							var intersectingEdges = GetIntersectingEdges(self.CenterPosition, proposedWVec, 1, Locomotor);
-							if (intersectingEdges.Count == 0)
-								FleeVectors.Add(repulsionMvVec);
-							else
-							{
-								// Remove any X or Y movement that causes the repulsion to intersect with an edge of a cell
-								var repulsionVector = repulsionMvVec.Vec;
-								foreach (var edge in intersectingEdges)
-									repulsionVector = RemoveVecOfIntersectingEdge(edge, repulsionVector);
-								if (repulsionVector.X != 0 || repulsionVector.Y != 0) // do not add flee vectors that have both X and Y as 0
-									FleeVectors.Add(new MvVec(repulsionVector, 1));
-							}
+							FleeVectors.Add(repulsionMvVec);
 						}
 					}
 				}
@@ -859,8 +845,8 @@ namespace OpenRA.Mods.Common.Traits
 
 			//// Check collision with walls
 			var cellsCollidingSet = new List<CPos>();
-			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 3, Locomotor));
-			//cellsCollidingSet.AddRange(mobileOffGrid.CellsCollidingWithActor(self, moveVec, 2, Locomotor));
+			cellsCollidingSet.AddRange(CellsCollidingWithActor(self, SeekVectors[0].Vec, 3, Locomotor));
+			cellsCollidingSet.AddRange(CellsCollidingWithActor(self, SeekVectors[0].Vec, 2, Locomotor));
 			cellsCollidingSet.AddRange(CellsCollidingWithActor(self, SeekVectors[0].Vec, 1, Locomotor));
 
 			// Used by MobileOffGrid to suppress movement in the direction that the unit is being blocked
@@ -878,21 +864,21 @@ namespace OpenRA.Mods.Common.Traits
 
 			var move = ForcedMove == WVec.Zero ? GenFinalWVec() : ForcedMove;
 
-			if (!SearchingForNextTarget && CurrPathTarget != WPos.Zero && SeekVectors.Count == 0)
+			if (!SearchingForNextTarget && CurrPathTarget != WPos.Zero)
 			{
-				Console.WriteLine($"CURRPATHTARGET: {CurrPathTarget}");
 				SeekVectors = new List<MvVec>() { new(GetDeltaMovement()) };
+				CurrMovementState = MovementState.Seeking;
 			}
 
 			RenderPathingStats();
-			RenderCurrPathTarget();
+			//RenderCurrPathTarget();
 
 			UpdateSeekVecWithLocalAvoidance();
 			AddCellCollisionFleeVectors();
 
 			// Remove vectors if unit is blocked
-			if (self.CurrentActivity is not ReturnToCellActivity)
-				move = RemoveBlockedVectors(move, BlockedByCells);
+			//if (self.CurrentActivity is not ReturnToCellActivity)
+			//	move = RemoveBlockedVectors(move, BlockedByCells);
 
 			if (ActorsCollidingWithActorBool(CenterPosition, move, UnitRadius * 2, Locomotor, attackingUnitsOnly: true))
 				GetBestNonCollidingMovement();
@@ -1163,7 +1149,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void RenderCurrPathTarget()
 		{
 			if (CurrPathTarget != WPos.Zero)
-				Overlay.AddLine(CenterPosition, CurrPathTarget, Color.Orange, 16, LineEndPoint.EndArrow,
+				Overlay.AddLine(CenterPosition, CurrPathTarget, Color.Orange, 8, LineEndPoint.EndArrow,
 					thickness: 3, key: OverlayKeyStrings.Pathing);
 		}
 
