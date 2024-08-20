@@ -1112,22 +1112,22 @@ namespace OpenRA
 			return new WPos(724 * (cell.X - cell.Y + 2), 724 * (cell.X + cell.Y + 2), z);
 		}
 
-		public List<WPos> TopEdgeOfCell(CPos cell) { return new List<WPos>() { TopLeftOfCell(cell),	TopRightOfCell(cell) };	}
+		public List<WPos> TopEdgeOfCell(CPos cell) { return new List<WPos>() { TopLeftOfCell(cell), TopRightOfCell(cell) }; }
 		public List<WPos> BottomEdgeOfCell(CPos cell) { return new List<WPos>() { BottomLeftOfCell(cell), BottomRightOfCell(cell) }; }
 		public List<WPos> LeftEdgeOfCell(CPos cell) { return new List<WPos>() { TopLeftOfCell(cell), BottomLeftOfCell(cell) }; }
 		public List<WPos> RightEdgeOfCell(CPos cell) { return new List<WPos>() { TopRightOfCell(cell), BottomRightOfCell(cell) }; }
 
 		public static bool CellEdgeIntersectsWithLine(List<WPos> cellEdge, WPos b0, WPos b1)
 		{
-			var a0 = cellEdge.ElementAt(0);
-			var a1 = cellEdge.ElementAt(1);
+			var a0 = cellEdge[0];
+			var a1 = cellEdge[1];
 			return WPos.DoTwoLinesIntersect(a0, a1, b0, b1);
 		}
 
 		public static WPos? CellEdgeIntersectionWithLine(List<WPos> cellEdge, WPos b0, WPos b1)
 		{
-			var a0 = cellEdge.ElementAt(0);
-			var a1 = cellEdge.ElementAt(1);
+			var a0 = cellEdge[0];
+			var a1 = cellEdge[1];
 			return WPos.FindIntersection(a0, a1, b0, b1);
 		}
 

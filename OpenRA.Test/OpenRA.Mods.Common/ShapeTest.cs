@@ -14,6 +14,8 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using OpenRA.Mods.Common.HitShapes;
+using OpenRA.Traits;
+
 
 #pragma warning disable SA1001 // Commas should be spaced correctly
 
@@ -149,6 +151,71 @@ namespace OpenRA.Test
 				Console.WriteLine($"line {index + 1} has collision: {collision} ");
 			}
 		}
+
+		[TestCase(TestName = "Do Two Lines Intersect.")]
+		public void DoTwoLinesIntersect()
+		{
+			var lines = new List<(WPos C1, WPos C2, WPos L1, WPos L2, bool Intersect)>
+			{
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(400, 800, 0), new WPos(100, 600, 0), false),
+				(new WPos(1000, 300, 0), new WPos(512, 300, 0), new WPos(400, 800, 0), new WPos(100, 600, 0), false),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(400, 800, 0), new WPos(873, 140, 0), true),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(512, 300, 0), new WPos(512, 300, 0), true),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(1000, 300, 0), new WPos(1000, 300, 0), true),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(900, 300, 0), new WPos(650, 300, 0), true),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(512, 100, 0), new WPos(512, 600, 0), true),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(512, 600, 0), new WPos(512, 100, 0), true),
+				(new WPos(1000, 300, 0), new WPos(512, 300, 0), new WPos(512, 100, 0), new WPos(512, 600, 0), true),
+				(new WPos(1000, 300, 0), new WPos(512, 300, 0), new WPos(512, 600, 0), new WPos(512, 100, 0), true),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(512, 100, 0), new WPos(512, 300, 0), true),
+				(new WPos(512, 300, 0), new WPos(1000, 300, 0), new WPos(512, 300, 0), new WPos(512, 100, 0), true),
+				(new WPos(1000, 300, 0), new WPos(512, 300, 0), new WPos(512, 100, 0), new WPos(512, 300, 0), true),
+				(new WPos(1000, 300, 0), new WPos(512, 300, 0), new WPos(512, 300, 0), new WPos(512, 100, 0), true),
+				(new WPos(180, 300, 0), new WPos(180, 700, 0), new WPos(180, 450, 0), new WPos(180, 550, 0), true),
+				(new WPos(180, 300, 0), new WPos(180, 700, 0), new WPos(180, 550, 0), new WPos(180, 450, 0), true),
+				(new WPos(180, 700, 0), new WPos(180, 300, 0), new WPos(180, 550, 0), new WPos(180, 450, 0), true),
+				(new WPos(180, 700, 0), new WPos(180, 300, 0), new WPos(180, 450, 0), new WPos(180, 550, 0), true),
+				(new WPos(180, 700, 0), new WPos(180, 300, 0), new WPos(180, 700, 0), new WPos(180, 700, 0), true),
+				(new WPos(180, 700, 0), new WPos(180, 300, 0), new WPos(180, 701, 0), new WPos(180, 701, 0), false),
+				(new WPos(180, 700, 0), new WPos(180, 300, 0), new WPos(180, 300, 0), new WPos(180, 300, 0), true),
+				(new WPos(180, 700, 0), new WPos(180, 300, 0), new WPos(180, 299, 0), new WPos(180, 299, 0), false),
+			};
+
+			foreach (var (c1, c2, l1, l2, intersect) in lines)
+			{
+				Assert.That(WPos.DoTwoLinesIntersect(c1, c2, l1, l2) == intersect);
+				Console.WriteLine($"{c1}{c2}{l1}{l2} has intersection: {intersect} ");
+			}
+		}
+
+		// TO DO: Potentially find a way to Mock the World class so I can call AnyCellEdgeIntersectsWithLine	
+		//public void AnyCellEdgeIntersectsWithLine()
+		//{
+		//	var world = OpenRA.Test.IMock
+
+		//	var lines = new List<(CPos Cell, WPos L1, WPos L2, bool Intersect)>
+		//	{
+		//		(new CPos(40, 30), new WPos(40960, 30720, 0), new WPos(40960, 30720, 0), true), // top left corner
+		//		(new CPos(40, 30), new WPos(40960, 31744, 0), new WPos(40960, 31744, 0), true), // top right corner
+		//		(new CPos(40, 30), new WPos(40960, 31744, 0), new WPos(41984, 31744, 0), true), // top
+		//		(new CPos(40, 30), new WPos(0, 31744, 0), new WPos(43000, 31744, 0), true), // top 2
+		//		(new CPos(40, 30), new WPos(40960, 31744, 0), new WPos(43000, 31744, 0), true), // left
+		//		(new CPos(40, 30), new WPos(0, 31744, 0), new WPos(43000, 31744, 0), true), // left 2
+		//		(new CPos(40, 30), new WPos(41984, 30720, 0), new WPos(41984, 30720, 0), true), // bottom left corner
+		//		(new CPos(40, 30), new WPos(41984, 31744, 0), new WPos(41984, 31744, 0), true), // bottom right corner
+		//		(new CPos(40, 30), new WPos(40960, 31744, 0), new WPos(41984, 31744, 0), true), // bottom
+		//		(new CPos(40, 30), new WPos(40950, 31744, 0), new WPos(42000, 31744, 0), true), // bottom 2
+		//		(new CPos(40, 30), new WPos(40960, 30721, 0), new WPos(40960, 50, 0), true),
+		//		(new CPos(40, 30), new WPos(0, 31744, 0), new WPos(50, 31744, 0), false),
+		//		(new CPos(40, 30), new WPos(41200, 1000, 0), new WPos(41200, 20000, 0), false),
+		//	};
+
+		//	foreach (var (c, l1, l2, intersect) in lines)
+		//	{
+		//		Assert.That(world.Map.AnyCellEdgeIntersectsWithLine(c, l1, l2) == intersect);
+		//		Console.WriteLine($"{c}{l1}{l2} has intersection: {intersect} ");
+		//	}
+		//}
 
 		[TestCase(TestName = "CapsuleShape report accurate distance")]
 		public void Capsule()
