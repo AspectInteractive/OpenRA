@@ -35,7 +35,7 @@ namespace OpenRA.Mods.Common.Traits
 		List<(CCState, Color)> statesWithColors = new();
 		readonly List<string> enabledOverlays = new();
 		bool NoFiltering => enabledOverlays.Count == 0;
-		readonly List<List<WPos>> paths = new();
+		readonly List<(List<WPos> Path, Color? C)> paths = new();
 		readonly List<(List<WPos> Line, string Key)> lines = new();
 
 		public struct OverlayKeyStrings
@@ -181,9 +181,9 @@ namespace OpenRA.Mods.Common.Traits
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
 			if (NoFiltering || enabledOverlays.Contains(OverlayKeyStrings.Path))
 			{
-				foreach (var path in paths)
+				foreach (var (path, color) in paths)
 				{
-					var linesToRender = GetPathRenderableSet(path, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
+					var linesToRender = GetPathRenderableSet(path, lineThickness, color ?? lineColor, endPointRadius, endPointThickness, lineColor);
 					foreach (var line in linesToRender)
 						yield return line;
 				}
@@ -254,8 +254,8 @@ namespace OpenRA.Mods.Common.Traits
 			UpdatePointColors();
 		}
 
-		public void AddPath(List<WPos> path) { paths.Add(path); }
-		public void RemovePath(List<WPos> path)	{ paths.RemoveAll(p => p == path); }
+		public void AddPath(List<WPos> path, Color? color = null) { paths.Add((path, color)); }
+		public void RemovePath(List<WPos> path)	{ paths.RemoveAll(p => p.Path == path); }
 		public void AddLine(List<WPos> line, string key) { lines.Add((line, key)); }
 		public void RemoveLine(List<WPos> line) { lines.RemoveAll(l => l.Line == line); }
 		public void AddLineWithColor(List<WPos> line, Color color, string key) { linesWithColors.Add((line, color, key)); }

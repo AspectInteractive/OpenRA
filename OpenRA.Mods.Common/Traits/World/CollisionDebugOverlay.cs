@@ -31,11 +31,11 @@ namespace OpenRA.Mods.Common.Traits
 		readonly List<(List<WPos>, Color, int)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int)> circlesWithColors = new();
 		readonly List<(WPos, Color, int)> pointsWithColors = new();
+		readonly List<(List<WPos> Path, Color? C)> paths = new();
 		readonly List<(Actor, WPos, Color, int)> actorPointsWithColors = new();
 		List<(CCState, Color)> statesWithColors = new();
 		readonly List<(WPos, string, Color, string)> textsWithColors = new();
 		readonly List<(Actor, WPos, string, Color, string)> actorTextsWithColors = new();
-		readonly List<List<WPos>> paths = new();
 		readonly List<(List<WPos>, int)> linesWithThickness = new();
 
 		// Set this to true to display annotations showing the cost at each cell
@@ -177,9 +177,9 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Render Paths
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
-			foreach (var path in paths)
+			foreach (var (path, color) in paths)
 			{
-				var linesToRender = GetPathRenderableSet(path, LineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
+				var linesToRender = GetPathRenderableSet(path, LineThickness, color ?? lineColor, endPointRadius, endPointThickness, lineColor);
 				foreach (var line in linesToRender)
 					yield return line;
 			}
@@ -265,6 +265,7 @@ namespace OpenRA.Mods.Common.Traits
 					pointsWithColors.Remove((pos, currColor, thickness));
 			UpdatePointColors();
 		}
+		public void AddPath(List<WPos> path, Color? color = null) { paths.Add((path, color)); }
 
 		public void RemoveActorPoint(WPos pos) { actorPointsWithColors.RemoveAll(ap => ap.Item2 == pos); }
 		public void RemoveActorPoint(Actor self) { actorPointsWithColors.RemoveAll(ap => ap.Item1 == self); }
@@ -279,8 +280,8 @@ namespace OpenRA.Mods.Common.Traits
 		public void RemoveActorText(Actor self, WPos pos) { actorTextsWithColors.RemoveAll(at => at.Item1 == self && at.Item2 == pos); }
 		public void RemoveActorText(Actor self, string text) { actorTextsWithColors.RemoveAll(at => at.Item1 == self && at.Item3 == text); }
 		public void RemoveActorText(Actor self, WPos pos, string text) { actorTextsWithColors.RemoveAll(at => at.Item1 == self && at.Item2 == pos && at.Item3 == text); }
-		public void AddPath(List<WPos> path) { paths.Add(path); }
-		public void RemovePath(List<WPos> path) { paths.RemoveAll(p => p == path); }
+		public void RemovePath(List<WPos> path) { paths.RemoveAll(p => p.Path == path); }
+		public void AddLine(WPos p1, WPos p2, int thickness = LineThickness) => AddLine(new List<WPos> { p1, p2 }, thickness);
 		public void AddLine(List<WPos> line, int thickness = LineThickness) { linesWithThickness.Add((line, thickness)); }
 		public void RemoveLine(List<WPos> line) { linesWithThickness.RemoveAll(l => l.Item1 == line); }
 		public void AddLineWithColor(List<WPos> line, Color color, int thickness = LineThickness) { linesWithColorsAndThickness.Add((line, color, thickness)); }
