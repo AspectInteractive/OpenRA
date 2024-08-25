@@ -43,11 +43,13 @@ namespace RVO
      * <summary>Defines the simulation.</summary>
      */
     public class Simulator
-    {
-        /**
+	{
+		readonly Random random = new();
+
+		/**
          * <summary>Defines a worker.</summary>
          */
-        private class Worker
+		private class Worker
         {
             private readonly ManualResetEvent doneEvent_;
             private readonly int end_;
@@ -117,39 +119,7 @@ namespace RVO
             }
         }
 
-        /**
-         * <summary>Adds a new agent with default properties to the simulation.
-         * </summary>
-         *
-         * <returns>The number of the agent, or -1 when the agent defaults have
-         * not been set.</returns>
-         *
-         * <param name="position">The two-dimensional starting position of this
-         * agent.</param>
-         */
-        public int addAgent(Vector2 position)
-        {
-            if (defaultAgent_ == null)
-            {
-                return -1;
-            }
-
-            Agent agent = new();
-            agent.id_ = agents_.Count;
-            agent.maxNeighbors_ = defaultAgent_.maxNeighbors_;
-            agent.maxSpeed_ = defaultAgent_.maxSpeed_;
-            agent.neighborDist_ = defaultAgent_.neighborDist_;
-            agent.position_ = position;
-            agent.radius_ = defaultAgent_.radius_;
-            agent.timeHorizon_ = defaultAgent_.timeHorizon_;
-            agent.timeHorizonObst_ = defaultAgent_.timeHorizonObst_;
-            agent.velocity_ = defaultAgent_.velocity_;
-            agents_.Add(agent);
-
-            return agent.id_;
-        }
-
-        /**
+		/**
          * <summary>Adds a new agent to the simulation.</summary>
          *
          * <returns>The number of the agent.</returns>
@@ -183,24 +153,93 @@ namespace RVO
          * <param name="velocity">The initial two-dimensional linear velocity of
          * this agent.</param>
          */
-        public int addAgent(Vector2 position, float neighborDist, int maxNeighbors, float timeHorizon, float timeHorizonObst, float radius, float maxSpeed, Vector2 velocity)
-        {
-            Agent agent = new();
-            agent.id_ = agents_.Count;
-            agent.maxNeighbors_ = maxNeighbors;
-            agent.maxSpeed_ = maxSpeed;
-            agent.neighborDist_ = neighborDist;
-            agent.position_ = position;
-            agent.radius_ = radius;
-            agent.timeHorizon_ = timeHorizon;
-            agent.timeHorizonObst_ = timeHorizonObst;
-            agent.velocity_ = velocity;
-            agents_.Add(agent);
+		public int addAgent(Vector2 position, float neighborDist, int maxNeighbors, float timeHorizon, float timeHorizonObst,
+			float radius, float maxSpeed, Vector2 velocity, Vector2? goal = null)
+		{
+			Agent agent = new()
+			{
+				id_ = agents_.Count,
+				maxNeighbors_ = maxNeighbors,
+				maxSpeed_ = maxSpeed,
+				neighborDist_ = neighborDist,
+				position_ = position,
+				radius_ = radius,
+				timeHorizon_ = timeHorizon,
+				timeHorizonObst_ = timeHorizonObst,
+				velocity_ = velocity
+			};
 
-            return agent.id_;
-        }
+			if (goal != null)
+				agent.SetGoal((Vector2)goal);
 
-        /**
+			agents_.Add(agent);
+
+			return agent.id_;
+		}
+
+		/**
+         * <summary>Adds a new agent with default properties to the simulation.
+         * </summary>
+         *
+         * <returns>The number of the agent, or -1 when the agent defaults have
+         * not been set.</returns>
+         *
+         * <param name="position">The two-dimensional starting position of this
+         * agent.</param>
+         */
+		public int addAgent(Vector2 position, Vector2? goal = null)
+		{
+			if (defaultAgent_ == null)
+			{
+				return -1;
+			}
+
+			Agent agent = new()
+			{
+				id_ = agents_.Count,
+				maxNeighbors_ = defaultAgent_.maxNeighbors_,
+				maxSpeed_ = defaultAgent_.maxSpeed_,
+				neighborDist_ = defaultAgent_.neighborDist_,
+				position_ = position,
+				radius_ = defaultAgent_.radius_,
+				timeHorizon_ = defaultAgent_.timeHorizon_,
+				timeHorizonObst_ = defaultAgent_.timeHorizonObst_,
+				velocity_ = defaultAgent_.velocity_
+			};
+
+			if (goal != null)
+				agent.SetGoal((Vector2)goal);
+
+			agents_.Add(agent);
+
+			return agent.id_;
+		}
+
+		// For use with AgentPreset
+		public int addAgent(Vector2 position, AgentPreset agentPreset, Vector2? velocity = null, float? maxSpeed = null, Vector2? goal = null)
+		{
+			Agent agent = new()
+			{
+				id_ = agents_.Count,
+				maxNeighbors_ = agentPreset.maxNeighbors,
+				maxSpeed_ = maxSpeed ?? agentPreset.maxSpeed,
+				neighborDist_ = agentPreset.neighborDist,
+				position_ = position,
+				radius_ = agentPreset.radius,
+				timeHorizon_ = agentPreset.timeHorizon,
+				timeHorizonObst_ = agentPreset.timeHorizonObst,
+				velocity_ = velocity ?? agentPreset.velocity
+			};
+
+			if (goal != null)
+				agent.SetGoal((Vector2)goal);
+
+			agents_.Add(agent);
+
+			return agent.id_;
+		}
+
+		/**
          * <summary>Adds a new obstacle to the simulation.</summary>
          *
          * <returns>The number of the first vertex of the obstacle, or -1 when
@@ -213,7 +252,7 @@ namespace RVO
          * the environment, the vertices should be listed in clockwise order.
          * </remarks>
          */
-        public int addObstacle(IList<Vector2> vertices)
+		public int addObstacle(IList<Vector2> vertices)
         {
             if (vertices.Count < 2)
             {
@@ -691,7 +730,8 @@ namespace RVO
          * <param name="velocity">The default initial two-dimensional linear
          * velocity of a new agent.</param>
          */
-        public void setAgentDefaults(float neighborDist, int maxNeighbors, float timeHorizon, float timeHorizonObst, float radius, float maxSpeed, Vector2 velocity)
+        public void setAgentDefaults(float neighborDist, int maxNeighbors, float timeHorizon, float timeHorizonObst,
+			float radius, float maxSpeed, Vector2 velocity)
         {
             if (defaultAgent_ == null)
             {
@@ -707,7 +747,7 @@ namespace RVO
             defaultAgent_.velocity_ = velocity;
         }
 
-        /**
+		/**
          * <summary>Sets the maximum neighbor count of a specified agent.
          * </summary>
          *
@@ -716,7 +756,7 @@ namespace RVO
          * <param name="maxNeighbors">The replacement maximum neighbor count.
          * </param>
          */
-        public void setAgentMaxNeighbors(int agentNo, int maxNeighbors)
+		public void setAgentMaxNeighbors(int agentNo, int maxNeighbors)
         {
             agents_[agentNo].maxNeighbors_ = maxNeighbors;
         }
@@ -771,12 +811,23 @@ namespace RVO
          * <param name="prefVelocity">The replacement of the two-dimensional
          * preferred velocity.</param>
          */
-        public void setAgentPrefVelocity(int agentNo, Vector2 prefVelocity)
+        public void setAgentPrefVelocity(int agentNo, Vector2 prefVelocity, bool usePerturbation = false)
         {
-            agents_[agentNo].prefVelocity_ = prefVelocity;
+			if (usePerturbation)
+				prefVelocity += getPerturbation();
+			agents_[agentNo].prefVelocity_ = prefVelocity;
         }
 
-        /**
+		// To prevent deadlocks due to perfect symmetry in collision
+		public Vector2 getPerturbation()
+		{
+			float angle = (float)random.NextDouble() * 2.0f * (float)Math.PI;
+			float dist = (float)random.NextDouble() * 0.0001f * 150;
+
+			return dist * new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle));
+		}
+
+		/**
          * <summary>Sets the radius of a specified agent.</summary>
          *
          * <param name="agentNo">The number of the agent whose radius is to be
@@ -784,7 +835,7 @@ namespace RVO
          * <param name="radius">The replacement radius. Must be non-negative.
          * </param>
          */
-        public void setAgentRadius(int agentNo, float radius)
+		public void setAgentRadius(int agentNo, float radius)
         {
             agents_[agentNo].radius_ = radius;
         }
@@ -812,7 +863,7 @@ namespace RVO
          * <param name="timeHorizonObst">The replacement time horizon with
          * respect to obstacles. Must be positive.</param>
          */
-        public void setAgentTimeHorizonObst(int agentNo, float timeHorizonObst)
+		public void setAgentTimeHorizonObst(int agentNo, float timeHorizonObst)
         {
             agents_[agentNo].timeHorizonObst_ = timeHorizonObst;
         }
@@ -826,7 +877,7 @@ namespace RVO
          * <param name="velocity">The replacement two-dimensional linear
          * velocity.</param>
          */
-        public void setAgentVelocity(int agentNo, Vector2 velocity)
+		public void setAgentVelocity(int agentNo, Vector2 velocity)
         {
             agents_[agentNo].velocity_ = velocity;
         }

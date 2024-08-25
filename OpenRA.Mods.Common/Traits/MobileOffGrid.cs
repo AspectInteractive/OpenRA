@@ -26,6 +26,7 @@ using OpenRA.Traits;
 using TagLib.Riff;
 using OpenRA.Mods.Common.HitShapes;
 using static OpenRA.Mods.Common.Traits.MobileOffGrid;
+using RVO;
 
 
 
@@ -324,6 +325,16 @@ namespace OpenRA.Mods.Common.Traits
 		public Color DebugColor = Color.RandomColor();
 		WPos cachedPosition;
 		WAngle cachedFacing;
+
+		public AgentPreset DefaultAgentPreset = new
+			(
+			neighborDist: 15.0f * 150,
+			maxNeighbors: 10 * 150,
+			timeHorizon: 5.0f * 150,
+			timeHorizonObst: 5.0f * 150,
+			radius: 2.0f * 150,
+			maxSpeed: 2.0f * 150,
+			velocity: new Vector2(0.0f, 0.0f));
 
 		public WPos CurrPathTarget;
 		public WPos LastPathTarget;

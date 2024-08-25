@@ -41,13 +41,41 @@ namespace RVO
     /**
      * <summary>Defines an agent in the simulation.</summary>
      */
+
+	public class AgentPreset
+	{
+		public float neighborDist;
+		public int maxNeighbors;
+		public float timeHorizon;
+		public float timeHorizonObst;
+		public float radius;
+		public float maxSpeed;
+		public Vector2 velocity;
+
+		public AgentPreset(float neighborDist, int maxNeighbors, float timeHorizon, float timeHorizonObst,
+			float radius, float maxSpeed, Vector2 velocity)
+		{
+			this.neighborDist = neighborDist;
+			this.maxNeighbors = maxNeighbors;
+			this.timeHorizon = timeHorizon;
+			this.timeHorizonObst = timeHorizonObst;
+			this.radius = radius;
+			this.maxSpeed = maxSpeed;
+			this.velocity = velocity;
+		}
+	}
+
     internal class Agent
     {
         internal IList<KeyValuePair<float, Agent>> agentNeighbors_ = new List<KeyValuePair<float, Agent>>();
         internal IList<KeyValuePair<float, Obstacle>> obstacleNeighbors_ = new List<KeyValuePair<float, Obstacle>>();
         internal IList<Line> orcaLines_ = new List<Line>();
         internal Vector2 position_;
-        internal Vector2 prefVelocity_;
+		const float GoalReachMinDistance = 400.0f;
+		public Vector2 Goal;
+		public Vector2 GoalVectorNorm => ConditionalNormalize(Goal - position_);
+		public bool ReachedGoal => RVOMath.absSq(Goal - position_) <= GoalReachMinDistance;
+		internal Vector2 prefVelocity_;
         internal Vector2 velocity_;
         internal int id_ = 0;
         internal int maxNeighbors_ = 0;
@@ -56,6 +84,15 @@ namespace RVO
         internal float radius_ = 0.0f;
         internal float timeHorizon_ = 0.0f;
         internal float timeHorizonObst_ = 0.0f;
+
+		internal static Vector2 ConditionalNormalize(Vector2 goalVector)
+		{
+			if (RVOMath.absSq(goalVector) > 1.0f * 150)
+				return RVOMath.normalize(goalVector);
+			return goalVector;
+		}
+
+		public void SetGoal(Vector2 goal) => Goal = goal;
 
         private Vector2 newVelocity_;
 

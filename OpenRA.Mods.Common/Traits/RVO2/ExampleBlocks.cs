@@ -70,46 +70,34 @@ namespace RVO
 #endif
         }
 
-        void setupScenario()
-        {
-            /* Specify the global time step of the simulation. */
-            Simulator.Instance.setTimeStep(0.25f * 150);
-
-			/*
-             * Specify the default parameters for agents that are subsequently
-             * added.
-             */
-			var neighbourDist = 15.0f * 150;
-			var maxNeighbours = 10 * 150;
-			var timeHorizon = 5.0f * 150;
-			var timeHorizonObst = 5.0f * 150;
-			var radius = 2.0f * 150;
-			var maxSpeed = 2.0f * 150;
-			var velocity = new Vector2(0.0f, 0.0f);
-			Simulator.Instance.setAgentDefaults(neighbourDist, maxNeighbours, timeHorizon, timeHorizonObst, radius, maxSpeed, velocity);
-
+		void setupAgents(AgentPreset agentPreset)
+		{
 			/*
              * Add agents, specifying their start position, and store their
              * goals on the opposite side of the environment.
              */
 			for (int i = 0; i < 5; ++i)
-            {
-                for (int j = 0; j < 5; ++j)
-                {
-					Simulator.Instance.addAgent(new Vector2(55.0f + i * 10.0f, 55.0f + j * 10.0f) * 150);
-					goals.Add(new Vector2(-75.0f, -75.0f) * 150);
+			{
+				for (int j = 0; j < 5; ++j)
+				{
+					Simulator.Instance.addAgent(new Vector2(55.0f + i * 10.0f, 55.0f + j * 10.0f) * 150, agentPreset,
+						goal: new Vector2(-75.0f, -75.0f) * 150);
 
-					Simulator.Instance.addAgent(new Vector2(-55.0f - i * 10.0f, 55.0f + j * 10.0f) * 150);
-					goals.Add(new Vector2(75.0f, -75.0f) * 150);
+					Simulator.Instance.addAgent(new Vector2(-55.0f - i * 10.0f, 55.0f + j * 10.0f) * 150, agentPreset,
+						goal: new Vector2(75.0f, -75.0f) * 150);
 
-					Simulator.Instance.addAgent(new Vector2(55.0f + i * 10.0f, -55.0f - j * 10.0f) * 150);
-					goals.Add(new Vector2(-75.0f, 75.0f) * 150);
+					Simulator.Instance.addAgent(new Vector2(55.0f + i * 10.0f, -55.0f - j * 10.0f) * 150, agentPreset,
+						goal: new Vector2(-75.0f, 75.0f) * 150);
 
-					Simulator.Instance.addAgent(new Vector2(-55.0f - i * 10.0f, -55.0f - j * 10.0f) * 150);
-					goals.Add(new Vector2(75.0f, 75.0f) * 150);
+					Simulator.Instance.addAgent(new Vector2(-55.0f - i * 10.0f, -55.0f - j * 10.0f) * 150, agentPreset,
+						goal: new Vector2(75.0f, 75.0f) * 150);
 				}
-            }
+			}
+		}
+		
 
+		void setupObstacles()
+		{
 			IList<Vector2> obstacle1 = new List<Vector2>
 			{
 				new Vector2(-10.0f, 40.0f) * 150,
@@ -145,6 +133,29 @@ namespace RVO
 				new Vector2(-40.0f, -40.0f) * 150
 			};
 			Simulator.Instance.addObstacle(obstacle4);
+		}
+
+		void setupScenario()
+        {
+            /* Specify the global time step of the simulation. */
+            Simulator.Instance.setTimeStep(0.25f * 150);
+
+			/*
+             * Specify the default parameters for agents that are subsequently
+             * added.
+             */
+
+			var agentPreset = new AgentPreset(
+				neighborDist: 15.0f * 150,
+				maxNeighbors: 10 * 150,
+				timeHorizon: 5.0f * 150,
+				timeHorizonObst: 5.0f * 150,
+				radius: 2.0f * 150,
+				maxSpeed: 2.0f * 150,
+				velocity: new Vector2(0.0f, 0.0f));
+
+			setupAgents(agentPreset);
+			setupObstacles();
 
 			/*
              * Process the obstacles so that they are accounted for in the
@@ -163,44 +174,19 @@ namespace RVO
 		}
 
 		void setPreferredVelocities()
-        {
-            /*
-             * Set the preferred velocity to be a vector of unit magnitude
-             * (speed) in the direction of the goal.
-             */
-            for (int i = 0; i < Simulator.Instance.getNumAgents(); ++i)
-            {
-                Vector2 goalVector = goals[i] - Simulator.Instance.getAgentPosition(i);
+		{
+			for (int i = 0; i < Simulator.Instance.getNumAgents(); ++i)
+				Simulator.Instance.setAgentPrefVelocity(i, Simulator.Instance.agents_[i].GoalVectorNorm, true);
+		}
 
-                if (RVOMath.absSq(goalVector) > 1.0f)
-                {
-                    goalVector = RVOMath.normalize(goalVector);
-                }
-
-                Simulator.Instance.setAgentPrefVelocity(i, goalVector);
-
-                /* Perturb a little to avoid deadlocks due to perfect symmetry. */
-                float angle = (float)random.NextDouble() * 2.0f * (float)Math.PI;
-                float dist = (float)random.NextDouble() * 0.0001f;
-
-                Simulator.Instance.setAgentPrefVelocity(i, Simulator.Instance.getAgentPrefVelocity(i) +
-                    dist * new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)));
-            }
-        }
-
-        bool reachedGoal()
-        {
-            /* Check if all agents have reached their goals. */
-            for (int i = 0; i < Simulator.Instance.getNumAgents(); ++i)
-            {
-                if (RVOMath.absSq(Simulator.Instance.getAgentPosition(i) - goals[i]) > 400.0f)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
+		bool reachedGoal()
+		{
+			/* Check if all agents have reached their goals. */
+			for (int i = 0; i < Simulator.Instance.getNumAgents(); ++i)
+				if (!Simulator.Instance.agents_[i].ReachedGoal)
+					return false;
+			return true;
+		}
 
         public void Tick()
         {
