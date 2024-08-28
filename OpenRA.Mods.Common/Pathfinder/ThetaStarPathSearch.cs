@@ -1010,7 +1010,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 		}
 
 		static List<CCPos> GetUnblockedNeighbours(World world, Actor self, Locomotor locomotor, CCPos cc,
-			bool excDiagBlocked = true, BlockedByActor check = BlockedByActor.Immovable)
+			bool incDiagBlocked = false, BlockedByActor check = BlockedByActor.Immovable)
 		{
 			if (!CcinMap(cc, world))
 				return new List<CCPos>();
@@ -1054,7 +1054,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 				neighbourList.Add(ccR);
 
 			// Exclude diagonally blocked corners if parameter used (default is that it is)
-			return excDiagBlocked ? neighbourList.Where(c => !DiagBlockedCCPos(self, world, locomotor, c)).ToList() : neighbourList;
+			return !incDiagBlocked ? neighbourList.Where(c => !DiagBlockedCCPos(self, world, locomotor, c)).ToList() : neighbourList;
 		}
 
 		#region Constructors

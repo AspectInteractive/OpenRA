@@ -950,11 +950,19 @@ namespace OpenRA.Mods.Common.Traits
 			SetForcedFacing(WAngle.Zero);
 			SetForcedAltitude(WDist.Zero);
 		}
+
 		static bool CPosinMap(Actor self, CPos cPos)
 		{
 			return cPos.X >= 0 && cPos.X <= self.World.Map.MapSize.X - 1 &&
 				   cPos.Y >= 0 && cPos.Y <= self.World.Map.MapSize.Y - 1;
 		}
+
+		static bool CPosinMap(World world, CPos cPos)
+		{
+			return cPos.X >= 0 && cPos.X <= world.Map.MapSize.X - 1 &&
+				   cPos.Y >= 0 && cPos.Y <= world.Map.MapSize.Y - 1;
+		}
+
 
 		public static List<(WPos Source, WPos Dest)> GenSDPairs(WPos selfCenter, WVec move, IHitShape unitHitShape)
 		{
@@ -968,11 +976,18 @@ namespace OpenRA.Mods.Common.Traits
 				CellBlockedByBuilding(self, cell) || !CPosinMap(self, cell);
 		}
 
+		public static bool CellIsBlocked(World world, Locomotor locomotor, CPos cell, BlockedByActor check = BlockedByActor.Immovable)
+		{
+			return locomotor.MovementCostToEnterCell(null, cell, check, null, true) == short.MaxValue ||
+				CellBlockedByBuilding(null, cell) || !CPosinMap(world, cell);
+		}
+
 		public static bool CellBlockedByBuilding(Actor self, CPos cell)
 		{
-			foreach (var otherActor in self.World.ActorMap.GetActorsAt(cell))
-				if (otherActor.OccupiesSpace is Building building && !building.TransitOnlyCells().Contains(cell))
-					return true;
+			if (self != null)
+				foreach (var otherActor in self.World.ActorMap.GetActorsAt(cell))
+					if (otherActor.OccupiesSpace is Building building && !building.TransitOnlyCells().Contains(cell))
+						return true;
 			return false;
 		}
 

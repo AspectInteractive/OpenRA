@@ -20,11 +20,12 @@ namespace OpenRA.Mods.Common.Traits
 	[Desc("Manages the queuing and prioritisation of Theta Pathfinder calculations, to ensure the computer is not overloded.")]
 
 	public class ThetaPathfinderExecutionManagerInfo : TraitInfo<ThetaPathfinderExecutionManager> { }
-	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder, IWorldLoaded
+	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder, IWorldLoaded, NotBefore<ICustomMovementLayerInfo>
 	{
 		RVO.Circle rvoCircle;
 		RVO.Blocks rvoBlocks;
 		RVO.Roadmap rvoRoadmap;
+		bool RVOtest = false;
 
 		public class ThetaCircle
 		{
@@ -91,6 +92,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		// The number of expansions allowed across all Theta pathfinders
 		Locomotor locomotor;
+		int currBcdId = 0;
+		bool bcdSet = false;
 		readonly int maxCurrExpansions = 500;
 		readonly int radiusForSharedThetas = 1024 * 10;
 		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
@@ -102,10 +105,95 @@ namespace OpenRA.Mods.Common.Traits
 		List<(ThetaStarPathSearch, ThetaPFAction)> thetaPFActions = new();
 		public bool PlayerCirclesLocked = false;
 
+		public class BasicCellDomain
+		{
+			public List<CPos> Cells = new();
+			public List<List<WPos>> CellEdges = new();
+			public int ID;
+
+			public BasicCellDomain(int id) => ID = id;
+
+			// Removes a cell edge from the list of edges. The order of positions does not matter
+			public void RemoveEdge(List<WPos> edge) => RemoveEdge(edge[0], edge[1]);
+			public void RemoveEdge(WPos p1, WPos p2)
+			{
+				CellEdges.RemoveAll(e => (e[0] == p1 && e[1] == p2) ||
+										 (e[0] == p2 && e[1] == p1));
+			}
+
+			public void RemoveCell(CPos cell) => Cells.RemoveAll(c => c.X == cell.X && c.Y == cell.Y);
+
+			public void MergeWith(BasicCellDomain bcd)
+			{
+				Cells.AddRange(bcd.Cells);
+				CellEdges.AddRange(bcd.CellEdges);
+			}
+
+			public void AddCellAndEdges(Map map, CPos cell)
+			{
+				Cells.Add(cell);
+				CellEdges.AddRange(Map.CellEdgeSet.FromCell(map, cell).GetAllEdgesAsPosList());
+			}
+		}
+
 		enum ThetaPFAction { Add, Remove }
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
 			locomotor = w.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
+		}
+
+		// Creates a basic cell domain by traversing all cells that match its blocked status, in the N E S and W destinations
+		public BasicCellDomain CreateBasicCellDomain(int currBcdId, World world, CPos cell, ref HashSet<CPos> visited,
+			BlockedByActor check = BlockedByActor.Immovable)
+		{
+			var map = world.Map;
+			var bcd = new BasicCellDomain(currBcdId);
+
+			if (!map.CPosInMap(cell))
+				return bcd;
+
+			var cT = new CPos(cell.X, cell.Y - 1, cell.Layer);
+			var cB = new CPos(cell.X, cell.Y + 1, cell.Layer);
+			var cL = new CPos(cell.X - 1, cell.Y, cell.Layer);
+			var cR = new CPos(cell.X + 1, cell.Y, cell.Layer);
+
+			var candidateCellsWithEdge = new List<(CPos Cell, List<WPos> Edge)>()
+			{
+				(cT, map.TopEdgeOfCell(cell)),
+				(cB, map.BottomEdgeOfCell(cell)),
+				(cL, map.LeftEdgeOfCell(cell)),
+				(cR, map.RightEdgeOfCell(cell))
+			};
+
+			// We do not want to test cells that have already been included or excluded
+			// A copy of visited is needed to bypass issue with using ref in functions
+			var visitedCopy = visited;
+			candidateCellsWithEdge.RemoveAll(ccwe => visitedCopy.Contains(ccwe.Cell));
+
+			bool CheckBlockFunc(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
+
+			var cellBlockStatus = CheckBlockFunc(cell);
+
+			foreach (var (c, edge) in candidateCellsWithEdge)
+			{
+				if (map.CPosInMap(c) && CheckBlockFunc(c) == cellBlockStatus)
+				{
+					bcd.AddCellAndEdges(map, c);
+					bcd.RemoveEdge(edge);
+					visited.Add(c);
+				}
+			}
+
+			visited.Add(cell);
+
+			// All valid directions that were added are then expanded again, and merged with the original domain
+			var newCellList = bcd.Cells.ToList();
+			foreach (var c in newCellList)
+				bcd.MergeWith(CreateBasicCellDomain(currBcdId, world, c, ref visited, check));
+
+			bcd.Cells.Add(cell);
+
+			return bcd;
 		}
 
 		public bool GreaterThanMinDistanceForCircles(Actor actor, WPos targetPos)
@@ -369,12 +457,36 @@ namespace OpenRA.Mods.Common.Traits
 
 		void Tick(World world)
 		{
+			var domainList = new List<BasicCellDomain>();
+
+			if (!bcdSet)
+			{
+				var visited = new HashSet<CPos>();
+				for (var x = 0; x < world.Map.MapSize.X; x++)
+					for (var y = 0; y < world.Map.MapSize.Y; y++)
+						domainList.Add(CreateBasicCellDomain(currBcdId, world, new CPos(x, y), ref visited));
+
+				foreach (var bcd in domainList)
+				{
+					foreach (var cell in bcd.Cells)
+					{
+						//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), new WDist(512));
+						MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), $"{bcd.ID}", Color.Yellow, "Title");
+					}
+
+					foreach (var edge in bcd.CellEdges)
+						MoveOffGrid.RenderLineCollDebug(world.WorldActor, edge[0], edge[1], 3);
+				}
+
+				bcdSet = true;
+			}
+
 			var collDebugOverlay = world.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
 
 			var rvoObject = rvoBlocks;
 
 			// Call RVO Tick
-			if (collDebugOverlay.Enabled && rvoObject == null)
+			if (RVOtest && collDebugOverlay.Enabled && rvoObject == null)
 			{
 				RVO.Simulator.Instance.Clear();
 				//rvoObject = new RVO.Circle();
@@ -382,7 +494,7 @@ namespace OpenRA.Mods.Common.Traits
 				rvoObject = new RVO.Blocks();
 				rvoBlocks = rvoObject;
 			}
-			else if (collDebugOverlay.Enabled)
+			else if (RVOtest && collDebugOverlay.Enabled)
 			{
 				collDebugOverlay.ClearCircles();
 				collDebugOverlay.ClearLines();
