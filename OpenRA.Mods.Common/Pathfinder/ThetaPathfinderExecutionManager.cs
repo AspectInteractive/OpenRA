@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Runtime.ConstrainedExecution;
 using OpenRA.Graphics;
@@ -94,6 +95,7 @@ namespace OpenRA.Mods.Common.Traits
 		Locomotor locomotor;
 		int currBcdId = 0;
 		bool bcdSet = false;
+		public Dictionary<CPos, BasicCellDomain> CellBCDs;
 		readonly int maxCurrExpansions = 500;
 		readonly int radiusForSharedThetas = 1024 * 10;
 		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
@@ -107,10 +109,12 @@ namespace OpenRA.Mods.Common.Traits
 
 		public class BasicCellDomain
 		{
+			public bool DomainIsBlocked;
 			public List<CPos> Cells = new();
 			public List<List<WPos>> CellEdges = new();
 			public int ID;
 
+			public BasicCellDomain() => ID = -1;
 			public BasicCellDomain(int id) => ID = id;
 
 			// Removes a cell edge from the list of edges. The order of positions does not matter
@@ -121,7 +125,37 @@ namespace OpenRA.Mods.Common.Traits
 										 (e[0] == p2 && e[1] == p1));
 			}
 
-			public void RemoveCell(CPos cell) => Cells.RemoveAll(c => c.X == cell.X && c.Y == cell.Y);
+			public void AddEdge(List<WPos> edge) => CellEdges.Add(edge);
+
+			public void RemoveEdgeIfNeighbourExists(Map map, CPos cell)
+			{
+				if (Cells.Contains(new CPos(cell.X - 1, cell.Y)))
+					RemoveEdge(map.LeftEdgeOfCell(cell));
+				if (Cells.Contains(new CPos(cell.X + 1, cell.Y)))
+					RemoveEdge(map.RightEdgeOfCell(cell));
+				if (Cells.Contains(new CPos(cell.X, cell.Y - 1)))
+					RemoveEdge(map.TopEdgeOfCell(cell));
+				if (Cells.Contains(new CPos(cell.X, cell.Y + 1)))
+					RemoveEdge(map.BottomEdgeOfCell(cell));
+			}
+
+			public void AddEdgeIfNeighbourExists(Map map, CPos cell)
+			{
+				if (Cells.Contains(new CPos(cell.X - 1, cell.Y)))
+					AddEdge(map.LeftEdgeOfCell(cell));
+				if (Cells.Contains(new CPos(cell.X + 1, cell.Y)))
+					AddEdge(map.RightEdgeOfCell(cell));
+				if (Cells.Contains(new CPos(cell.X, cell.Y - 1)))
+					AddEdge(map.TopEdgeOfCell(cell));
+				if (Cells.Contains(new CPos(cell.X, cell.Y + 1)))
+					AddEdge(map.BottomEdgeOfCell(cell));
+			}
+
+			public void RemoveCell(Map map, CPos cell)
+			{
+				Cells.RemoveAll(c => c.X == cell.X && c.Y == cell.Y);
+				AddEdgeIfNeighbourExists(map, cell);
+			}
 
 			public void MergeWith(BasicCellDomain bcd)
 			{
@@ -134,66 +168,138 @@ namespace OpenRA.Mods.Common.Traits
 				Cells.Add(cell);
 				CellEdges.AddRange(Map.CellEdgeSet.FromCell(map, cell).GetAllEdgesAsPosList());
 			}
+
+			public static Queue<CPos> GetCellsWithinDomain(World world, Locomotor locomotor,
+				CPos cell, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null)
+			{
+				var map = world.Map;
+				var candidateCells = new List<CPos>();
+
+				if (!map.CPosInMap(cell))
+					return default;
+
+				candidateCells.Add(new CPos(cell.X, cell.Y - 1, cell.Layer)); // Top
+				candidateCells.Add(new CPos(cell.X, cell.Y + 1, cell.Layer)); // Bottom
+				candidateCells.Add(new CPos(cell.X - 1, cell.Y, cell.Layer)); // Left
+				candidateCells.Add(new CPos(cell.X + 1, cell.Y, cell.Layer)); // Right
+
+				bool CheckBlockFunc(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
+
+				var cellBlockStatus = CheckBlockFunc(cell);
+
+				// We do not want to test cells that have already been included or excluded
+				// A copy of visited is needed to bypass issue with using ref in functions
+				if (visited != null && visited.Count > 0)
+					candidateCells.RemoveAll(c => visited.Contains(c));
+
+				var cellsWithinDomain = new Queue<CPos>();
+				foreach (var c in candidateCells)
+					if (map.CPosInMap(c) && CheckBlockFunc(c) == cellBlockStatus)
+						cellsWithinDomain.Enqueue(c);
+
+				return cellsWithinDomain;
+			}
+
+			// NOT USABLE YET: WORK IN PROGRESS
+			public static void UpdateCellDomain(World world, Locomotor locomotor, CPos cell, ref Dictionary<CPos, BasicCellDomain> cellBCDs,
+				BlockedByActor check = BlockedByActor.Immovable)
+			{
+				var map = world.Map;
+				bool CheckBlockFunc(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
+
+				var cellPastBlockStatus = cellBCDs[cell].DomainIsBlocked;
+				var cellBlockStatus = CheckBlockFunc(cell);
+				var bcd = new BasicCellDomain();
+
+				var cT = new CPos(cell.X, cell.Y - 1, cell.Layer);
+				var cB = new CPos(cell.X, cell.Y + 1, cell.Layer);
+				var cL = new CPos(cell.X - 1, cell.Y, cell.Layer);
+				var cR = new CPos(cell.X + 1, cell.Y, cell.Layer);
+
+				var candidateCells = new List<CPos> { cT, cB, cL, cR };
+
+				if (cellPastBlockStatus != cellBlockStatus)
+				{
+					cellBCDs[cell].RemoveCell(map, cell);
+					var cellBCDsCopy = cellBCDs;
+					if (candidateCells.Select(c => cellBCDsCopy[cell].DomainIsBlocked).Count(b => b) >= 2)
+					{ }
+				}
+
+				foreach (var c in candidateCells)
+				{
+					if (CheckBlockFunc(c) == cellBlockStatus)
+					{
+						bcd.AddCellAndEdges(map, c);
+						bcd.RemoveEdgeIfNeighbourExists(map, c);
+					}
+				}
+			}
+
+			// NOT USABLE YET: WORK IN PROGRESS
+			public bool AreDomainsConnected(World world, Locomotor locomotor, Dictionary<CPos, BasicCellDomain> startCellBSDs,
+				BlockedByActor check = BlockedByActor.Immovable)
+			{
+				var visited = startCellBSDs.Keys.ToHashSet();
+
+				var cellsToExpand = new Queue<CPos>();
+				foreach (var c in visited)
+					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited))
+						cellsToExpand.Enqueue(cwd);
+
+				while (cellsToExpand.Count > 0)
+				{
+					var c = cellsToExpand.Dequeue();
+					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited))
+					{
+						cellsToExpand.Enqueue(cwd);
+						visited.Add(cwd);
+					}
+				}
+
+				return false;
+			}
+
+			// Creates a basic cell domain by traversing all cells that match its blocked status, in the N E S and W destinations
+			public static BasicCellDomain CreateBasicCellDomain(int currBcdId, World world, Locomotor locomotor, CPos cell,
+				ref HashSet<CPos> visited, BlockedByActor check = BlockedByActor.Immovable)
+			{
+				var map = world.Map;
+				var bcd = new BasicCellDomain(currBcdId)
+				{
+					DomainIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, cell, check)
+				};
+
+				var cellsToExpand = GetCellsWithinDomain(world, locomotor, cell, check, visited);
+				foreach (var c in cellsToExpand)
+					visited.Add(c);
+
+				visited.Add(cell);
+				bcd.AddCellAndEdges(map, cell);
+
+				while (cellsToExpand.Count > 0)
+				{
+					var c = cellsToExpand.Dequeue();
+					bcd.AddCellAndEdges(map, c);
+					bcd.RemoveEdgeIfNeighbourExists(map, c);
+
+					// INVARIANT: bcd is independent of the below method that obtains neighbouring cells
+					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited))
+					{
+						cellsToExpand.Enqueue(cwd);
+						visited.Add(cwd);
+					}
+				}
+
+
+				return bcd;
+			}
 		}
 
 		enum ThetaPFAction { Add, Remove }
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
 			locomotor = w.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
-		}
-
-		// Creates a basic cell domain by traversing all cells that match its blocked status, in the N E S and W destinations
-		public BasicCellDomain CreateBasicCellDomain(int currBcdId, World world, CPos cell, ref HashSet<CPos> visited,
-			BlockedByActor check = BlockedByActor.Immovable)
-		{
-			var map = world.Map;
-			var bcd = new BasicCellDomain(currBcdId);
-
-			if (!map.CPosInMap(cell))
-				return bcd;
-
-			var cT = new CPos(cell.X, cell.Y - 1, cell.Layer);
-			var cB = new CPos(cell.X, cell.Y + 1, cell.Layer);
-			var cL = new CPos(cell.X - 1, cell.Y, cell.Layer);
-			var cR = new CPos(cell.X + 1, cell.Y, cell.Layer);
-
-			var candidateCellsWithEdge = new List<(CPos Cell, List<WPos> Edge)>()
-			{
-				(cT, map.TopEdgeOfCell(cell)),
-				(cB, map.BottomEdgeOfCell(cell)),
-				(cL, map.LeftEdgeOfCell(cell)),
-				(cR, map.RightEdgeOfCell(cell))
-			};
-
-			// We do not want to test cells that have already been included or excluded
-			// A copy of visited is needed to bypass issue with using ref in functions
-			var visitedCopy = visited;
-			candidateCellsWithEdge.RemoveAll(ccwe => visitedCopy.Contains(ccwe.Cell));
-
-			bool CheckBlockFunc(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
-
-			var cellBlockStatus = CheckBlockFunc(cell);
-
-			foreach (var (c, edge) in candidateCellsWithEdge)
-			{
-				if (map.CPosInMap(c) && CheckBlockFunc(c) == cellBlockStatus)
-				{
-					bcd.AddCellAndEdges(map, c);
-					bcd.RemoveEdge(edge);
-					visited.Add(c);
-				}
-			}
-
-			visited.Add(cell);
-
-			// All valid directions that were added are then expanded again, and merged with the original domain
-			var newCellList = bcd.Cells.ToList();
-			foreach (var c in newCellList)
-				bcd.MergeWith(CreateBasicCellDomain(currBcdId, world, c, ref visited, check));
-
-			bcd.Cells.Add(cell);
-
-			return bcd;
 		}
 
 		public bool GreaterThanMinDistanceForCircles(Actor actor, WPos targetPos)
@@ -464,14 +570,27 @@ namespace OpenRA.Mods.Common.Traits
 				var visited = new HashSet<CPos>();
 				for (var x = 0; x < world.Map.MapSize.X; x++)
 					for (var y = 0; y < world.Map.MapSize.Y; y++)
-						domainList.Add(CreateBasicCellDomain(currBcdId, world, new CPos(x, y), ref visited));
+						if (!visited.Contains(new CPos(x, y)))
+						{
+							domainList.Add(BasicCellDomain.CreateBasicCellDomain(currBcdId, world, locomotor, new CPos(x, y), ref visited));
+							currBcdId++;
+						}
+
+				CellBCDs = domainList.SelectMany(domain => domain.Cells
+									.Select(cell => new KeyValuePair<CPos, BasicCellDomain>(cell, domain)))
+								  .ToDictionary(k => k.Key, k => k.Value);
 
 				foreach (var bcd in domainList)
 				{
 					foreach (var cell in bcd.Cells)
 					{
 						//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), new WDist(512));
-						MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), $"{bcd.ID}", Color.Yellow, "Title");
+						Color colorToUse;
+						if (bcd.DomainIsBlocked)
+							colorToUse = Color.Red;
+						else
+							colorToUse = Color.Green;
+						MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), $"{bcd.ID}", colorToUse, "Title");
 					}
 
 					foreach (var edge in bcd.CellEdges)
