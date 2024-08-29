@@ -170,7 +170,8 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			public static Queue<CPos> GetCellsWithinDomain(World world, Locomotor locomotor,
-				CPos cell, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null)
+				CPos cell, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null,
+				Func<CPos, bool> cellMatchingCriteria = null, HashSet<CPos> limitedCellSet = null)
 			{
 				var map = world.Map;
 				var candidateCells = new List<CPos>();
@@ -183,9 +184,11 @@ namespace OpenRA.Mods.Common.Traits
 				candidateCells.Add(new CPos(cell.X - 1, cell.Y, cell.Layer)); // Left
 				candidateCells.Add(new CPos(cell.X + 1, cell.Y, cell.Layer)); // Right
 
-				bool CheckBlockFunc(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
+				cellMatchingCriteria ??= (CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
 
-				var cellBlockStatus = CheckBlockFunc(cell);
+				// If we are limited to cells within a specific set, we remove all candidates that are not in the set
+				if (limitedCellSet != null && limitedCellSet.Count > 0)
+					candidateCells.RemoveAll(c => !limitedCellSet.Contains(c));
 
 				// We do not want to test cells that have already been included or excluded
 				// A copy of visited is needed to bypass issue with using ref in functions
@@ -194,7 +197,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				var cellsWithinDomain = new Queue<CPos>();
 				foreach (var c in candidateCells)
-					if (map.CPosInMap(c) && CheckBlockFunc(c) == cellBlockStatus)
+					if (map.CPosInMap(c) && cellMatchingCriteria(c) == cellMatchingCriteria(cell))
 						cellsWithinDomain.Enqueue(c);
 
 				return cellsWithinDomain;
@@ -202,13 +205,19 @@ namespace OpenRA.Mods.Common.Traits
 
 			// NOT USABLE YET: WORK IN PROGRESS
 			public static void UpdateCellDomain(World world, Locomotor locomotor, CPos cell, ref Dictionary<CPos, BasicCellDomain> cellBCDs,
-				BlockedByActor check = BlockedByActor.Immovable)
+				BlockedByActor check = BlockedByActor.Immovable, ref int currBcdId)
 			{
 				var map = world.Map;
 				bool CheckBlockFunc(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
 
 				var cellPastBlockStatus = cellBCDs[cell].DomainIsBlocked;
 				var cellBlockStatus = CheckBlockFunc(cell);
+
+				// If the cell is still blocked or still unblocked, then we do not need to update the domain
+				if (cellPastBlockStatus != cellBlockStatus)
+					return;
+
+				BasicCellDomain cellPastBCD;
 				var bcd = new BasicCellDomain();
 
 				var cT = new CPos(cell.X, cell.Y - 1, cell.Layer);
@@ -216,48 +225,73 @@ namespace OpenRA.Mods.Common.Traits
 				var cL = new CPos(cell.X - 1, cell.Y, cell.Layer);
 				var cR = new CPos(cell.X + 1, cell.Y, cell.Layer);
 
-				var candidateCells = new List<CPos> { cT, cB, cL, cR };
+				var candidateCells = new List<CPos> { cT, cB, cL, cR }.Where(c => map.CPosInMap(c)).ToList();
+				var cellBCDsCopy = cellBCDs;
 
-				if (cellPastBlockStatus != cellBlockStatus)
-				{
-					cellBCDs[cell].RemoveCell(map, cell);
-					var cellBCDsCopy = cellBCDs;
-					if (candidateCells.Select(c => cellBCDsCopy[cell].DomainIsBlocked).Count(b => b) >= 2)
-					{ }
-				}
 
-				foreach (var c in candidateCells)
+				cellPastBCD = cellBCDs[cell];
+				cellBCDs[cell].RemoveCell(map, cell);
+
+				// borderCells are cells that have at least one side or corner cell having a different domain ID
+				var borderCellBCDs = cellBCDs.Where(c => (c.Value.ID != cellBCDsCopy[c.Key + new CVec(-1, -1)].ID) ||
+														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(0, -1)].ID) ||
+														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(1, -1)].ID) ||
+														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(-1, 0)].ID) ||
+														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(1, 0)].ID) ||
+														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(-1, 1)].ID) ||
+														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(0, 1)].ID) ||
+														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(1, 1)].ID));
+
+				var borderCells = borderCellBCDs.Select(c => c.Key).ToHashSet();
+				var neighboursWithSameDomainID = candidateCells.Where(c => cellBCDsCopy[c].ID == cellBCDsCopy[cell].ID).ToList();
+				var connectedNeighbours = FindCellsFromCell(world, locomotor,
+					neighboursWithSameDomainID[0], neighboursWithSameDomainID.Skip(1).ToList(), cellBCDs, borderCells, check);
+
+				// If we could not find all connected neighbours, we need to assign a new ID to the found members
+				// and then continue with the remaining members
+				if (connectedNeighbours.Count < neighboursWithSameDomainID.Count)
 				{
-					if (CheckBlockFunc(c) == cellBlockStatus)
-					{
-						bcd.AddCellAndEdges(map, c);
-						bcd.RemoveEdgeIfNeighbourExists(map, c);
-					}
+					foreach (var cn in connectedNeighbours)
+						cellBCDs[cn].ID = currBcdId;
+					currBcdId++;
+
+					// Need to keep looping for each non-connected neighbour to each remaining neighbour, to ensure they are not linked
+					// E.g. A -> BCD finds C, leaving BD, we then need to check B -> D
+					// Or if A -> BCD finds nothing, we then check B -> CD, if that finds C, then we set BC to a new domain and add D
+					// However if A -> BCD finds nothing and B -> CD finds nothing, then we check C -> D
 				}
 			}
 
 			// NOT USABLE YET: WORK IN PROGRESS
-			public bool AreDomainsConnected(World world, Locomotor locomotor, Dictionary<CPos, BasicCellDomain> startCellBSDs,
-				BlockedByActor check = BlockedByActor.Immovable)
+			public static List<CPos> FindCellsFromCell(World world, Locomotor locomotor, CPos startCell, List<CPos> targetCells,
+				Dictionary<CPos, BasicCellDomain> cellBCDs, HashSet<CPos> borderCells, BlockedByActor check = BlockedByActor.Immovable)
 			{
-				var visited = startCellBSDs.Keys.ToHashSet();
+				var visited = new HashSet<CPos>();
+				var foundTargetCells = new List<CPos>();
 
 				var cellsToExpand = new Queue<CPos>();
-				foreach (var c in visited)
-					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited))
-						cellsToExpand.Enqueue(cwd);
+				cellsToExpand.Enqueue(startCell);
+				visited.Add(startCell);
 
-				while (cellsToExpand.Count > 0)
+				bool MatchingDomainID(CPos c) => cellBCDs[c].ID == cellBCDs[startCell].ID;
+
+				while (cellsToExpand.Count > 0 || targetCells.Count == 0)
 				{
 					var c = cellsToExpand.Dequeue();
-					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited))
+					if (targetCells.Contains(c))
+					{
+						foundTargetCells.Add(c);
+						targetCells.Remove(c);
+					}
+
+					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited, MatchingDomainID, borderCells))
 					{
 						cellsToExpand.Enqueue(cwd);
 						visited.Add(cwd);
 					}
 				}
 
-				return false;
+				return foundTargetCells;
 			}
 
 			// Creates a basic cell domain by traversing all cells that match its blocked status, in the N E S and W destinations
