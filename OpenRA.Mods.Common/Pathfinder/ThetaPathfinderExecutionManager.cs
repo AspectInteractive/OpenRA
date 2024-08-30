@@ -21,7 +21,8 @@ namespace OpenRA.Mods.Common.Traits
 	[Desc("Manages the queuing and prioritisation of Theta Pathfinder calculations, to ensure the computer is not overloded.")]
 
 	public class ThetaPathfinderExecutionManagerInfo : TraitInfo<ThetaPathfinderExecutionManager> { }
-	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder, IWorldLoaded, NotBefore<ICustomMovementLayerInfo>
+	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder, IWorldLoaded, NotBefore<ICustomMovementLayerInfo>,
+		INotifyActorDisposing
 	{
 		RVO.Circle rvoCircle;
 		RVO.Blocks rvoBlocks;
@@ -92,6 +93,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// The number of expansions allowed across all Theta pathfinders
+		World world;
 		Locomotor locomotor;
 		int currBcdId = 0;
 		bool bcdSet = false;
@@ -205,7 +207,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			// NOT USABLE YET: WORK IN PROGRESS
 			public static void UpdateCellDomain(World world, Locomotor locomotor, CPos cell, ref Dictionary<CPos, BasicCellDomain> cellBCDs,
-				BlockedByActor check = BlockedByActor.Immovable, ref int currBcdId)
+				ref int currBcdId, BlockedByActor check = BlockedByActor.Immovable)
 			{
 				var map = world.Map;
 				bool CheckBlockFunc(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, check);
@@ -220,14 +222,14 @@ namespace OpenRA.Mods.Common.Traits
 				BasicCellDomain cellPastBCD;
 				var bcd = new BasicCellDomain();
 
-				var cT = new CPos(cell.X, cell.Y - 1, cell.Layer);
-				var cB = new CPos(cell.X, cell.Y + 1, cell.Layer);
-				var cL = new CPos(cell.X - 1, cell.Y, cell.Layer);
-				var cR = new CPos(cell.X + 1, cell.Y, cell.Layer);
-
-				var candidateCells = new List<CPos> { cT, cB, cL, cR }.Where(c => map.CPosInMap(c)).ToList();
+				var candidateCells = new List<CPos>
+				{
+					new(cell.X, cell.Y - 1, cell.Layer), // Top neighbour
+					new(cell.X, cell.Y + 1, cell.Layer), // Bottom neighbour
+					new(cell.X - 1, cell.Y, cell.Layer), // Left neighbour
+					new(cell.X + 1, cell.Y, cell.Layer) // Right neighbour
+				}.Where(c => map.CPosInMap(c)).ToList();
 				var cellBCDsCopy = cellBCDs;
-
 
 				cellPastBCD = cellBCDs[cell];
 				cellBCDs[cell].RemoveCell(map, cell);
@@ -244,21 +246,26 @@ namespace OpenRA.Mods.Common.Traits
 
 				var borderCells = borderCellBCDs.Select(c => c.Key).ToHashSet();
 				var neighboursWithSameDomainID = candidateCells.Where(c => cellBCDsCopy[c].ID == cellBCDsCopy[cell].ID).ToList();
-				var connectedNeighbours = FindCellsFromCell(world, locomotor,
-					neighboursWithSameDomainID[0], neighboursWithSameDomainID.Skip(1).ToList(), cellBCDs, borderCells, check);
 
+				// Need to keep looping for each non-connected neighbour to each remaining neighbour, to ensure they are not linked
+				// E.g. A -> BCD finds C, leaving BD, we then need to check B -> D
+				// Or if A -> BCD finds nothing, we then check B -> CD, if that finds C, then we set BC to a new domain and add D
+				// However if A -> BCD finds nothing and B -> CD finds nothing, then we check C -> D.
 				// If we could not find all connected neighbours, we need to assign a new ID to the found members
-				// and then continue with the remaining members
-				if (connectedNeighbours.Count < neighboursWithSameDomainID.Count)
+				// and then continue with the remaining members. We repeat this process as many times as we have neighbours to remove
+				while (neighboursWithSameDomainID.Count > 1)
 				{
-					foreach (var cn in connectedNeighbours)
-						cellBCDs[cn].ID = currBcdId;
-					currBcdId++;
+					// connectedNeighbours are at most 3 of N S E W of a given neighbour from N S E W
+					var connectedNeighbours = FindCellsFromCell(world, locomotor,
+						neighboursWithSameDomainID[0], neighboursWithSameDomainID.Skip(1).ToList(), cellBCDs, borderCells, check);
+					if (connectedNeighbours.Count < 3) // If all neighbours are still connected (3) we do not need to update anything
+						foreach (var cn in connectedNeighbours)
+							cellBCDs[cn].ID = currBcdId;
 
-					// Need to keep looping for each non-connected neighbour to each remaining neighbour, to ensure they are not linked
-					// E.g. A -> BCD finds C, leaving BD, we then need to check B -> D
-					// Or if A -> BCD finds nothing, we then check B -> CD, if that finds C, then we set BC to a new domain and add D
-					// However if A -> BCD finds nothing and B -> CD finds nothing, then we check C -> D
+					// We have updated the index for the connected neighbours, so they do not need to be handled anymore and can be removed from
+					// the neighbour list.
+					neighboursWithSameDomainID = neighboursWithSameDomainID.Except(connectedNeighbours).ToList();
+					currBcdId++;
 				}
 			}
 
@@ -325,7 +332,6 @@ namespace OpenRA.Mods.Common.Traits
 					}
 				}
 
-
 				return bcd;
 			}
 		}
@@ -333,6 +339,7 @@ namespace OpenRA.Mods.Common.Traits
 		enum ThetaPFAction { Add, Remove }
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
+			world = w;
 			locomotor = w.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
 
@@ -704,6 +711,12 @@ namespace OpenRA.Mods.Common.Traits
 					ThetaPFsToRun.RemoveAt(i - 1); // Remove if no longer expanding
 				}
 			}
+		}
+
+		public void Disposing(Actor self)
+		{
+			var actorCell = world.Map.CellContaining(self.CenterPosition);
+			BasicCellDomain.UpdateCellDomain(world, locomotor, actorCell, ref CellBCDs, ref currBcdId, BlockedByActor.Immovable);
 		}
 	}
 }
