@@ -21,8 +21,7 @@ namespace OpenRA.Mods.Common.Traits
 	[Desc("Manages the queuing and prioritisation of Theta Pathfinder calculations, to ensure the computer is not overloded.")]
 
 	public class ThetaPathfinderExecutionManagerInfo : TraitInfo<ThetaPathfinderExecutionManager> { }
-	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder, IWorldLoaded, NotBefore<ICustomMovementLayerInfo>,
-		INotifyActorDisposing
+	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder, IWorldLoaded, NotBefore<ICustomMovementLayerInfo>
 	{
 		RVO.Circle rvoCircle;
 		RVO.Blocks rvoBlocks;
@@ -113,6 +112,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			public bool DomainIsBlocked;
 			public List<CPos> Cells = new();
+			public List<(CPos Child, CPos Parent)> ChildParents = new();
 			public List<List<WPos>> CellEdges = new();
 			public int ID;
 
@@ -171,7 +171,9 @@ namespace OpenRA.Mods.Common.Traits
 				CellEdges.AddRange(Map.CellEdgeSet.FromCell(map, cell).GetAllEdgesAsPosList());
 			}
 
-			public static Queue<CPos> GetCellsWithinDomain(World world, Locomotor locomotor,
+			void AddChildParent((CPos Child, CPos Parent) childParent) => ChildParents.Add(childParent);
+
+			public static Queue<(CPos Child, CPos Parent)> GetCellsWithinDomain(World world, Locomotor locomotor,
 				CPos cell, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null,
 				Func<CPos, bool> cellMatchingCriteria = null, HashSet<CPos> limitedCellSet = null)
 			{
@@ -197,10 +199,10 @@ namespace OpenRA.Mods.Common.Traits
 				if (visited != null && visited.Count > 0)
 					candidateCells.RemoveAll(c => visited.Contains(c));
 
-				var cellsWithinDomain = new Queue<CPos>();
+				var cellsWithinDomain = new Queue<(CPos Child, CPos Parent)>();
 				foreach (var c in candidateCells)
 					if (map.CPosInMap(c) && cellMatchingCriteria(c) == cellMatchingCriteria(cell))
-						cellsWithinDomain.Enqueue(c);
+						cellsWithinDomain.Enqueue((c, cell));
 
 				return cellsWithinDomain;
 			}
@@ -216,7 +218,7 @@ namespace OpenRA.Mods.Common.Traits
 				var cellBlockStatus = CheckBlockFunc(cell);
 
 				// If the cell is still blocked or still unblocked, then we do not need to update the domain
-				if (cellPastBlockStatus != cellBlockStatus)
+				if (cellPastBlockStatus == cellBlockStatus)
 					return;
 
 				BasicCellDomain cellPastBCD;
@@ -232,19 +234,37 @@ namespace OpenRA.Mods.Common.Traits
 				var cellBCDsCopy = cellBCDs;
 
 				cellPastBCD = cellBCDs[cell];
-				cellBCDs[cell].RemoveCell(map, cell);
 
 				// borderCells are cells that have at least one side or corner cell having a different domain ID
-				var borderCellBCDs = cellBCDs.Where(c => (c.Value.ID != cellBCDsCopy[c.Key + new CVec(-1, -1)].ID) ||
-														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(0, -1)].ID) ||
-														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(1, -1)].ID) ||
-														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(-1, 0)].ID) ||
-														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(1, 0)].ID) ||
-														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(-1, 1)].ID) ||
-														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(0, 1)].ID) ||
-														 (c.Value.ID != cellBCDsCopy[c.Key + new CVec(1, 1)].ID));
+				var borderCellsOfPastBCD = cellPastBCD.Cells.Where(c =>
+					(map.CPosInMap(c + new CVec(-1, -1)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(-1, -1)].ID) ||
+					(map.CPosInMap(c + new CVec(0, -1)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(0, -1)].ID) ||
+					(map.CPosInMap(c + new CVec(1, -1)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(1, -1)].ID) ||
+					(map.CPosInMap(c + new CVec(-1, 0)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(-1, 0)].ID) ||
+					(map.CPosInMap(c + new CVec(1, 0)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(1, 0)].ID) ||
+					(map.CPosInMap(c + new CVec(-1, 1)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(-1, 1)].ID) ||
+					(map.CPosInMap(c + new CVec(0, 1)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(0, 1)].ID) ||
+					(map.CPosInMap(c + new CVec(1, 1)) && cellPastBCD.ID != cellBCDsCopy[c + new CVec(1, 1)].ID)).ToHashSet();
 
-				var borderCells = borderCellBCDs.Select(c => c.Key).ToHashSet();
+				var diagonalCells = new List<CPos>
+				{
+					new(cell.X - 1, cell.Y - 1, cell.Layer), // Top-Left neighbour
+					new(cell.X + 1, cell.Y - 1, cell.Layer), // Top-Right neighbour
+					new(cell.X - 1, cell.Y + 1, cell.Layer), // Bottom-Left neighbour
+					new(cell.X + 1, cell.Y + 1, cell.Layer) // Bottom-Right neighbour
+				};
+
+				if (!borderCellsOfPastBCD.Intersect(candidateCells).Any())
+				{
+					cellBCDs[cell].RemoveCell(map, cell);
+					return;
+				}
+
+				// We need to include all cells neighbouring the changed cell within borderCells, as it is possible for 3 of the
+				// cells to not be in borderCells, e.g. N E W but not S., yet one of them is preventing autosolve.
+				foreach (var c in candidateCells.Union(diagonalCells))
+					borderCellsOfPastBCD.Add(c);
+
 				var neighboursWithSameDomainID = candidateCells.Where(c => cellBCDsCopy[c].ID == cellBCDsCopy[cell].ID).ToList();
 
 				// Need to keep looping for each non-connected neighbour to each remaining neighbour, to ensure they are not linked
@@ -257,9 +277,9 @@ namespace OpenRA.Mods.Common.Traits
 				{
 					// connectedNeighbours are at most 3 of N S E W of a given neighbour from N S E W
 					var connectedNeighbours = FindCellsFromCell(world, locomotor,
-						neighboursWithSameDomainID[0], neighboursWithSameDomainID.Skip(1).ToList(), cellBCDs, borderCells, check);
+						neighboursWithSameDomainID[0], neighboursWithSameDomainID.Skip(1).ToList(), cellBCDs, borderCellsOfPastBCD, check);
 					if (connectedNeighbours.Count < 3) // If all neighbours are still connected (3) we do not need to update anything
-						foreach (var cn in connectedNeighbours)
+						foreach (var cn in connectedNeighbours) // TO DO: we need to also isolate these entire domains from the original domain
 							cellBCDs[cn].ID = currBcdId;
 
 					// We have updated the index for the connected neighbours, so they do not need to be handled anymore and can be removed from
@@ -267,6 +287,8 @@ namespace OpenRA.Mods.Common.Traits
 					neighboursWithSameDomainID = neighboursWithSameDomainID.Except(connectedNeighbours).ToList();
 					currBcdId++;
 				}
+
+				cellBCDs[cell].RemoveCell(map, cell);
 			}
 
 			// NOT USABLE YET: WORK IN PROGRESS
@@ -282,7 +304,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				bool MatchingDomainID(CPos c) => cellBCDs[c].ID == cellBCDs[startCell].ID;
 
-				while (cellsToExpand.Count > 0 || targetCells.Count == 0)
+				while (cellsToExpand.Count > 0 && targetCells.Count > 0)
 				{
 					var c = cellsToExpand.Dequeue();
 					if (targetCells.Contains(c))
@@ -291,7 +313,7 @@ namespace OpenRA.Mods.Common.Traits
 						targetCells.Remove(c);
 					}
 
-					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited, MatchingDomainID, borderCells))
+					foreach (var (cwd, _) in GetCellsWithinDomain(world, locomotor, c, check, visited, MatchingDomainID, borderCells))
 					{
 						cellsToExpand.Enqueue(cwd);
 						visited.Add(cwd);
@@ -311,24 +333,25 @@ namespace OpenRA.Mods.Common.Traits
 					DomainIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, cell, check)
 				};
 
-				var cellsToExpand = GetCellsWithinDomain(world, locomotor, cell, check, visited);
-				foreach (var c in cellsToExpand)
-					visited.Add(c);
+				var cellsToExpandWithParent = GetCellsWithinDomain(world, locomotor, cell, check, visited);
+				foreach (var (child, _) in cellsToExpandWithParent)
+					visited.Add(child);
 
 				visited.Add(cell);
 				bcd.AddCellAndEdges(map, cell);
 
-				while (cellsToExpand.Count > 0)
+				while (cellsToExpandWithParent.Count > 0)
 				{
-					var c = cellsToExpand.Dequeue();
-					bcd.AddCellAndEdges(map, c);
-					bcd.RemoveEdgeIfNeighbourExists(map, c);
+					var (child, parent) = cellsToExpandWithParent.Dequeue();
+					bcd.AddCellAndEdges(map, child);
+					bcd.AddChildParent((child, parent));
+					bcd.RemoveEdgeIfNeighbourExists(map, child);
 
 					// INVARIANT: bcd is independent of the below method that obtains neighbouring cells
-					foreach (var cwd in GetCellsWithinDomain(world, locomotor, c, check, visited))
+					foreach (var cpwd in GetCellsWithinDomain(world, locomotor, child, check, visited))
 					{
-						cellsToExpand.Enqueue(cwd);
-						visited.Add(cwd);
+						cellsToExpandWithParent.Enqueue(cpwd);
+						visited.Add(cpwd.Child);
 					}
 				}
 
@@ -605,9 +628,11 @@ namespace OpenRA.Mods.Common.Traits
 		void Tick(World world)
 		{
 			var domainList = new List<BasicCellDomain>();
+			var collDebugOverlay = world.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
 
-			if (!bcdSet)
+			if (!bcdSet && collDebugOverlay.Enabled)
 			{
+				world.ActorRemoved += RemovedFromWorld;
 				var visited = new HashSet<CPos>();
 				for (var x = 0; x < world.Map.MapSize.X; x++)
 					for (var y = 0; y < world.Map.MapSize.Y; y++)
@@ -631,7 +656,22 @@ namespace OpenRA.Mods.Common.Traits
 							colorToUse = Color.Red;
 						else
 							colorToUse = Color.Green;
-						MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), $"{bcd.ID}", colorToUse, "Title");
+						MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), $"{bcd.ID}", colorToUse, "MediumBold");
+					}
+
+					foreach (var (child, parent) in bcd.ChildParents)
+					{
+						//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cell), new WDist(512));
+
+						var arrowDist = (world.Map.CenterOfCell(parent) - world.Map.CenterOfCell(child)) / 10 * 8;
+
+						Color colorToUse;
+						if (bcd.DomainIsBlocked)
+							colorToUse = Color.Red;
+						else
+							colorToUse = Color.Green;
+						MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
+							world.Map.CenterOfCell(child), world.Map.CenterOfCell(child) + arrowDist, colorToUse, 3, LineEndPoint.EndArrow);
 					}
 
 					foreach (var edge in bcd.CellEdges)
@@ -640,8 +680,6 @@ namespace OpenRA.Mods.Common.Traits
 
 				bcdSet = true;
 			}
-
-			var collDebugOverlay = world.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
 
 			var rvoObject = rvoBlocks;
 
@@ -713,10 +751,10 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void Disposing(Actor self)
+		public void RemovedFromWorld(Actor self)
 		{
-			var actorCell = world.Map.CellContaining(self.CenterPosition);
-			BasicCellDomain.UpdateCellDomain(world, locomotor, actorCell, ref CellBCDs, ref currBcdId, BlockedByActor.Immovable);
+			if (self.OccupiesSpace != null)
+				BasicCellDomain.UpdateCellDomain(world, locomotor, self.Location, ref CellBCDs, ref currBcdId, BlockedByActor.Immovable);
 		}
 	}
 }

@@ -18,6 +18,7 @@ using OpenRA.Mods.Common.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Traits;
 using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
+using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
 
 namespace OpenRA.Mods.Common.Traits
 {
@@ -28,7 +29,7 @@ namespace OpenRA.Mods.Common.Traits
 	public class CollisionDebugOverlay : IWorldLoaded, IChatCommand, IRenderAnnotations
 	{
 		public readonly List<Command> Comms;
-		readonly List<(List<WPos>, Color, int)> linesWithColorsAndThickness = new();
+		readonly List<(List<WPos>, Color, int, LineEndPoint EndPoints)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int)> circlesWithColors = new();
 		readonly List<(WPos, Color, int)> pointsWithColors = new();
 		readonly List<(List<WPos> Path, Color? C)> paths = new();
@@ -43,7 +44,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		public bool Enabled;
 		const int DefaultThickness = 3;
+		const int DefaultArrowThickness = 3;
+		const int DefaultSharpnessDegrees = 45; // angle in degrees that each side of the arrow head of an arrow should be
 		const int LineThickness = 3;
+		readonly WDist defaultArrowLength = new(256);
 		float currHue = Color.Blue.ToAhsv().H; // 0.0 - 1.0
 		readonly float pointHue = Color.Red.ToAhsv().H; // 0.0 - 1.0
 		readonly float circleHue = Color.LightGreen.ToAhsv().H; // 0.0 - 1.0
@@ -120,6 +124,20 @@ namespace OpenRA.Mods.Common.Traits
 			GenericLinkedPointsFunc(path, path.Count, FuncOnLinkedPoints);
 			return linesToRender;
 		}
+		static List<LineAnnotationRenderableWithZIndex> RenderArrowhead(WPos start, WVec directionAndLength, Color color,
+			int thickness = DefaultArrowThickness, int sharpnessDegrees = DefaultSharpnessDegrees)
+		{
+			var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
+			var end = start - directionAndLength;
+			var endOfLeftSide = start + directionAndLength.Rotate(WRot.FromYaw(WAngle.FromDegrees(sharpnessDegrees + 180)));
+			var endOfRightSide = start + directionAndLength.Rotate(WRot.FromYaw(WAngle.FromDegrees(-sharpnessDegrees + 180)));
+
+			linesToRender.Add(new(start, end, thickness, color));
+			linesToRender.Add(new(start, endOfLeftSide, thickness, color));
+			linesToRender.Add(new(start, endOfRightSide, thickness, color));
+
+			return linesToRender;
+		}
 
 		IEnumerable<IRenderable> IRenderAnnotations.RenderAnnotations(Actor self, WorldRenderer wr)
 		{
@@ -127,8 +145,8 @@ namespace OpenRA.Mods.Common.Traits
 				yield break;
 
 			var pointRadius = 100;
-			var endPointRadius = 100;
-			var endPointThickness = 3;
+			const int EndPointRadius = 100;
+			const int EndPointThickness = 3;
 			var defaultFontName = "TinyBold";
 			var font = Game.Renderer.Fonts[defaultFontName];
 			Color lineColor;
@@ -145,6 +163,30 @@ namespace OpenRA.Mods.Common.Traits
 				var font = Game.Renderer.Fonts[fontname];
 				return new(font, p, 0, color, text);
 			}
+
+
+			List<LineAnnotationRenderableWithZIndex> LineRenderFunc(WPos start, WPos end, Color color,
+				LineEndPoint endPoints = LineEndPoint.None, int thickness = DefaultThickness)
+			{
+				var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
+
+				if (endPoints == LineEndPoint.None)
+					linesToRender.Add(new(start, end, thickness, color, color, (0, 0, color)));
+				else if (endPoints == LineEndPoint.Circle)
+					linesToRender.Add(new(start, end, thickness, color, color, (EndPointRadius, EndPointThickness, color)));
+				else if (endPoints == LineEndPoint.StartArrow || endPoints == LineEndPoint.EndArrow || endPoints == LineEndPoint.BothArrows)
+				{
+					var arrowVec = new WVec(defaultArrowLength, WRot.FromYaw((end - start).Yaw));
+					linesToRender.Add(new(start, end, thickness, color, color, (0, 0, color)));
+					if (endPoints == LineEndPoint.StartArrow || endPoints == LineEndPoint.BothArrows)
+						linesToRender = linesToRender.Union(RenderArrowhead(start, -arrowVec, color)).ToList();
+					if (endPoints == LineEndPoint.EndArrow || endPoints == LineEndPoint.BothArrows)
+						linesToRender = linesToRender.Union(RenderArrowhead(end, arrowVec, color)).ToList();
+				}
+
+				return linesToRender;
+			}
+
 
 			// Render States
 			foreach (var (ccState, color) in statesWithColors)
@@ -179,7 +221,7 @@ namespace OpenRA.Mods.Common.Traits
 			lineColor = Color.FromAhsv(pathHue, currSat, currLight);
 			foreach (var (path, color) in paths)
 			{
-				var linesToRender = GetPathRenderableSet(path, LineThickness, color ?? lineColor, endPointRadius, endPointThickness, lineColor);
+				var linesToRender = GetPathRenderableSet(path, LineThickness, color ?? lineColor, EndPointRadius, EndPointThickness, lineColor);
 				foreach (var line in linesToRender)
 					yield return line;
 			}
@@ -188,17 +230,16 @@ namespace OpenRA.Mods.Common.Traits
 			lineColor = Color.FromAhsv(lineHue, currSat, currLight);
 			foreach (var (line, thickness) in linesWithThickness)
 			{
-				var linesToRender = GetPathRenderableSet(line, thickness, lineColor, endPointRadius, endPointThickness, lineColor);
+				var linesToRender = GetPathRenderableSet(line, thickness, lineColor, EndPointRadius, EndPointThickness, lineColor);
 				foreach (var l in linesToRender)
 					yield return l;
 			}
 
 			// Render LinesWithColours
-			foreach (var (line, color, thickness) in linesWithColorsAndThickness)
+			foreach (var (line, color, thickness, endpoints) in linesWithColorsAndThickness)
 			{
-				var linesToRender = GetPathRenderableSet(line, thickness, color, endPointRadius, endPointThickness, color);
-				foreach (var l in linesToRender)
-					yield return l;
+				foreach (var renderLine in LineRenderFunc(line[0], line[1], color, endpoints, thickness))
+					yield return renderLine;
 			}
 		}
 
@@ -284,7 +325,8 @@ namespace OpenRA.Mods.Common.Traits
 		public void AddLine(WPos p1, WPos p2, int thickness = LineThickness) => AddLine(new List<WPos> { p1, p2 }, thickness);
 		public void AddLine(List<WPos> line, int thickness = LineThickness) { linesWithThickness.Add((line, thickness)); }
 		public void RemoveLine(List<WPos> line) { linesWithThickness.RemoveAll(l => l.Item1 == line); }
-		public void AddLineWithColor(List<WPos> line, Color color, int thickness = LineThickness) { linesWithColorsAndThickness.Add((line, color, thickness)); }
+		public void AddLineWithColor(List<WPos> line, Color color, int thickness = LineThickness, LineEndPoint endpoints = LineEndPoint.None)
+			=> linesWithColorsAndThickness.Add((line, color, thickness, endpoints));
 		public void RemoveLineWithColor(List<WPos> line) { linesWithColorsAndThickness.RemoveAll(lwc => lwc.Item1 == line); }
 		public void AddCircle((WPos P, WDist D) circle, int thickness = DefaultThickness)
 		{ circlesWithColors.Add((circle, Color.FromAhsv(circleHue, currSat, currLight), DefaultThickness)); }

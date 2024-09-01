@@ -19,6 +19,7 @@ using OpenRA.Primitives;
 using OpenRA.Traits;
 using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
 using static OpenRA.Mods.Common.Traits.MobileOffGrid;
+using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
 
 #pragma warning disable SA1512 // SingleLineCommentsMustNotBeFollowedByBlankLine
 #pragma warning disable SA1515 // Single-line comment should be preceded by blank line
@@ -222,11 +223,12 @@ namespace OpenRA.Mods.Common.Activities
 			var renderLine = new List<WPos>() { pos1, pos2 };
 			self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault().AddLine(renderLine, thickness);
 		}
-		public static void RenderLineWithColorCollDebug(Actor self, WPos pos1, WPos pos2, Color color, int thickness = LineThickness)
+		public static void RenderLineWithColorCollDebug(Actor self, WPos pos1, WPos pos2, Color color,
+			int thickness = LineThickness, LineEndPoint endpoints = LineEndPoint.None)
 		{
 			var renderLine = new List<WPos>() { pos1, pos2 };
 			self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault()
-				.AddLineWithColor(renderLine, color, thickness);
+				.AddLineWithColor(renderLine, color, thickness, endpoints);
 		}
 
 		public static void RenderCircle(Actor self, WPos pos, WDist radius, string key)

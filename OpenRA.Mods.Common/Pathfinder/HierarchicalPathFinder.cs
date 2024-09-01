@@ -649,7 +649,8 @@ namespace OpenRA.Mods.Common.Pathfinder
 		/// </summary>
 		bool ActorIsBlocking(Actor actor)
 		{
-			var isMovable = actor.OccupiesSpace is Mobile mobile && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable;
+			var isMovable = (actor.OccupiesSpace is Mobile mobile && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable) ||
+							(actor.OccupiesSpace is MobileOffGrid mobileOG && !mobileOG.IsTraitDisabled && !mobileOG.IsTraitPaused && !mobileOG.IsImmovable);
 			if (isMovable)
 				return false;
 
