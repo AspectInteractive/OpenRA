@@ -1156,7 +1156,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 				// During a search, all other cells searched by the heuristic are guaranteed to be reachable.
 				// So we don't need to handle an abstract cell lookup failing, or the search failing to expand.
-				// Cells added as initial starting points for the search might not be reachable,
+				// CellNodesDict added as initial starting points for the search might not be reachable,
 				// so for those we need to perform accessibility checks.
 				// If the exceptions here do fire, they indicate a bug. The abstract graph is considering a cell to be
 				// unreachable, but the local pathfinder thinks it is reachable. We must fix the abstract graph to also

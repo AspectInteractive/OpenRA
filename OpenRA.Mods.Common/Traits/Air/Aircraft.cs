@@ -1303,7 +1303,7 @@ namespace OpenRA.Mods.Common.Traits
 				var location = self.World.Map.CellContaining(target.CenterPosition);
 
 				// Aircraft can be force-landed by issuing a force-move order on a clear terrain cell
-				// Cells that contain a blocking building are treated as regular force move orders, overriding
+				// CellNodesDict that contain a blocking building are treated as regular force move orders, overriding
 				// selection for left-mouse orders
 				if (modifiers.HasModifier(TargetModifiers.ForceMove) && aircraft.Info.CanForceLand)
 				{

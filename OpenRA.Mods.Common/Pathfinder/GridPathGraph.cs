@@ -16,7 +16,7 @@ namespace OpenRA.Mods.Common.Pathfinder
 {
 	/// <summary>
 	/// A dense pathfinding graph that supports a search over all cells within a <see cref="Grid"/>.
-	/// Cells outside the grid area are deemed unreachable and will not be considered.
+	/// CellNodesDict outside the grid area are deemed unreachable and will not be considered.
 	/// It implements the ability to cost and get connections for cells, and supports <see cref="ICustomMovementLayer"/>.
 	/// </summary>
 	sealed class GridPathGraph : DensePathGraph

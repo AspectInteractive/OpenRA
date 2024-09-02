@@ -134,7 +134,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				var orderName = mi.Modifiers.HasModifier(Modifiers.Ctrl) ? "AssaultMove" : "AttackMove";
 
-				// Cells outside the playable area should be clamped to the edge for consistency with move orders
+				// CellNodesDict outside the playable area should be clamped to the edge for consistency with move orders
 				cell = world.Map.Clamp(cell);
 				yield return new Order(orderName, null, Target.FromCell(world, cell), queued, null, subjects.Select(s => s.Actor).ToArray());
 			}
