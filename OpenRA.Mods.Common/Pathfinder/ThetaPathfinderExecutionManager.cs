@@ -97,6 +97,7 @@ namespace OpenRA.Mods.Common.Traits
 		Locomotor locomotor;
 		int currBcdId = 0;
 		bool bcdSet = false;
+		bool actorRemoved = false;
 		public Dictionary<CPos, LinkedListNode<CPos>> AllCellNodes;
 		public Dictionary<CPos, BasicCellDomain> AllCellBCDs;
 		readonly int maxCurrExpansions = 500;
@@ -139,21 +140,24 @@ namespace OpenRA.Mods.Common.Traits
 			// Removes the parent and sets new parents for the children
 			public LinkedListNode<T> RemoveParentAndReturnNewParent(List<LinkedListNode<T>> neighboursOfChildren)
 			{
+				Parent = null;
+				if (Children.Count == 0)
+					return null;
+
 				// For each child, we run IsValidParent from that child to all other children to identify if they are
 				// a valid parent and only keep them if they are valid. Then we sort the original list of children
 				// by the highest number first (most valid children), to get the best candidates for parents.
 				var bestCandidateParentWithChildren
-					= Children.Select(parent => (parent, Children.Where(cx => cx != parent).Where(c2 => IsValidParent(parent, c2))))
-						.OrderByDescending(c => c.Item2.Count()).FirstOrDefault();
-
-				Parent = null;
+					= Children.Select(parent => (parent, Children.Where(cx => cx != parent).Where(c2 => IsValidParent(parent, c2)).ToList()))
+						.OrderByDescending(c => c.Item2.Count).FirstOrDefault();
 
 				// First we set the best parent and assign all nearby children to it
 				var childrenToReparent = Children;
-				foreach (var child in bestCandidateParentWithChildren.Item2)
+				var childrenOfBestCandidate = bestCandidateParentWithChildren.Item2;
+				for (var i = childrenOfBestCandidate.Count - 1; i >= 0; i--)
 				{
-					childrenToReparent.Remove(child);
-					child.Parent = bestCandidateParentWithChildren.parent;
+					childrenToReparent.Remove(childrenOfBestCandidate[i]);
+					childrenOfBestCandidate[i].Parent = bestCandidateParentWithChildren.parent;
 				}
 
 				// Next we check every single neighbour of every remaining child, to find a valid parent for all of them
@@ -262,21 +266,31 @@ namespace OpenRA.Mods.Common.Traits
 				// We set the new parent and remove it from the BCD
 				Parent = parent.RemoveParentAndReturnNewParent(neighboursOfChildren); // how do we know if the new parents are still part of the index?
 				RemoveCell(world.Map, parent.Value);
-				var adjCellNodesDict = CellNodesDict;
+				allCellBCDs[parent.Value] = null;
+
+				// If there are no cells, there is no further action needed
+				if (CellNodesDict.Count == 0)
+					return;
+
+				var origCellNodesDict = CellNodesDict;
 
 				// We try to find all cells again from the new parent
 				CellNodesDict = FindNodesFromStartNode(world, locomotor, Parent, CellNodesDict.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check)
 									.ToDictionary(c => c.Value, c => c);
 
-				// Any cells t hat were not found from the new parent need to form new domains
-				if (CellNodesDict != adjCellNodesDict)
+				var cellsNotFound = origCellNodesDict.Values.Select(cn => cn.Value).Except(CellNodesDict.Values.Select(cn => cn.Value)).ToList();
+
+				var colorToUse = Color.Green;
+
+				// Any cells that were not found from the new parent need to form new domains
+				if (cellsNotFound.Count > 0)
 				{
 					// First set the existing domain to a new ID
 					ID = currBcdId;
 					currBcdId++;
 
 					// Next get the set of all cells that could not be found from the new parent
-					var remainingCellNodes = adjCellNodesDict.Except(CellNodesDict).ToDictionary(k => k.Key, k => k.Value);
+					var remainingCellNodes = origCellNodesDict.Where(c => cellsNotFound.Contains(c.Key)).ToDictionary(k => k.Key, k => k.Value);
 
 					// Keep looping through the remaining nodes until all of them have a domain
 					while (remainingCellNodes.Count > 0)
@@ -284,7 +298,7 @@ namespace OpenRA.Mods.Common.Traits
 						// Use the first cell node in the remaining nodes list to search for all other remaining cell nodes
 						// NOTE: This does not use parent/child logic, it is simply a BFS
 						var candidateCellNodes = FindNodesFromStartNode(world, locomotor, remainingCellNodes.Values.FirstOrDefault(),
-							remainingCellNodes.Values.Skip(1).ToList(), allCellBCDs, new HashSet<CPos>(), check).ToDictionary(c => c.Value, c => c);
+							remainingCellNodes.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check).ToDictionary(c => c.Value, c => c);
 
 						// Add this new set of cell nodes to a new domain, then increment the currBcdId
 						var newBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, candidateCellNodes.Values.ToList(), check);
@@ -293,8 +307,16 @@ namespace OpenRA.Mods.Common.Traits
 						currBcdId++;
 
 						// Remove the nodes that have recently been added to a new domain, and repeat the process with the remaining nodes
-						remainingCellNodes = remainingCellNodes.Except(candidateCellNodes).ToDictionary(k => k.Key, k => k.Value);
+						remainingCellNodes = remainingCellNodes.Where(c => !candidateCellNodes.ContainsKey(c.Key)).ToDictionary(k => k.Key, k => k.Value);
 					}
+				}
+
+				foreach (var cn in CellNodesDict.Values)
+				{
+					if (cn.Parent != null)
+						MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
+								world.Map.CenterOfCell(cn.Value), world.Map.CenterOfCell(cn.Parent.Value), colorToUse, 3, LineEndPoint.EndArrow);
+					MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cn.Value), $"ID:{allCellBCDs[cn.Value].ID}", colorToUse, "MediumBold");
 				}
 			}
 
@@ -312,20 +334,26 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var visited = new HashSet<CPos>();
 				var foundTargetNodes = new List<LinkedListNode<CPos>>();
+				var targetNodeCells = targetNodes.ConvertAll(cn => cn.Value);
 
 				var nodesToExpand = new Queue<LinkedListNode<CPos>>();
 				nodesToExpand.Enqueue(startNode);
 				visited.Add(startNode.Value);
 
-				bool MatchingDomainID(CPos c) => cellBCDs[c].ID == cellBCDs[startNode.Value].ID;
+				bool MatchingDomainID(CPos c)
+				{
+					if (cellBCDs[c] != null && cellBCDs[startNode.Value] != null)
+						return cellBCDs[c].ID == cellBCDs[startNode.Value].ID;
+					return false; // cannot match domain ID if one of the domain IDs is missing
+				}
 
-				while (nodesToExpand.Count > 0 && targetNodes.Count > 0)
+				while (nodesToExpand.Count > 0 && targetNodeCells.Count > 0)
 				{
 					var cn = nodesToExpand.Dequeue();
-					if (targetNodes.Contains(cn))
+					if (targetNodeCells.Contains(cn.Value))
 					{
 						foundTargetNodes.Add(cn);
-						targetNodes.Remove(cn);
+						targetNodeCells.Remove(cn.Value);
 					}
 
 					foreach (var cnd in GetCellsWithinDomain(world, locomotor, cn, check, visited, MatchingDomainID, borderCells))
@@ -708,6 +736,40 @@ namespace OpenRA.Mods.Common.Traits
 			ActorOrdersInCircleSlices.Clear();
 		}
 
+		public void RenderBCD(List<BasicCellDomain> domainList)
+		{
+			foreach (var bcd in domainList)
+			{
+				foreach (var cellNode in bcd.CellNodesDict.Values)
+				{
+					//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cellNode), new WDist(512));
+					Color colorToUse;
+					if (bcd.DomainIsBlocked)
+						colorToUse = Color.Red;
+					else
+						colorToUse = Color.Green;
+					MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cellNode.Value), $"ID:{bcd.ID}", colorToUse, "MediumBold");
+
+					var parent = CPos.Zero;
+					if (cellNode.Parent != null)
+						parent = cellNode.Parent.Value;
+					var child = cellNode.Value;
+					//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cellNode), new WDist(512));
+
+					var arrowDist = WVec.Zero;
+					if (parent != CPos.Zero)
+						arrowDist = (world.Map.CenterOfCell(parent) - world.Map.CenterOfCell(child)) / 10 * 8;
+
+					if (arrowDist != WVec.Zero)
+						MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
+							world.Map.CenterOfCell(child), world.Map.CenterOfCell(child) + arrowDist, colorToUse, 3, LineEndPoint.EndArrow);
+				}
+
+				foreach (var edge in bcd.CellEdges)
+					MoveOffGrid.RenderLineCollDebug(world.WorldActor, edge[0], edge[1], 3);
+			}
+		}
+
 		void Tick(World world)
 		{
 			var domainList = new List<BasicCellDomain>();
@@ -730,47 +792,19 @@ namespace OpenRA.Mods.Common.Traits
 									.Select(cell => new KeyValuePair<CPos, BasicCellDomain>(cell.Key, domain)))
 								  .ToDictionary(k => k.Key, k => k.Value);
 
-				foreach (var bcd in domainList)
-				{
-					foreach (var cellNode in bcd.CellNodesDict.Values)
-					{
-						//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cellNode), new WDist(512));
-						Color colorToUse;
-						if (bcd.DomainIsBlocked)
-							colorToUse = Color.Red;
-						else
-							colorToUse = Color.Green;
-						MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cellNode.Value), $"{bcd.ID}", colorToUse, "MediumBold");
-					}
-
-					foreach (var cellNode in bcd.CellNodesDict.Values)
-					{
-						var parent = CPos.Zero;
-						if (cellNode.Parent != null)
-							parent = cellNode.Parent.Value;
-						var child = cellNode.Value;
-						//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cellNode), new WDist(512));
-
-						var arrowDist = WVec.Zero;
-						if (parent != CPos.Zero)
-							arrowDist = (world.Map.CenterOfCell(parent) - world.Map.CenterOfCell(child)) / 10 * 8;
-
-						Color colorToUse;
-						if (bcd.DomainIsBlocked)
-							colorToUse = Color.Red;
-						else
-							colorToUse = Color.Green;
-						if (arrowDist != WVec.Zero)
-							MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
-								world.Map.CenterOfCell(child), world.Map.CenterOfCell(child) + arrowDist, colorToUse, 3, LineEndPoint.EndArrow);
-					}
-
-					foreach (var edge in bcd.CellEdges)
-						MoveOffGrid.RenderLineCollDebug(world.WorldActor, edge[0], edge[1], 3);
-				}
+				RenderBCD(domainList);
 
 				bcdSet = true;
 			}
+
+			//if (actorRemoved)
+			//{
+			//	collDebugOverlay.ClearTexts();
+			//	collDebugOverlay.ClearLines();
+			//	domainList = AllCellBCDs.Select(kv => kv.Value).Distinct().ToList();
+			//	RenderBCD(domainList);
+			//	actorRemoved = false;
+			//}
 
 			var rvoObject = rvoBlocks;
 
