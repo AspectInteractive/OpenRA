@@ -100,6 +100,7 @@ namespace OpenRA.Mods.Common.Traits
 		bool actorRemoved = false;
 		public Dictionary<CPos, LinkedListNode<CPos>> AllCellNodes;
 		public Dictionary<CPos, BasicCellDomain> AllCellBCDs;
+		Actor removeActorFromWorld = null;
 		readonly int maxCurrExpansions = 500;
 		readonly int radiusForSharedThetas = 1024 * 10;
 		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
@@ -254,25 +255,28 @@ namespace OpenRA.Mods.Common.Traits
 
 				// cell blocked status has changed, so
 				// neighbour must be the opposite of the current state
+				var cellIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, parent.Value, BlockedByActor.Immovable);
 				bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
-					=> ValidParent(parent, candidate) && OppositeOfBlockedStatus(candidate);
-				bool OppositeOfBlockedStatus(CPos c) => allCellBCDsCopy[c].DomainIsBlocked == !DomainIsBlocked;
+					=> ValidParent(parent, candidate) && MatchingBlockedStatus(candidate);
+				bool MatchingBlockedStatus(CPos c) => allCellBCDsCopy[c].DomainIsBlocked == cellIsBlocked;
 
 				var oldParentValidNeighbours = CellNeighbours(world.Map, parent.Value, ValidParentAndValidBlockedStatus);
 
 				BasicCellDomain oldParentNewBCD;
 				if (oldParentValidNeighbours.Count > 0)
 				{
-					var oldParentLargestValidNeighbour = oldParentValidNeighbours.OrderBy(c => allCellBCDsCopy[c].CellNodesDict.Count).FirstOrDefault();
+					var oldParentLargestValidNeighbour = oldParentValidNeighbours
+						.OrderByDescending(c => allCellBCDsCopy[c].CellNodesDict.Count).FirstOrDefault();
+
 					// Assign new parent and domain (largest domain with matching blocked status) to the old parent
 					oldParentNewBCD = allCellBCDs[oldParentLargestValidNeighbour];
 					parent.Parent = oldParentNewBCD.CellNodesDict[oldParentLargestValidNeighbour];
+					oldParentNewBCD.CellNodesDict[oldParentLargestValidNeighbour].Children.Add(parent);
 					oldParentNewBCD.AddCellAndEdges(world.Map, parent);
 				}
 				else
 				{
 					oldParentNewBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, new List<LinkedListNode<CPos>>() { parent }, check);
-					oldParentNewBCD.DomainIsBlocked = !DomainIsBlocked;
 					currBcdId++;
 				}
 
@@ -325,15 +329,6 @@ namespace OpenRA.Mods.Common.Traits
 						remainingCellNodes = remainingCellNodes.Where(c => !candidateCellNodes.ContainsKey(c.Key)).ToDictionary(k => k.Key, k => k.Value);
 					}
 				}
-
-				//colorToUse = DomainIsBlocked ? Color.Red : Color.Green;
-				//foreach (var cn in CellNodesDict.Values.Append(parent))
-				//{
-				//	if (cn.Parent != null)
-				//		MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
-				//				world.Map.CenterOfCell(cn.Value), world.Map.CenterOfCell(cn.Parent.Value), colorToUse, 3, LineEndPoint.EndArrow);
-				//	MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cn.Value), $"ID:{allCellBCDs[cn.Value].ID}", colorToUse, "MediumBold");
-				//}
 			}
 
 			public void AddCellAndEdges(Map map, LinkedListNode<CPos> cellNode)
@@ -370,6 +365,7 @@ namespace OpenRA.Mods.Common.Traits
 					if (targetNodeCells.Contains(cn.Value))
 					{
 						foundTargetNodes.Add(cn);
+						cn.Parent?.Children.Add(cn);
 						targetNodeCells.Remove(cn.Value);
 					}
 
@@ -823,6 +819,12 @@ namespace OpenRA.Mods.Common.Traits
 				actorRemoved = false;
 			}
 
+			if (removeActorFromWorld != null && !removeActorFromWorld.IsInWorld)
+			{
+				RemoveFromWorld(removeActorFromWorld);
+				removeActorFromWorld = null;
+			}
+
 			var rvoObject = rvoBlocks;
 
 			// Call RVO Tick
@@ -892,9 +894,8 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void RemovedFromWorld(Actor self)
+		public void RemoveFromWorld(Actor self)
 		{
-			// TO BE COMPLETED:
 			if (self.OccupiesSpace != null && self.World.Map.Contains(self.Location))
 			{
 				var cellNode = AllCellNodes[self.Location];
@@ -907,5 +908,7 @@ namespace OpenRA.Mods.Common.Traits
 				actorRemoved = true;
 			}
 		}
+
+		public void RemovedFromWorld(Actor self) => removeActorFromWorld = self;
 	}
 }

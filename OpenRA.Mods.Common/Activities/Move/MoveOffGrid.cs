@@ -354,12 +354,20 @@ namespace OpenRA.Mods.Common.Activities
 				// being called _before_ any traits are called. This is because all of the actors
 				// must be processed collectively in order for the grouped pathfinding to work.
 				// Otherwise pathfinding will be inefficient and slow.
-				thetaPFexecManager.AddMoveOrder(self, target.CenterPosition, ActorsSharingMove);
+				thetaPFexecManager.AddMoveOrder(self, GetValidTargetPos(), ActorsSharingMove);
 				thetaPFexecManager.PlayerCirclesLocked = false;
 			}
 
 			if (!usePathFinder)
-				pathRemaining = new List<WPos>() { target.CenterPosition };
+				pathRemaining = new List<WPos>() { GetValidTargetPos() };
+		}
+
+		public WPos GetValidTargetPos()
+		{
+			if (target != default && target.Type != TargetType.Invalid)
+				return target.CenterPosition;
+			else
+				return lastVisibleTarget.CenterPosition;
 		}
 
 		public void EndingActions()
@@ -479,7 +487,7 @@ namespace OpenRA.Mods.Common.Activities
 
 				// Default movement if no path is found
 				if (pathRemaining.Count == 0)
-					pathRemaining = new List<WPos>() { target.CenterPosition };
+					pathRemaining = new List<WPos>() { GetValidTargetPos() };
 
 				GetNextTargetOrComplete(self);
 
@@ -564,7 +572,7 @@ namespace OpenRA.Mods.Common.Activities
 								mobileOffGrid.IsBlocked = false;
 								EndingActions();
 								Complete();
-								thetaPFexecManager.AddMoveOrder(self, target.CenterPosition);
+								thetaPFexecManager.AddMoveOrder(self, GetValidTargetPos());
 								RenderCircleColorCollDebug(self, mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius, Color.Purple, 3);
 								thetaPFexecManager.PlayerCirclesLocked = false;
 								thetaIters++;
