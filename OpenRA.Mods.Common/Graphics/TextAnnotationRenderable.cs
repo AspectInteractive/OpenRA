@@ -12,6 +12,7 @@
 using OpenRA.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Widgets;
+using System.Security.Cryptography;
 
 namespace OpenRA.Mods.Common.Graphics
 {
@@ -52,8 +53,24 @@ namespace OpenRA.Mods.Common.Graphics
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
-			var screenPos = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos)) - 0.5f * font.Measure(text).ToFloat2();
-			font.DrawTextWithContrast(text, screenPos, color, bgDark, bgLight, 1);
+			var tl = wr.Viewport.Rectangle.TopLeft;
+			var br = wr.Viewport.Rectangle.BottomRight;
+
+			var size = font.Measure(text).ToFloat2();
+			var screenPos = wr.ScreenPosition(Pos);
+			var viewPos = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos));
+
+			var textViewTL = viewPos - 0.5f * size;
+			var textScreenTL = screenPos - 0.5f * size;
+			var textScreenBR = screenPos + 0.5f * size;
+
+			if ((textScreenTL.Y < tl.Y && textScreenBR.Y < tl.Y) ||
+				(textScreenTL.X < tl.X && textScreenBR.X < tl.X) ||
+				(textScreenTL.Y > br.Y && textScreenBR.Y > br.Y) ||
+				(textScreenTL.X > br.X && textScreenBR.X > br.X))
+				return;
+
+			font.DrawTextWithContrast(text, textViewTL, color, bgDark, bgLight, 1);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)

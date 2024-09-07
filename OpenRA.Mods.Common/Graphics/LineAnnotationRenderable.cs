@@ -47,6 +47,7 @@ namespace OpenRA.Mods.Common.Graphics
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
+
 		public void Render(WorldRenderer wr)
 		{
 			Game.Renderer.RgbaColorRenderer.DrawLine(

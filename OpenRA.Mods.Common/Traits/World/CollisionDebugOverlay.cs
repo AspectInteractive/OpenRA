@@ -344,6 +344,21 @@ namespace OpenRA.Mods.Common.Traits
 		public void ClearTexts() { textsWithColors.Clear(); }
 		public void ClearActorTexts() { actorTextsWithColors.Clear(); }
 
+		public void ClearAll()
+		{
+			ClearIntervals();
+			ClearPaths();
+			ClearLines();
+			ClearLinesWithColors();
+			ClearStates();
+			ClearPoints();
+			ClearActorPoints();
+			ClearCircles();
+			ClearRadiuses();
+			ClearActorTexts();
+			ClearTexts();
+		}
+
 		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}
 }

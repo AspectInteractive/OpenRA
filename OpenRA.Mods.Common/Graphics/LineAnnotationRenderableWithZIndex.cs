@@ -72,6 +72,18 @@ namespace OpenRA.Mods.Common.Graphics
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
+			var tl = wr.Viewport.Rectangle.TopLeft;
+			var br = wr.Viewport.Rectangle.BottomRight;
+
+			var startSp = wr.ScreenPosition(start);
+			var endSp = wr.ScreenPosition(end);
+
+			if ((startSp.Y < tl.Y && endSp.Y < tl.Y) ||
+				(startSp.X < tl.X && endSp.X < tl.X) ||
+				(startSp.Y > br.Y && endSp.Y > br.Y) ||
+				(startSp.X > br.X && endSp.X > br.X))
+				return;
+
 			Game.Renderer.RgbaColorRenderer.DrawLine(
 				wr.Viewport.WorldToViewPx(wr.ScreenPosition(start)),
 				wr.Viewport.WorldToViewPx(wr.Screen3DPosition(end)),

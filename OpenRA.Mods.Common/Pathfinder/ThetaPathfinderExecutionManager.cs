@@ -122,14 +122,18 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				Parent = parent;
 				Value = value;
-				IsValidParent = (LinkedListNode<T> parent, LinkedListNode<T> child) => parentValidator(parent.Value, child.Value);
+				IsValidParent = (LinkedListNode<T> parent, LinkedListNode<T> child)
+					=> parentValidator(parent.Value, child.Value) && !(parent.Parent == child && child.Parent == parent);
 			}
 
 			public LinkedListNode(T value, Func<T, T, bool> parentValidator)
 			{
 				Value = value;
-				IsValidParent = (LinkedListNode<T> parent, LinkedListNode<T> child) => parentValidator(parent.Value, child.Value);
+				IsValidParent = (LinkedListNode<T> parent, LinkedListNode<T> child)
+					=> parentValidator(parent.Value, child.Value) && !(parent.Parent == child && child.Parent == parent);
 			}
+
+			public bool ValueEquals(LinkedListNode<T> other) => EqualityComparer<T>.Default.Equals(Value, other.Value);
 
 			public void AddChild(LinkedListNode<T> child) => Children.Add(child);
 			public void AddChildren(List<LinkedListNode<T>> children) => Children.AddRange(children);
@@ -144,42 +148,16 @@ namespace OpenRA.Mods.Common.Traits
 				if (Children.Count == 0)
 					return null;
 
+				//var test = Children.Select(c1 => (c1, Children.Where(cx => !cx.ValueEquals(c1) && IsValidParent(c1, cx)).ToList()));
+
 				// For each child, we run IsValidParent from that child to all other children to identify if they are
 				// a valid parent and only keep them if they are valid. Then we sort the original list of children
 				// by the highest number first (most valid children), to get the best candidates for parents.
 				var bestCandidateParentWithChildren
-					= Children.Select(parent => (parent, Children.Where(cx => cx != parent).Where(c2 => IsValidParent(parent, c2)).ToList()))
+					= Children.Select(c1 => (c1, Children.Where(cx => !cx.ValueEquals(c1) && IsValidParent(c1, cx)).ToList()))
 						.OrderByDescending(c => c.Item2.Count).FirstOrDefault();
 
-				// First we set the best parent and assign all nearby children to it
-				var childrenToReparent = Children;
-				var childrenOfBestCandidate = bestCandidateParentWithChildren.Item2;
-				for (var i = childrenOfBestCandidate.Count - 1; i >= 0; i--)
-				{
-					childrenToReparent.Remove(childrenOfBestCandidate[i]);
-					childrenOfBestCandidate[i].Parent = bestCandidateParentWithChildren.parent;
-				}
-
-				// Next we check every single neighbour of every remaining child, to find a valid parent for all of them
-				for (var i = childrenToReparent.Count - 1; i >= 0; i--)
-				{
-					foreach (var neighbour in neighboursOfChildren)
-					{
-						if (IsValidParent(neighbour, childrenToReparent[i]))
-						{
-							childrenToReparent[i].Parent = neighbour;
-							childrenToReparent.RemoveAt(i);
-							break;
-						}
-					}
-				}
-
-				// All children must point to a parent otherwise we cannot continue
-				if (childrenToReparent.Count > 0)
-					throw new InvalidOperationException($"Cannot find valid parent for children: " +
-						$"{string.Join(",", childrenToReparent.ConvertAll(c => c.Value))}.");
-
-				return bestCandidateParentWithChildren.parent;
+				return bestCandidateParentWithChildren.c1;
 			}
 		}
 
@@ -193,7 +171,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			public BasicCellDomain() => ID = -1;
 			public BasicCellDomain(int id) => ID = id;
-			static bool ValidParent(CPos c1, CPos c2) => (c2 - c1).Length == 1;
+			static bool ValidParent(CPos c1, CPos c2) => Math.Abs(c2.X - c1.X) + Math.Abs(c2.Y - c1.Y) == 1;
 
 			public void LoadCells()
 			{
@@ -219,12 +197,15 @@ namespace OpenRA.Mods.Common.Traits
 
 			public void AddEdge(List<WPos> edge) => CellEdges.Add(edge);
 
-			public List<CPos> CellNeighboursInBCD(Map map, CPos cell)
+			public bool CellIsInBCD(CPos cell) => CellNodesDict.ContainsKey(cell);
+
+			public static List<CPos> CellNeighbours(Map map, CPos cell, Func<CPos, CPos, bool> checkCondition = null)
 			{
+				checkCondition ??= (c1, c2) => true; // use function that always returns true if no function is passed
 				var neighbours = new List<CPos>();
 				for (var x = -1; x <= 1; x++)
 					for (var y = -1; y <= 1; y++)
-						if (!(x == 0 && y == 0) && CellNodesDict.ContainsKey(new CPos(cell.X + x, cell.Y + y)))
+						if (!(x == 0 && y == 0) && checkCondition(new CPos(cell.X + x, cell.Y + y), cell))
 							neighbours.Add(new CPos(cell.X + x, cell.Y + y));
 				return neighbours;
 			}
@@ -263,18 +244,50 @@ namespace OpenRA.Mods.Common.Traits
 				List<LinkedListNode<CPos>> neighboursOfChildren, HashSet<CPos> borderCells, ref int currBcdId,
 				ref Dictionary<CPos, BasicCellDomain> allCellBCDs, BlockedByActor check = BlockedByActor.Immovable)
 			{
+
+				neighboursOfChildren.Remove(parent);
+
 				// We set the new parent and remove it from the BCD
 				Parent = parent.RemoveParentAndReturnNewParent(neighboursOfChildren); // how do we know if the new parents are still part of the index?
 				RemoveCell(world.Map, parent.Value);
-				allCellBCDs[parent.Value] = null;
+				var allCellBCDsCopy = allCellBCDs;
 
-				// If there are no cells, there is no further action needed
-				if (CellNodesDict.Count == 0)
+				// cell blocked status has changed, so
+				// neighbour must be the opposite of the current state
+				bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
+					=> ValidParent(parent, candidate) && OppositeOfBlockedStatus(candidate);
+				bool OppositeOfBlockedStatus(CPos c) => allCellBCDsCopy[c].DomainIsBlocked == !DomainIsBlocked;
+
+				var oldParentValidNeighbours = CellNeighbours(world.Map, parent.Value, ValidParentAndValidBlockedStatus);
+
+				BasicCellDomain oldParentNewBCD;
+				if (oldParentValidNeighbours.Count > 0)
+				{
+					var oldParentLargestValidNeighbour = oldParentValidNeighbours.OrderBy(c => allCellBCDsCopy[c].CellNodesDict.Count).FirstOrDefault();
+					// Assign new parent and domain (largest domain with matching blocked status) to the old parent
+					oldParentNewBCD = allCellBCDs[oldParentLargestValidNeighbour];
+					parent.Parent = oldParentNewBCD.CellNodesDict[oldParentLargestValidNeighbour];
+					oldParentNewBCD.AddCellAndEdges(world.Map, parent);
+				}
+				else
+				{
+					oldParentNewBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, new List<LinkedListNode<CPos>>() { parent }, check);
+					oldParentNewBCD.DomainIsBlocked = !DomainIsBlocked;
+					currBcdId++;
+				}
+
+				allCellBCDs[parent.Value] = oldParentNewBCD;
+
+				// If there are no cells to handle or no new Parent could be found (can only mean there are no children),
+				// then there is no further action needed
+				if (CellNodesDict.Count == 0 || Parent == null)
 					return;
+
+				Parent.Parent = null; // the new Parent must be detached from its old parent.
 
 				var origCellNodesDict = CellNodesDict;
 
-				// We try to find all cells again from the new parent
+				// We try to find all cells again from the new parent and assign them to this domain
 				CellNodesDict = FindNodesFromStartNode(world, locomotor, Parent, CellNodesDict.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check)
 									.ToDictionary(c => c.Value, c => c);
 
@@ -297,7 +310,9 @@ namespace OpenRA.Mods.Common.Traits
 					{
 						// Use the first cell node in the remaining nodes list to search for all other remaining cell nodes
 						// NOTE: This does not use parent/child logic, it is simply a BFS
-						var candidateCellNodes = FindNodesFromStartNode(world, locomotor, remainingCellNodes.Values.FirstOrDefault(),
+						var firstNode = remainingCellNodes.Values.First();
+						firstNode.Parent = null; // This ensures we don't set recursive node
+						var candidateCellNodes = FindNodesFromStartNode(world, locomotor, firstNode,
 							remainingCellNodes.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check).ToDictionary(c => c.Value, c => c);
 
 						// Add this new set of cell nodes to a new domain, then increment the currBcdId
@@ -311,19 +326,21 @@ namespace OpenRA.Mods.Common.Traits
 					}
 				}
 
-				foreach (var cn in CellNodesDict.Values)
-				{
-					if (cn.Parent != null)
-						MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
-								world.Map.CenterOfCell(cn.Value), world.Map.CenterOfCell(cn.Parent.Value), colorToUse, 3, LineEndPoint.EndArrow);
-					MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cn.Value), $"ID:{allCellBCDs[cn.Value].ID}", colorToUse, "MediumBold");
-				}
+				//colorToUse = DomainIsBlocked ? Color.Red : Color.Green;
+				//foreach (var cn in CellNodesDict.Values.Append(parent))
+				//{
+				//	if (cn.Parent != null)
+				//		MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
+				//				world.Map.CenterOfCell(cn.Value), world.Map.CenterOfCell(cn.Parent.Value), colorToUse, 3, LineEndPoint.EndArrow);
+				//	MoveOffGrid.RenderTextCollDebug(world.WorldActor, world.Map.CenterOfCell(cn.Value), $"ID:{allCellBCDs[cn.Value].ID}", colorToUse, "MediumBold");
+				//}
 			}
 
 			public void AddCellAndEdges(Map map, LinkedListNode<CPos> cellNode)
 			{
 				CellNodesDict.Add(cellNode.Value, cellNode);
 				CellEdges.AddRange(Map.CellEdgeSet.FromCell(map, cellNode.Value).GetAllEdgesAsPosList());
+				RemoveEdgeIfNeighbourExists(map, cellNode.Value);
 			}
 
 			// NOTE: Does NOT iterate through children of nodes, uses CPos instead and works off of the assumption that
@@ -412,16 +429,18 @@ namespace OpenRA.Mods.Common.Traits
 					DomainIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, cellNodeList.FirstOrDefault().Value, check)
 				};
 
-				var highestParent = cellNodeList.FirstOrDefault();
-				while (highestParent.Parent != null)
-					highestParent = highestParent.Parent;
-				bcd.Parent = highestParent;
+				if (cellNodeList.Count > 1)
+				{
+					var highestParent = cellNodeList.FirstOrDefault();
+					while (highestParent.Parent != null)
+						highestParent = highestParent.Parent;
+					bcd.Parent = highestParent;
+				}
+				else
+					bcd.Parent = null;
 
 				foreach (var cellNode in cellNodeList)
-				{
 					bcd.AddCellAndEdges(map, cellNode);
-					bcd.RemoveEdgeIfNeighbourExists(map, cellNode.Value);
-				}
 
 				return bcd;
 			}
@@ -455,7 +474,6 @@ namespace OpenRA.Mods.Common.Traits
 					// NOTE: There is no need to add the Parent/Child since all children branch from the first parent
 					var child = cellsToExpandWithParent.Dequeue();
 					bcd.AddCellAndEdges(map, child);
-					bcd.RemoveEdgeIfNeighbourExists(map, child.Value);
 
 					// INVARIANT: bcd is independent of the below method that obtains neighbouring cells
 					foreach (var cn in GetCellsWithinDomain(world, locomotor, child, check, visited))
@@ -797,14 +815,13 @@ namespace OpenRA.Mods.Common.Traits
 				bcdSet = true;
 			}
 
-			//if (actorRemoved)
-			//{
-			//	collDebugOverlay.ClearTexts();
-			//	collDebugOverlay.ClearLines();
-			//	domainList = AllCellBCDs.Select(kv => kv.Value).Distinct().ToList();
-			//	RenderBCD(domainList);
-			//	actorRemoved = false;
-			//}
+			if (actorRemoved)
+			{
+				collDebugOverlay.ClearAll();
+				domainList = AllCellBCDs.Select(kv => kv.Value).Distinct().ToList();
+				RenderBCD(domainList);
+				actorRemoved = false;
+			}
 
 			var rvoObject = rvoBlocks;
 
@@ -819,8 +836,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 			else if (RVOtest && collDebugOverlay.Enabled)
 			{
-				collDebugOverlay.ClearCircles();
-				collDebugOverlay.ClearLines();
+				collDebugOverlay.ClearAll();
 
 				var agentPositions = rvoObject.getAgentPositions();
 				var agentSpawnLocation = new WPos(world.Map.MapSize.X * 1024 / 2, world.Map.MapSize.Y * 1024 / 2, 0);
@@ -879,14 +895,16 @@ namespace OpenRA.Mods.Common.Traits
 		public void RemovedFromWorld(Actor self)
 		{
 			// TO BE COMPLETED:
-			if (self.OccupiesSpace != null)
+			if (self.OccupiesSpace != null && self.World.Map.Contains(self.Location))
 			{
 				var cellNode = AllCellNodes[self.Location];
 				var cellBCD = AllCellBCDs[self.Location];
 				var neighboursOfChildren = cellNode.Children.SelectMany(c =>
-					cellBCD.CellNeighboursInBCD(self.World.Map, c.Value).ConvertAll(c2 => AllCellNodes[c2])).ToList();
+					BasicCellDomain.CellNeighbours(self.World.Map, c.Value, (candidate, parent) => cellBCD.CellIsInBCD(candidate))
+						.ConvertAll(c2 => AllCellNodes[c2])).ToList();
 				AllCellBCDs[self.Location].RemoveParent(self.World, locomotor, cellNode, neighboursOfChildren, new HashSet<CPos>(),
 					ref currBcdId, ref AllCellBCDs);
+				actorRemoved = true;
 			}
 		}
 	}
