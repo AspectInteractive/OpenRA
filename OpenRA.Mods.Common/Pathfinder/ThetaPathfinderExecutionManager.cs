@@ -98,7 +98,6 @@ namespace OpenRA.Mods.Common.Traits
 		int currBcdId = 0;
 		bool bcdSet = false;
 		bool actorRemoved = false;
-		public Dictionary<CPos, LinkedListNode<CPos>> AllCellNodes;
 		public Dictionary<CPos, BasicCellDomain> AllCellBCDs;
 		Actor removeActorFromWorld = null;
 		readonly int maxCurrExpansions = 500;
@@ -168,6 +167,7 @@ namespace OpenRA.Mods.Common.Traits
 			public Dictionary<CPos, LinkedListNode<CPos>> CellNodesDict = new();
 			public LinkedListNode<CPos> Parent;
 			public List<List<WPos>> CellEdges = new();
+			public List<List<WPos>> ConnectedCellEdges = new();
 			public int ID;
 
 			public BasicCellDomain() => ID = -1;
@@ -197,6 +197,54 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			public void AddEdge(List<WPos> edge) => CellEdges.Add(edge);
+
+			public void GenerateConnectedCellEdges(World world)
+			{
+				List<List<WPos>> newEdges = new();
+				Dictionary<WPos, List<List<WPos>>> edgesByStart = new();
+				HashSet<List<WPos>> traversedEdges = new();
+
+				foreach (var edge in CellEdges)
+				{
+					if (edgesByStart.ContainsKey(edge[0]))
+						edgesByStart[edge[0]].Add(edge);
+					else
+						edgesByStart[edge[0]] = new List<List<WPos>> { edge };
+				}
+
+				for (var i = 0; i < CellEdges.Count; i++)
+				{
+					var edge = CellEdges[i];
+
+					if (traversedEdges.Any(e => e[0] == edge[0] && e[1] == edge[1]))
+						continue;
+
+					traversedEdges.Add(new List<WPos>(edge));
+					while (edgesByStart.ContainsKey(edge[1]) && // if a second edge starts where this edge ends
+						   edgesByStart[edge[1]].Any(e => e[1].X == edge[0].X || // and the second edge ends in the same X
+														  e[1].Y == edge[0].Y)) // or ends in the same Y, then it's a continous line
+					{
+						var matchingEdges = edgesByStart[edge[1]]
+							.Where(e => e[1].X == edge[0].X ||
+										e[1].Y == edge[0].Y).ToList();
+
+						if (matchingEdges.Count > 1)
+							throw new DataMisalignedException($"Cannot have more than one matching edge: {string.Join(',', matchingEdges)}");
+
+						traversedEdges.Add(new List<WPos>(matchingEdges[0]));
+						edge[1] = matchingEdges[0][1]; // make the original edge's end point equal to the second edge's end point
+					}
+
+					// Before adding the new edge, remove any existing edges that are overlapping and smaller than the currently found edge
+					newEdges.RemoveAll(e => (e[0].X >= edge[0].X && e[1].X <= edge[1].X &&                      // X's of edge are fully contained
+											 e[0].Y == edge[0].Y && e[1].Y == edge[1].Y && e[0].Y == e[1].Y) || // and all points are on the same Y plane
+											(e[0].Y >= edge[0].Y && e[1].Y <= edge[1].Y &&                      // Y's of edge are fully contained
+											 e[0].X == edge[0].X && e[1].X == edge[1].X && e[0].X == e[1].X));  // and all points are on the same  plane
+					newEdges.Add(edge);
+				}
+
+				ConnectedCellEdges = newEdges;
+			}
 
 			public bool CellIsInBCD(CPos cell) => CellNodesDict.ContainsKey(cell);
 
@@ -779,13 +827,15 @@ namespace OpenRA.Mods.Common.Traits
 							world.Map.CenterOfCell(child), world.Map.CenterOfCell(child) + arrowDist, colorToUse, 3, LineEndPoint.EndArrow);
 				}
 
-				foreach (var edge in bcd.CellEdges)
+				var edgesToUse = bcd.ConnectedCellEdges;
+				foreach (var edge in edgesToUse)
 					MoveOffGrid.RenderLineCollDebug(world.WorldActor, edge[0], edge[1], 3);
 			}
 		}
 
 		void Tick(World world)
 		{
+
 			var domainList = new List<BasicCellDomain>();
 			var collDebugOverlay = world.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
 
@@ -801,10 +851,12 @@ namespace OpenRA.Mods.Common.Traits
 							currBcdId++;
 						}
 
-				AllCellNodes = domainList.SelectMany(domain => domain.CellNodesDict).ToDictionary(k => k.Key, k => k.Value);
 				AllCellBCDs = domainList.SelectMany(domain => domain.CellNodesDict
 									.Select(cell => new KeyValuePair<CPos, BasicCellDomain>(cell.Key, domain)))
 								  .ToDictionary(k => k.Key, k => k.Value);
+
+				foreach (var dom in domainList)
+					dom.GenerateConnectedCellEdges(world);
 
 				RenderBCD(domainList);
 
@@ -898,11 +950,11 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (self.OccupiesSpace != null && self.World.Map.Contains(self.Location))
 			{
-				var cellNode = AllCellNodes[self.Location];
 				var cellBCD = AllCellBCDs[self.Location];
+				var cellNode = cellBCD.CellNodesDict[self.Location];
 				var neighboursOfChildren = cellNode.Children.SelectMany(c =>
 					BasicCellDomain.CellNeighbours(self.World.Map, c.Value, (candidate, parent) => cellBCD.CellIsInBCD(candidate))
-						.ConvertAll(c2 => AllCellNodes[c2])).ToList();
+						.ConvertAll(c2 => AllCellBCDs[c2].CellNodesDict[c2])).ToList();
 				AllCellBCDs[self.Location].RemoveParent(self.World, locomotor, cellNode, neighboursOfChildren, new HashSet<CPos>(),
 					ref currBcdId, ref AllCellBCDs);
 				actorRemoved = true;
