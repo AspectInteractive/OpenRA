@@ -356,8 +356,6 @@ namespace OpenRA.Mods.Common.Traits
 				RemoveCell(parent.Value);
 				var allCellBCDsCopy = allCellBCDs;
 
-				// cell blocked status has changed, so
-				// neighbour must be the opposite of the current state
 				var cellIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, parent.Value, BlockedByActor.Immovable);
 				bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
 					=> ValidParent(parent, candidate) && MatchingBlockedStatus(candidate);
@@ -384,8 +382,8 @@ namespace OpenRA.Mods.Common.Traits
 					currBcdId++;
 				}
 
-				oldParentNewBCD.LoadEdges(world.Map, allCellBCDs);
 				allCellBCDs[parent.Value] = oldParentNewBCD;
+				oldParentNewBCD.LoadEdges(world.Map, allCellBCDs);
 
 				// If there are no cells to handle or no new Parent could be found (can only mean there are no children),
 				// then there is no further action needed
@@ -884,7 +882,12 @@ namespace OpenRA.Mods.Common.Traits
 				}
 
 				var edgesToUse = bcd.ConnectedCellEdges;
-				var lineColour = Color.RandomColor();
+				//var lineColour = Color.RandomColor();
+				Color lineColour;
+				if (bcd.DomainIsBlocked)
+					lineColour = Color.Red;
+				else
+					lineColour = Color.Green;
 				foreach (var edge in edgesToUse)
 					MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor, edge[0], edge[1], lineColour, 3, LineEndPoint.Circle);
 			}
