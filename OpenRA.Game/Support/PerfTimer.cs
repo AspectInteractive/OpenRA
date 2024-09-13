@@ -79,7 +79,7 @@ namespace OpenRA.Support
 			return (long)(Stopwatch.Frequency * millis / 1000f);
 		}
 
-		float ElapsedMs => 1000f * ticks / Stopwatch.Frequency;
+		public float ElapsedMs => 1000f * ticks / Stopwatch.Frequency;
 
 		public static void LogLongTick(long startStopwatchTicks, long endStopwatchTicks, string name, object item)
 		{

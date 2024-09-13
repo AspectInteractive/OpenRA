@@ -10,6 +10,7 @@ using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.HitShapes;
 using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
+using OpenRA.Support;
 using OpenRA.Traits;
 using RVO;
 using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
@@ -361,97 +362,102 @@ namespace OpenRA.Mods.Common.Traits
 				ref BasicCellDomain[,] allCellBCDs,
 				BlockedByActor check = BlockedByActor.Immovable)
 			{
-				neighboursOfChildren.Remove(parent);
-
-				// We set the new parent and remove it from the BCD
-				Parent = parent.RemoveParentAndReturnNewParent(neighboursOfChildren);
-				RemoveCell(parent.Value);
-				var allCellBCDsCopy = allCellBCDs;
-
-				var cellIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, parent.Value, BlockedByActor.Immovable);
-				bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
-					=> ValidParent(parent, candidate) && MatchingBlockedStatus(candidate);
-				bool MatchingBlockedStatus(CPos c) => allCellBCDsCopy[c.X, c.Y].DomainIsBlocked == cellIsBlocked;
-
-				var oldParentValidNeighbours = CellNeighbours(world.Map, parent.Value, ValidParentAndValidBlockedStatus);
-
-				// NOTE: None of this code affects the original domain since it is tied to the new domain
-				BasicCellDomain oldParentNewBCD;
-
-				if (oldParentValidNeighbours.Count > 0)
+				using (var pt = new PerfTimer("RemoveParent"))
 				{
-					var oldParentLargestValidNeighbour = oldParentValidNeighbours
-						.OrderByDescending(c => allCellBCDsCopy[c.X, c.Y].CellNodesDict.Count).FirstOrDefault();
 
-					// Assign new parent and domain (largest domain with matching blocked status) to the old parent
-					oldParentNewBCD = allCellBCDs[oldParentLargestValidNeighbour.X, oldParentLargestValidNeighbour.Y];
-					parent.Parent = oldParentNewBCD.CellNodesDict[oldParentLargestValidNeighbour];
-					oldParentNewBCD.CellNodesDict[oldParentLargestValidNeighbour].Children.Add(parent);
-					oldParentNewBCD.AddCell(world.Map, parent);
-				}
-				else
-				{
-					oldParentNewBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, new List<LinkedListNode<CPos>>() { parent }, check);
-					parent.Parent = null;
-					currBcdId++;
-				}
+					neighboursOfChildren.Remove(parent);
 
-				allCellBCDs[parent.Value.X, parent.Value.Y] = oldParentNewBCD;
-				oldParentNewBCD.LoadEdges(world.Map, allCellBCDs);
+					// We set the new parent and remove it from the BCD
+					Parent = parent.RemoveParentAndReturnNewParent(neighboursOfChildren);
+					RemoveCell(parent.Value);
+					var allCellBCDsCopy = allCellBCDs;
 
-				// If there are no cells to handle or no new Parent could be found (can only mean there are no children),
-				// then there is no further action needed
-				if (CellNodesDict.Count == 0 || Parent == null)
-				{
-					LoadEdges(world.Map, allCellBCDs);
-					return;
-				}
+					var cellIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, parent.Value, BlockedByActor.Immovable);
+					bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
+						=> ValidParent(parent, candidate) && MatchingBlockedStatus(candidate);
+					bool MatchingBlockedStatus(CPos c) => allCellBCDsCopy[c.X, c.Y].DomainIsBlocked == cellIsBlocked;
 
-				Parent.Parent = null; // the new Parent must be detached from its old parent.
+					var oldParentValidNeighbours = CellNeighbours(world.Map, parent.Value, ValidParentAndValidBlockedStatus);
 
-				var origCellNodesDict = CellNodesDict;
+					// NOTE: None of this code affects the original domain since it is tied to the new domain
+					BasicCellDomain oldParentNewBCD;
 
-				// We try to find all cells again from the new parent and assign them to this domain
-				CellNodesDict = FindNodesFromStartNode(world, locomotor, Parent, CellNodesDict.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check)
-									.ToDictionary(c => c.Value, c => c);
-
-				LoadEdges(world.Map, allCellBCDs);
-
-				var cellsNotFound = origCellNodesDict.Values.Select(cn => cn.Value).Except(CellNodesDict.Values.Select(cn => cn.Value)).ToList();
-
-				var colorToUse = Color.Green;
-
-				// Any cells that were not found from the new parent need to form new domains
-				if (cellsNotFound.Count > 0)
-				{
-					// First set the existing domain to a new ID
-					ID = currBcdId;
-					currBcdId++;
-
-					// Next get the set of all cells that could not be found from the new parent
-					var remainingCellNodes = origCellNodesDict.Where(c => cellsNotFound.Contains(c.Key)).ToDictionary(k => k.Key, k => k.Value);
-
-					// Keep looping through the remaining nodes until all of them have a domain
-					while (remainingCellNodes.Count > 0)
+					if (oldParentValidNeighbours.Count > 0)
 					{
-						// Use the first cell node in the remaining nodes list to search for all other remaining cell nodes
-						// NOTE: This does not use parent/child logic, it is simply a BFS
-						var firstNode = remainingCellNodes.Values.First();
-						firstNode.Parent = null; // This ensures we don't set recursive node
-						var candidateCellNodes = FindNodesFromStartNode(world, locomotor, firstNode,
-							remainingCellNodes.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check).ToDictionary(c => c.Value, c => c);
+						var oldParentLargestValidNeighbour = oldParentValidNeighbours
+							.OrderByDescending(c => allCellBCDsCopy[c.X, c.Y].CellNodesDict.Count).FirstOrDefault();
 
-						// Add this new set of cell nodes to a new domain, then increment the currBcdId
-						var newBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, candidateCellNodes.Values.ToList(), check);
-						foreach (var cell in candidateCellNodes.Keys)
-							allCellBCDs[cell.X, cell.Y] = newBCD;
-						newBCD.LoadEdges(world.Map, allCellBCDs);
+						// Assign new parent and domain (largest domain with matching blocked status) to the old parent
+						oldParentNewBCD = allCellBCDs[oldParentLargestValidNeighbour.X, oldParentLargestValidNeighbour.Y];
+						parent.Parent = oldParentNewBCD.CellNodesDict[oldParentLargestValidNeighbour];
+						oldParentNewBCD.CellNodesDict[oldParentLargestValidNeighbour].Children.Add(parent);
+						oldParentNewBCD.AddCell(world.Map, parent);
+					}
+					else
+					{
+						oldParentNewBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, new List<LinkedListNode<CPos>>() { parent }, check);
+						parent.Parent = null;
+						currBcdId++;
+					}
+
+					allCellBCDs[parent.Value.X, parent.Value.Y] = oldParentNewBCD;
+					oldParentNewBCD.LoadEdges(world.Map, allCellBCDs);
+
+					// If there are no cells to handle or no new Parent could be found (can only mean there are no children),
+					// then there is no further action needed
+					if (CellNodesDict.Count == 0 || Parent == null)
+					{
+						LoadEdges(world.Map, allCellBCDs);
+						return;
+					}
+
+					Parent.Parent = null; // the new Parent must be detached from its old parent.
+
+					var origCellNodesDict = CellNodesDict;
+
+					// We try to find all cells again from the new parent and assign them to this domain
+					CellNodesDict = FindNodesFromStartNode(world, locomotor, Parent, CellNodesDict.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check)
+										.ToDictionary(c => c.Value, c => c);
+
+					LoadEdges(world.Map, allCellBCDs);
+
+					var cellsNotFound = origCellNodesDict.Values.Select(cn => cn.Value).Except(CellNodesDict.Values.Select(cn => cn.Value)).ToList();
+
+					var colorToUse = Color.Green;
+
+					// Any cells that were not found from the new parent need to form new domains
+					if (cellsNotFound.Count > 0)
+					{
+						// First set the existing domain to a new ID
+						ID = currBcdId;
 						currBcdId++;
 
-						// Remove the nodes that have recently been added to a new domain, and repeat the process with the remaining nodes
-						remainingCellNodes = remainingCellNodes.Where(c => !candidateCellNodes.ContainsKey(c.Key)).ToDictionary(k => k.Key, k => k.Value);
+						// Next get the set of all cells that could not be found from the new parent
+						var remainingCellNodes = origCellNodesDict.Where(c => cellsNotFound.Contains(c.Key)).ToDictionary(k => k.Key, k => k.Value);
+
+						// Keep looping through the remaining nodes until all of them have a domain
+						while (remainingCellNodes.Count > 0)
+						{
+							// Use the first cell node in the remaining nodes list to search for all other remaining cell nodes
+							// NOTE: This does not use parent/child logic, it is simply a BFS
+							var firstNode = remainingCellNodes.Values.First();
+							firstNode.Parent = null; // This ensures we don't set recursive node
+							var candidateCellNodes = FindNodesFromStartNode(world, locomotor, firstNode,
+								remainingCellNodes.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check).ToDictionary(c => c.Value, c => c);
+
+							// Add this new set of cell nodes to a new domain, then increment the currBcdId
+							var newBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, candidateCellNodes.Values.ToList(), check);
+							foreach (var cell in candidateCellNodes.Keys)
+								allCellBCDs[cell.X, cell.Y] = newBCD;
+							newBCD.LoadEdges(world.Map, allCellBCDs);
+							currBcdId++;
+
+							// Remove the nodes that have recently been added to a new domain, and repeat the process with the remaining nodes
+							remainingCellNodes = remainingCellNodes.Where(c => !candidateCellNodes.ContainsKey(c.Key)).ToDictionary(k => k.Key, k => k.Value);
+						}
 					}
 				}
+
 			}
 
 			// NOTE: Does NOT iterate through children of nodes, uses CPos instead and works off of the assumption that
