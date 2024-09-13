@@ -577,9 +577,6 @@ namespace OpenRA.Mods.Common.Pathfinder
 						newCellCandidates.Add(nc);
 			}
 
-			foreach (var c in newCandidates)
-				MoveOffGrid.RenderCircleCollDebug(self, world.Map.WPosFromCCPos(c), new WDist(1024));
-
 			var distFromDest = int.MaxValue;
 			var bestCandidate = newCandidates[0];
 

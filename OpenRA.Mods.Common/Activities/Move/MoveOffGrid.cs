@@ -573,7 +573,7 @@ namespace OpenRA.Mods.Common.Activities
 								EndingActions();
 								Complete();
 								thetaPFexecManager.AddMoveOrder(self, GetValidTargetPos());
-								RenderCircleColorCollDebug(self, mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius, Color.Purple, 3);
+								//RenderCircleColorCollDebug(self, mobileOffGrid.CenterPosition, mobileOffGrid.UnitRadius, Color.Purple, 3);
 								thetaPFexecManager.PlayerCirclesLocked = false;
 								thetaIters++;
 							}

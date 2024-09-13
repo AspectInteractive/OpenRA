@@ -819,7 +819,7 @@ namespace OpenRA.Mods.Common.Traits
 					//RenderPoint(self, CenterPosition + revisedMoveVec, Color.LightGreen);
 #endif
 					AddToTraversedCirclesBuffer(self.CenterPosition + revisedMoveVec);
-					MoveOffGrid.RenderCircleColorCollDebug(self, CenterPosition + revisedMoveVec, UnitRadius, Color.LightGreen, 3);
+					//MoveOffGrid.RenderCircleColorCollDebug(self, CenterPosition + revisedMoveVec, UnitRadius, Color.LightGreen, 3);
 					currLocalAvoidanceAngleOffset = localAvoidanceAngleOffset;
 					//RenderLine(CenterPosition, CenterPosition + revisedMoveVec * 4, LineType.LocalAvoidanceDirection);
 					pastMoveVec = moveVec;

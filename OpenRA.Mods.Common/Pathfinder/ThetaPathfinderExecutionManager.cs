@@ -98,9 +98,10 @@ namespace OpenRA.Mods.Common.Traits
 		Locomotor locomotor;
 		int currBcdId = 0;
 		bool bcdSet = false;
-		bool actorRemoved = false;
+		bool blockStatusUpdated = false;
 		public Dictionary<CPos, BasicCellDomain> AllCellBCDs;
-		List<(Actor Actor, bool PastBlockedStatus)> removedActorsFromWorldWithBlockStatus = new();
+		List<(Actor Actor, bool PastBlockedStatus)> actorsWithBlockStatusChange = new();
+		List<(Building Building, Actor BuildingActor, bool PastBlockedStatus)> buildingsWithBlockStatusChange = new();
 		readonly int maxCurrExpansions = 500;
 		readonly int radiusForSharedThetas = 1024 * 10;
 		readonly int minDistanceForCircles = 0; // used to be 1024 * 28
@@ -243,12 +244,12 @@ namespace OpenRA.Mods.Common.Traits
 					if (edgesByStart.ContainsKey(edge[0]))
 						edgesByStart[edge[0]].Add(edge);
 					else
-						edgesByStart[edge[0]] = new List<List<WPos>> { edge };
+						edgesByStart[edge[0]] = new List<List<WPos>> { edge.ToList() };
 				}
 
 				for (var i = 0; i < cellEdges.Count; i++)
 				{
-					var edge = cellEdges[i];
+					var edge = cellEdges[i].ToList();
 
 					if (traversedEdges.Any(e => e[0] == edge[0] && e[1] == edge[1]))
 						continue;
@@ -365,6 +366,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				// NOTE: None of this code affects the original domain since it is tied to the new domain
 				BasicCellDomain oldParentNewBCD;
+
 				if (oldParentValidNeighbours.Count > 0)
 				{
 					var oldParentLargestValidNeighbour = oldParentValidNeighbours
@@ -379,6 +381,7 @@ namespace OpenRA.Mods.Common.Traits
 				else
 				{
 					oldParentNewBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, new List<LinkedListNode<CPos>>() { parent }, check);
+					parent.Parent = null;
 					currBcdId++;
 				}
 
@@ -740,6 +743,17 @@ namespace OpenRA.Mods.Common.Traits
 				};
 		}
 
+		public List<BasicCellDomain> GetDomainList()
+		{
+			var domainList = new List<BasicCellDomain>();
+
+			foreach (var bcd in AllCellBCDs.Values)
+				if (!domainList.Any(d => d.ID == bcd.ID)) // if a domain with this domain ID has not been added, we add it
+					domainList.Add(bcd);
+
+			return domainList;
+		}
+
 		public void GenSharedMoveThetaPFs(World world)
 		{
 			// Do not generate shared moves until player circles have been unlocked (i.e. all player circle generation is complete)
@@ -881,7 +895,7 @@ namespace OpenRA.Mods.Common.Traits
 							world.Map.CenterOfCell(child), world.Map.CenterOfCell(child) + arrowDist, colorToUse, 3, LineEndPoint.EndArrow);
 				}
 
-				var edgesToUse = bcd.ConnectedCellEdges;
+				var edgesToUse = bcd.ConnectedCellEdges.ToList();
 				//var lineColour = Color.RandomColor();
 				Color lineColour;
 				if (bcd.DomainIsBlocked)
@@ -899,9 +913,10 @@ namespace OpenRA.Mods.Common.Traits
 			var domainList = new List<BasicCellDomain>();
 			var collDebugOverlay = world.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
 
-			if (!bcdSet && collDebugOverlay.Enabled)
+			if (!bcdSet)
 			{
-				world.ActorRemoved += RemovedFromWorld;
+				world.ActorRemoved += AddedToOrRemovedFromWorld;
+				world.ActorAdded += AddedToOrRemovedFromWorld;
 				var visited = new HashSet<CPos>();
 				for (var x = 0; x < world.Map.MapSize.X; x++)
 					for (var y = 0; y < world.Map.MapSize.Y; y++)
@@ -920,24 +935,43 @@ namespace OpenRA.Mods.Common.Traits
 				bcdSet = true;
 			}
 
-			if (actorRemoved)
+			if (blockStatusUpdated)
 			{
 				collDebugOverlay.ClearAll();
-				domainList = AllCellBCDs.Select(kv => kv.Value).Distinct().ToList();
+				domainList = GetDomainList();
 				RenderBCD(domainList);
-				actorRemoved = false;
+				blockStatusUpdated = false;
 			}
 
-			if (removedActorsFromWorldWithBlockStatus.Count > 0 &&
-				removedActorsFromWorldWithBlockStatus.Any(ab => !ab.Actor.IsInWorld))
+			// If actor is in world, then blocked status must now be True, and PastBlockedStatus must have been False,
+			// making !PastBlockedStatus == True == ab.Actor.IsInWorld
+			// Otherwise if actor is no longer in the world, then blocked status must now be False, and PastBlockedStatus must have been True,
+			// making !PastBlockedStatus == False == ab.Actor.IsInWorld
+			if (actorsWithBlockStatusChange.Count > 0 &&
+				actorsWithBlockStatusChange.Any(ab => !ab.PastBlockedStatus == ab.Actor.IsInWorld))
 			{
-				for (var i = removedActorsFromWorldWithBlockStatus.Count - 1; i >= 0; i--)
+				for (var i = actorsWithBlockStatusChange.Count - 1; i >= 0; i--)
 				{
-					var actorWithBlockStatus = removedActorsFromWorldWithBlockStatus[i];
-					if (!actorWithBlockStatus.Actor.IsInWorld)
+					var actorWithBlockStatus = actorsWithBlockStatusChange[i];
+					if (!actorWithBlockStatus.PastBlockedStatus == actorWithBlockStatus.Actor.IsInWorld)
 					{
-						RemoveFromWorld(actorWithBlockStatus.Actor, actorWithBlockStatus.PastBlockedStatus);
-						removedActorsFromWorldWithBlockStatus.RemoveAt(i);
+						ActorBlockedStatusChange(actorWithBlockStatus.Actor, actorWithBlockStatus.PastBlockedStatus);
+						actorsWithBlockStatusChange.RemoveAt(i);
+					}
+				}
+			}
+
+			// Same logic as actorsWithBlockStatusChange
+			if (buildingsWithBlockStatusChange.Count > 0 &&
+				buildingsWithBlockStatusChange.Any(bb => !bb.PastBlockedStatus == bb.BuildingActor.IsInWorld))
+			{
+				for (var i = buildingsWithBlockStatusChange.Count - 1; i >= 0; i--)
+				{
+					var buildingWithBlockStatus = buildingsWithBlockStatusChange[i];
+					if (!buildingWithBlockStatus.PastBlockedStatus == buildingWithBlockStatus.BuildingActor.IsInWorld)
+					{
+						BuildingBlockedStatusChange(buildingWithBlockStatus.Building, buildingWithBlockStatus.PastBlockedStatus);
+						buildingsWithBlockStatusChange.RemoveAt(i);
 					}
 				}
 			}
@@ -1011,7 +1045,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void RemoveFromWorld(Actor self, bool pastBlockedStatus)
+		public void ActorBlockedStatusChange(Actor self, bool pastBlockedStatus)
 		{
 			if (MobileOffGrid.CellIsBlocked(world, locomotor, self.Location, BlockedByActor.Immovable) != pastBlockedStatus)
 			{
@@ -1022,15 +1056,52 @@ namespace OpenRA.Mods.Common.Traits
 						.ConvertAll(c2 => AllCellBCDs[c2].CellNodesDict[c2])).ToList();
 				AllCellBCDs[self.Location].RemoveParent(self.World, locomotor, cellNode, neighboursOfChildren, new HashSet<CPos>(),
 					ref currBcdId, ref AllCellBCDs);
-				actorRemoved = true;
+				blockStatusUpdated = true;
 			}
 		}
 
-		public void RemovedFromWorld(Actor self)
+		public void BuildingBlockedStatusChange(Building self, bool pastBlockedStatus)
+		{
+			var cellsWithChangedBlockStatus = self.OccupiedCells().Where(c =>
+					MobileOffGrid.CellIsBlocked(world.WorldActor, locomotor, c.Item1, BlockedByActor.Immovable) != pastBlockedStatus)
+					.Select(csc => csc.Item1).ToList();
+
+			foreach (var cell in cellsWithChangedBlockStatus)
+			{
+				var cellBCD = AllCellBCDs[cell];
+				var cellNode = cellBCD.CellNodesDict[cell];
+				var neighboursOfChildren = cellNode.Children.SelectMany(c =>
+					BasicCellDomain.CellNeighbours(world.Map, c.Value, (candidate, parent) => cellBCD.CellIsInBCD(candidate))
+						.ConvertAll(c2 => AllCellBCDs[c2].CellNodesDict[c2])).ToList();
+				AllCellBCDs[cell].RemoveParent(world, locomotor, cellNode, neighboursOfChildren, new HashSet<CPos>(),
+					ref currBcdId, ref AllCellBCDs);
+				blockStatusUpdated = true;
+			}
+		}
+
+		public void AddedToOrRemovedFromWorld(Actor self)
+		{
+			var building = self.TraitsImplementing<Building>().FirstEnabledTraitOrDefault();
+			if (building != null)
+				AddBuildingWithBlockStatusChange(self, building);
+			else
+				AddActorWithBlockStatusChange(self);
+		}
+
+		public void AddActorWithBlockStatusChange(Actor self)
 		{
 			if (self.OccupiesSpace != null && self.World.Map.Contains(self.Location))
-				removedActorsFromWorldWithBlockStatus
+				actorsWithBlockStatusChange
 					.Add((self, MobileOffGrid.CellIsBlocked(world, locomotor, self.Location, BlockedByActor.Immovable)));
 		}
+
+		public void AddBuildingWithBlockStatusChange(Actor buildingActor, Building building)
+		{
+			var buildingOccupiedCells = building.OccupiedCells().Select(csc => csc.Item1).ToList();
+			if (buildingOccupiedCells.Count > 0 && buildingOccupiedCells.All(c => world.Map.Contains(c)))
+				buildingsWithBlockStatusChange
+					.Add((building, buildingActor, MobileOffGrid.CellIsBlocked(world, locomotor, building.TopLeft, BlockedByActor.Immovable)));
+		}
+
 	}
 }
