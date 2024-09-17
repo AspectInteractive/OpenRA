@@ -10,9 +10,12 @@ using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.HitShapes;
 using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
+using OpenRA.Support;
 using OpenRA.Traits;
 using RVO;
 using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
+using static OpenRA.Mods.Common.Traits.ThetaPathfinderExecutionManager;
+
 
 
 #pragma warning disable SA1108 // Block statements should not contain embedded comments
@@ -100,6 +103,7 @@ namespace OpenRA.Mods.Common.Traits
 		bool bcdSet = false;
 		bool blockStatusUpdated = false;
 		public Dictionary<CPos, BasicCellDomain> AllCellBCDs;
+		public Dictionary<CPos, LinkedListNode<CPos>> AllCellNodes;
 		List<(Actor Actor, bool PastBlockedStatus)> actorsWithBlockStatusChange = new();
 		List<(Building Building, Actor BuildingActor, bool PastBlockedStatus)> buildingsWithBlockStatusChange = new();
 		readonly int maxCurrExpansions = 500;
@@ -113,26 +117,78 @@ namespace OpenRA.Mods.Common.Traits
 		List<(ThetaStarPathSearch, ThetaPFAction)> thetaPFActions = new();
 		public bool PlayerCirclesLocked = false;
 
+		public class LinkedListNodeHead<T> : LinkedListNode<T>
+		{
+			public new int ID = -1;
+
+			public LinkedListNodeHead(LinkedListNode<T> node)
+				: base(node.Value, node.IsValidParent)
+			{
+				Parent = node.Parent;
+				Children = node.Children;
+				Head = null;
+				Value = node.Value;
+			}
+
+			public LinkedListNodeHead(T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator, int id = -1)
+				: base(value, parentValidator)
+			{
+				if (id != -1)
+					ID = id;
+			}
+
+			public LinkedListNodeHead(LinkedListNode<T> parent, T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator, int id = -1)
+				: base(parent, value, parentValidator)
+			{
+				if (id != -1)
+					ID = id;
+			}
+		}
+
 		public class LinkedListNode<T>
 		{
 			public LinkedListNode<T> Parent;
 			public List<LinkedListNode<T>> Children = new();
 			public Func<LinkedListNode<T>, LinkedListNode<T>, bool> IsValidParent;
+			public LinkedListNodeHead<T> Head;
 			public T Value;
+			public int ID => Head.ID;
 
-			public LinkedListNode(LinkedListNode<T> parent, T value, Func<T, T, bool> parentValidator)
+			public LinkedListNode(LinkedListNode<T> parent, LinkedListNodeHead<T> head, T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
+				: this(parent, value, parentValidator)
+				=> Head = head;
+
+			public LinkedListNode(LinkedListNodeHead<T> head, T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
+				: this(value, parentValidator)
+				=> Head = head;
+
+			public LinkedListNode(LinkedListNode<T> parent, T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
+				: this(value, parentValidator)
+				=> Parent = parent;
+
+			public LinkedListNode(T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
 			{
-				Parent = parent;
 				Value = value;
 				IsValidParent = (LinkedListNode<T> parent, LinkedListNode<T> child)
-					=> parentValidator(parent.Value, child.Value) && !(parent.Parent == child && child.Parent == parent);
+					=> parentValidator(parent, child) && !(parent.Parent == child && child.Parent == parent);
 			}
 
-			public LinkedListNode(T value, Func<T, T, bool> parentValidator)
+			public void AssignHead(LinkedListNodeHead<T> head) => Head = head;
+
+			public LinkedListNodeHead<T> FindHead()
 			{
-				Value = value;
-				IsValidParent = (LinkedListNode<T> parent, LinkedListNode<T> child)
-					=> parentValidator(parent.Value, child.Value) && !(parent.Parent == child && child.Parent == parent);
+				var i = 0;
+				var currNode = this;
+				while (currNode.Parent != null && i < 9000)
+				{
+					currNode = currNode.Parent;
+					i++;
+				}
+
+				if (i >= 9000)
+					throw new DataMisalignedException($"An infinite loop exists between {currNode.Value} and {currNode.Parent.Value}.");
+
+				return new LinkedListNodeHead<T>(currNode);
 			}
 
 			public bool ValueEquals(LinkedListNode<T> other) => EqualityComparer<T>.Default.Equals(Value, other.Value);
@@ -294,6 +350,22 @@ namespace OpenRA.Mods.Common.Traits
 				return neighbours;
 			}
 
+			public static List<T> CellNeighboursNSEW<T>(Map map, CPos cell, Func<CPos, bool> checkCondition = null, Func<CPos, T> withTransform = null)
+			{
+				var neighbours = new List<T>();
+
+				var t = new CPos(cell.X, cell.Y - 1);
+				var b = new CPos(cell.X, cell.Y + 1);
+				var l = new CPos(cell.X - 1, cell.Y);
+				var r = new CPos(cell.X + 1, cell.Y);
+
+				foreach (var c in new List<CPos>() { t, b, l, r })
+					if (checkCondition == null || checkCondition(c))
+						neighbours.Add(withTransform(c));
+
+				return neighbours;
+			}
+
 			public void RemoveEdgeIfNeighbourExists(Map map, CPos cell)
 			{
 				if (CellNodesDict.ContainsKey(new CPos(cell.X - 1, cell.Y)))
@@ -350,10 +422,11 @@ namespace OpenRA.Mods.Common.Traits
 				List<LinkedListNode<CPos>> neighboursOfChildren, HashSet<CPos> borderCells, ref int currBcdId,
 				ref Dictionary<CPos, BasicCellDomain> allCellBCDs, BlockedByActor check = BlockedByActor.Immovable)
 			{
-				neighboursOfChildren.Remove(parent);
+				using var pt = new PerfTimer("RemoveParent2");
+				//neighboursOfChildren.Remove(parent);
 
 				// We set the new parent and remove it from the BCD
-				Parent = parent.RemoveParentAndReturnNewParent(neighboursOfChildren);
+				//Parent = parent.RemoveParentAndReturnNewParent(neighboursOfChildren);
 				RemoveCell(parent.Value);
 				var allCellBCDsCopy = allCellBCDs;
 
@@ -380,7 +453,7 @@ namespace OpenRA.Mods.Common.Traits
 				}
 				else
 				{
-					oldParentNewBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, new List<LinkedListNode<CPos>>() { parent }, check);
+					oldParentNewBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, new List<LinkedListNode<CPos>>() { parent }, check, "_oldParent");
 					parent.Parent = null;
 					currBcdId++;
 				}
@@ -396,65 +469,139 @@ namespace OpenRA.Mods.Common.Traits
 					return;
 				}
 
-				Parent.Parent = null; // the new Parent must be detached from its old parent.
+				//Parent.Parent = null; // the new Parent must be detached from its old parent.
 
 				var origCellNodesDict = CellNodesDict;
 
 				// We try to find all cells again from the new parent and assign them to this domain
-				CellNodesDict = FindNodesFromStartNode(world, locomotor, Parent, CellNodesDict.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check)
-									.ToDictionary(c => c.Value, c => c);
+				//CellNodesDict = FindNodesFromStartNode(world, locomotor, Parent, CellNodesDict.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check, "_fromNewParent")
+				//					.ToDictionary(c => c.Value, c => c);
 
-				LoadEdges(world.Map, allCellBCDs);
+				// We take the cellNeighbours of the original parent, not the new one.
+				//var cellNeighbours = CellNeighboursNSEW(world.Map, parent.Value, x => allCellBCDsCopy[x].ID == allCellBCDsCopy[Parent.Value].ID, y => CellNodesDict[y]);
 
-				var cellsNotFound = origCellNodesDict.Values.Select(cn => cn.Value).Except(CellNodesDict.Values.Select(cn => cn.Value)).ToList();
+				// If all cell neighbours are reachable from each other, then the domain does not need to be updated
 
-				var colorToUse = Color.Green;
+				//LoadEdges(world.Map, allCellBCDs);
 
-				// Any cells that were not found from the new parent need to form new domains
-				if (cellsNotFound.Count > 0)
+				//var cellsNotFound = origCellNodesDict.Values.Select(cn => cn.Value).Except(CellNodesDict.Values.Select(cn => cn.Value)).ToList();
+				//var cellsNotFound = cellNeighbours.Select(cn => cn.Value).Except(CellNodesDict.Values.Select(cn => cn.Value)).ToList();
+
+				//var neighboursNotFound = cellNeighbours;
+
+				var currChild = parent.Children.FirstOrDefault();
+
+				List<LinkedListNode<CPos>> reversedCellsToHead = new();
+				if (currChild != null)
 				{
-					// First set the existing domain to a new ID
-					ID = currBcdId;
+					var foundHead = FindNodeFromStartNode(world, locomotor, currChild, parent.Head, allCellBCDs, check: check, debugName: "_fromNewParent");
+					reversedCellsToHead = ReverseLinkedListNodes(foundHead);
+				}
+
+				// Need to keep looping for each non-connected neighbour to each remaining neighbour, to ensure they are not linked
+				// E.g. A -> BCD finds C, leaving BD, we then need to check B -> D
+				// Or if A -> BCD finds nothing, we then check B -> CD, if that finds C, then we set BC to a new domain and add D
+				// However if A -> BCD finds nothing and B -> CD finds nothing, then we check C -> D.
+				// If we could not find all connected neighbours, we need to assign a new ID to the found members
+				// and then continue with the remaining members. We repeat this process as many times as we have neighbours to remove
+				while (neighboursNotFound.Count > 0)
+				{
+					var connectedNeighbours = FindNodesFromStartNode(world, locomotor, cellNeighbours[0], cellNeighbours.Skip(1).ToList(),
+						allCellBCDs, new HashSet<CPos>(), check, "_fromNewParent");
+					neighboursNotFound = cellNeighbours.Except(connectedNeighbours).ToList();
+
+					if (connectedNeighbours.Count < 3) // If all neighbours are still connected (3) we do not need to update anything
+						foreach (var cn in connectedNeighbours)
+
+							// First set the existing domain to a new ID
+							//ID = currBcdId;
+							//currBcdId++;
+
+							// Next get the set of all cells that could not be found from the new parent
+							//var remainingCellNodes = origCellNodesDict.Where(c => cellsNotFound.Contains(c.Key)).ToDictionary(k => k.Key, k => k.Value);
+
+							// Keep looping through the remaining nodes until all of them have a domain
+							// Use the first cell node in the remaining nodes list to search for all other remaining cell nodes
+							// NOTE: This does not use parent/child logic, it is simply a BFS
+							var firstNode = neighboursNotFound.First();
+					firstNode.Parent = null; // This ensures we don't set recursive node
+					var candidateCellNodes = FindNodesFromStartNode(world, locomotor, firstNode,
+						remainingCellNodes.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check, "_candidateCells").ToDictionary(c => c.Value, c => c);
+
+					// Add this new set of cell nodes to a new domain, then increment the currBcdId
+					var newBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, candidateCellNodes.Values.ToList(), check, "_candidateCells");
+					foreach (var cell in candidateCellNodes.Keys)
+						allCellBCDs[cell] = newBCD;
+					newBCD.LoadEdges(world.Map, allCellBCDs);
 					currBcdId++;
 
-					// Next get the set of all cells that could not be found from the new parent
-					var remainingCellNodes = origCellNodesDict.Where(c => cellsNotFound.Contains(c.Key)).ToDictionary(k => k.Key, k => k.Value);
-
-					// Keep looping through the remaining nodes until all of them have a domain
-					while (remainingCellNodes.Count > 0)
-					{
-						// Use the first cell node in the remaining nodes list to search for all other remaining cell nodes
-						// NOTE: This does not use parent/child logic, it is simply a BFS
-						var firstNode = remainingCellNodes.Values.First();
-						firstNode.Parent = null; // This ensures we don't set recursive node
-						var candidateCellNodes = FindNodesFromStartNode(world, locomotor, firstNode,
-							remainingCellNodes.Values.ToList(), allCellBCDs, new HashSet<CPos>(), check).ToDictionary(c => c.Value, c => c);
-
-						// Add this new set of cell nodes to a new domain, then increment the currBcdId
-						var newBCD = CreateBasicCellDomainFromCellNodes(currBcdId, world, locomotor, candidateCellNodes.Values.ToList(), check);
-						foreach (var cell in candidateCellNodes.Keys)
-							allCellBCDs[cell] = newBCD;
-						newBCD.LoadEdges(world.Map, allCellBCDs);
-						currBcdId++;
-
-						// Remove the nodes that have recently been added to a new domain, and repeat the process with the remaining nodes
-						remainingCellNodes = remainingCellNodes.Where(c => !candidateCellNodes.ContainsKey(c.Key)).ToDictionary(k => k.Key, k => k.Value);
-					}
+					// Remove the nodes that have recently been added to a new domain, and repeat the process with the remaining nodes
+					remainingCellNodes = remainingCellNodes.Where(c => !candidateCellNodes.ContainsKey(c.Key)).ToDictionary(k => k.Key, k => k.Value);
 				}
+			}
+
+			static List<LinkedListNode<CPos>> ReverseLinkedListNodes(LinkedListNode<CPos> head, CPos? stopPos = null)
+			{
+				var reversedNodes = new List<LinkedListNode<CPos>>();
+				var newHead = new LinkedListNodeHead<CPos>(head.Value, head.IsValidParent); // We need to add newHead separetely since it has no parents
+				reversedNodes.Add(newHead);
+
+				// Create list from head to dest or end of list
+				var i = 0;
+				LinkedListNode<CPos> lastNewNode = newHead;
+				var currNode = head.Parent;
+				currNode.Children.RemoveAll(c => c.Value == head.Value); // Make sure not to keep the head as a child
+				while (currNode != null && (stopPos == null || currNode.Value != stopPos) && i < 9000)
+				{
+					var newCurrNode = new LinkedListNode<CPos>(lastNewNode, newHead, currNode.Value, currNode.IsValidParent)
+					{
+						Children = currNode.Children // Because the parents are all still valid paths to the head, we can preserve all children of all parents
+					};
+					lastNewNode.Children.Add(newCurrNode);
+					reversedNodes.Add(newCurrNode);
+					currNode = currNode.Parent;
+					lastNewNode = newCurrNode;
+					i++;
+				}
+
+				if (i >= 9000)
+					throw new DataMisalignedException($"An infinite loop exists between {currNode.Value} and {currNode.Parent.Value}.");
+
+				return reversedNodes;
+			}
+
+			// For finding a single target node rather than multiple target nodes
+			public static LinkedListNode<CPos> FindNodeFromStartNode(World world, Locomotor locomotor, LinkedListNode<CPos> startNode,
+				LinkedListNode<CPos> targetNode, Dictionary<CPos, BasicCellDomain> cellBCDs, HashSet<CPos> borderCells = null,
+				BlockedByActor check = BlockedByActor.Immovable, string debugName = "")
+			{
+				var foundNodes = FindNodesFromStartNode(world, locomotor, startNode, new List<LinkedListNode<CPos>>() { targetNode },
+					cellBCDs, borderCells, check, debugName);
+
+				if (foundNodes != null && foundNodes.Count > 0)
+					return foundNodes[0];
+				else
+					return null;
 			}
 
 			// NOTE: Does NOT iterate through children of nodes, uses CPos instead and works off of the assumption that
 			// any adjacent node sharing the same domain is traversable
 			public static List<LinkedListNode<CPos>> FindNodesFromStartNode(World world, Locomotor locomotor, LinkedListNode<CPos> startNode,
-				List<LinkedListNode<CPos>> targetNodes, Dictionary<CPos, BasicCellDomain> cellBCDs, HashSet<CPos> borderCells,
-				BlockedByActor check = BlockedByActor.Immovable)
+				List<LinkedListNode<CPos>> targetNodes, Dictionary<CPos, BasicCellDomain> cellBCDs, HashSet<CPos> borderCells = null,
+				BlockedByActor check = BlockedByActor.Immovable, string debugName = "")
 			{
+				int DistToStartNode(CPos c) => (c - startNode.Value).LengthSquared;
+
+				using var pt = new PerfTimer("FindNodesFromStartNode" + debugName);
 				var visited = new HashSet<CPos>();
+				var visitedNodes = new List<LinkedListNode<CPos>>();
 				var foundTargetNodes = new List<LinkedListNode<CPos>>();
 				var targetNodeCells = targetNodes.ConvertAll(cn => cn.Value);
 
-				var nodesToExpand = new Queue<LinkedListNode<CPos>>();
-				nodesToExpand.Enqueue(startNode);
+				var nodesToExpand = new List<(LinkedListNode<CPos> Node, int DistToStartNode)>
+				{
+					(startNode, DistToStartNode(startNode.Value))
+				};
 				visited.Add(startNode.Value);
 
 				bool MatchingDomainID(CPos c)
@@ -466,17 +613,23 @@ namespace OpenRA.Mods.Common.Traits
 
 				while (nodesToExpand.Count > 0 && targetNodeCells.Count > 0)
 				{
-					var cn = nodesToExpand.Dequeue();
+					var cn = nodesToExpand[0].Node;
+					nodesToExpand.RemoveAt(0);
+					visitedNodes.Add(cn);
 					if (targetNodeCells.Contains(cn.Value))
 					{
 						foundTargetNodes.Add(cn);
-						cn.Parent?.Children.Add(cn);
+						//cn.Parent?.Children.Add(cn); // Does not make sense, the node's Parent's Children must by definition already have cn
 						targetNodeCells.Remove(cn.Value);
 					}
 
-					foreach (var cnd in GetCellsWithinDomain(world, locomotor, cn, check, visited, MatchingDomainID, borderCells))
+					foreach (var cnd in GetCellsWithinDomain(world, locomotor, cn, startNode.Head, check, visited, MatchingDomainID, borderCells))
 					{
-						nodesToExpand.Enqueue(cnd);
+						// We make sure to add the node at an index that is sorted by how far it is from the StartNode, so that we are
+						// always able to take the closest node (we do not search far away locations until closer locations have been exhausted)
+						var cndDistToStartNode = DistToStartNode(cnd.Value);
+						var insertionIndex = nodesToExpand.ConvertAll(nd => nd.DistToStartNode).BinarySearch(cndDistToStartNode);
+						nodesToExpand.Insert(~insertionIndex, (cnd, cndDistToStartNode));
 						visited.Add(cnd.Value);
 					}
 				}
@@ -484,8 +637,8 @@ namespace OpenRA.Mods.Common.Traits
 				return foundTargetNodes;
 			}
 
-			public static Queue<LinkedListNode<CPos>> GetCellsWithinDomain(World world, Locomotor locomotor,
-				LinkedListNode<CPos> cellNode, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null,
+			public static List<LinkedListNode<CPos>> GetCellsWithinDomain(World world, Locomotor locomotor,
+				LinkedListNode<CPos> cellNode, LinkedListNodeHead<CPos> head = null, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null,
 				Func<CPos, bool> cellMatchingCriteria = null, HashSet<CPos> limitedCellSet = null)
 			{
 				var map = world.Map;
@@ -511,10 +664,10 @@ namespace OpenRA.Mods.Common.Traits
 				if (visited != null && visited.Count > 0)
 					candidateCells.RemoveAll(c => visited.Contains(c));
 
-				var cellsWithinDomain = new Queue<LinkedListNode<CPos>>();
+				var cellsWithinDomain = new List<LinkedListNode<CPos>>();
 				foreach (var c in candidateCells)
 					if (map.CPosInMap(c) && cellMatchingCriteria(c) == cellMatchingCriteria(cell))
-						cellsWithinDomain.Enqueue(new LinkedListNode<CPos>(cellNode, c, ValidParent));
+						cellsWithinDomain.Add(new LinkedListNode<CPos>(cellNode, head, c, ValidParent));
 
 				return cellsWithinDomain;
 			}
@@ -522,8 +675,9 @@ namespace OpenRA.Mods.Common.Traits
 			// REQUIREMENT: CellNodes must already have appropriate parent and children, as this method simply creates a domain
 			// for a given list of cellNodes
 			public static BasicCellDomain CreateBasicCellDomainFromCellNodes(int currBcdId, World world, Locomotor locomotor,
-				List<LinkedListNode<CPos>> cellNodeList, BlockedByActor check = BlockedByActor.Immovable)
+				List<LinkedListNode<CPos>> cellNodeList, BlockedByActor check = BlockedByActor.Immovable, string debugName = "")
 			{
+				using var pt = new PerfTimer("CreateBasicCellDomainFromCellNodes" + debugName);
 				var map = world.Map;
 				var bcd = new BasicCellDomain(currBcdId)
 				{
@@ -550,16 +704,21 @@ namespace OpenRA.Mods.Common.Traits
 			// NOTE: This deliberately does not populate CellNodesDict or AllCellBCDs, to keep the logic distinct.
 			// TO DO: Isolate further by not having this create the BasicCellDomain, but just the linked nodes, or something similar
 			public static BasicCellDomain CreateBasicCellDomain(int currBcdId, World world, Locomotor locomotor, CPos cell,
-				ref HashSet<CPos> visited, BlockedByActor check = BlockedByActor.Immovable)
+				ref HashSet<CPos> visited, BlockedByActor check = BlockedByActor.Immovable, string debugName = "")
 			{
+				using var pt = new PerfTimer("CreateBasicCellDomain" + debugName);
 				var map = world.Map;
-				var cellNode = new LinkedListNode<CPos>(cell, ValidParent);
+				var head = new LinkedListNodeHead<CPos>(cell, ValidParent);
+				var cellNode = new LinkedListNode<CPos>(head, cell, ValidParent);
 				var bcd = new BasicCellDomain(currBcdId)
 				{
 					DomainIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, cell, check)
 				};
 
-				var cellsToExpandWithParent = GetCellsWithinDomain(world, locomotor, cellNode, check, visited);
+				var cellsToExpandWithParent = new LinkedList<LinkedListNode<CPos>>();
+				foreach (var c in GetCellsWithinDomain(world, locomotor, cellNode, head, check, visited))
+					cellsToExpandWithParent.AddLast(c);
+
 				foreach (var child in cellsToExpandWithParent)
 				{
 					cellNode.AddChild(child);
@@ -573,13 +732,14 @@ namespace OpenRA.Mods.Common.Traits
 				while (cellsToExpandWithParent.Count > 0)
 				{
 					// NOTE: There is no need to add the Parent/Child since all children branch from the first parent
-					var child = cellsToExpandWithParent.Dequeue();
+					var child = cellsToExpandWithParent.Last();
+					cellsToExpandWithParent.RemoveLast();
 					bcd.AddCellAndEdges(map, child);
 
 					// INVARIANT: bcd is independent of the below method that obtains neighbouring cells
-					foreach (var cn in GetCellsWithinDomain(world, locomotor, child, check, visited))
+					foreach (var cn in GetCellsWithinDomain(world, locomotor, child, head, check, visited))
 					{
-						cellsToExpandWithParent.Enqueue(cn);
+						cellsToExpandWithParent.AddLast(cn);
 						child.AddChild(cn);
 						visited.Add(cn.Value);
 					}
@@ -743,16 +903,27 @@ namespace OpenRA.Mods.Common.Traits
 				};
 		}
 
-		public List<BasicCellDomain> GetDomainList()
+		public static List<LinkedListNodeHead<T>> GetAllHeads<T>(List<LinkedListNode<T>> nodeList)
 		{
-			var domainList = new List<BasicCellDomain>();
+			var headList = new List<LinkedListNodeHead<T>>();
 
-			foreach (var bcd in AllCellBCDs.Values)
-				if (!domainList.Any(d => d.ID == bcd.ID)) // if a domain with this domain ID has not been added, we add it
-					domainList.Add(bcd);
+			foreach (var node in nodeList)
+				if (!headList.Contains(node.Head))
+					headList.Add(node.Head);
 
-			return domainList;
+			return headList;
 		}
+
+		//public List<BasicCellDomain> GetDomainList()
+		//{
+		//	var domainList = new List<BasicCellDomain>();
+
+		//	foreach (var bcd in AllCellBCDs.Values)
+		//		if (!domainList.Any(d => d.ID == bcd.ID)) // if a domain with this domain ID has not been added, we add it
+		//			domainList.Add(bcd);
+
+		//	return domainList;
+		//}
 
 		public void GenSharedMoveThetaPFs(World world)
 		{
@@ -866,7 +1037,7 @@ namespace OpenRA.Mods.Common.Traits
 			ActorOrdersInCircleSlices.Clear();
 		}
 
-		public void RenderBCD(List<BasicCellDomain> domainList)
+		public void RenderDomains(List<LinkedListNodeHead<T>> domainList)
 		{
 			foreach (var bcd in domainList)
 			{
@@ -930,7 +1101,7 @@ namespace OpenRA.Mods.Common.Traits
 									.Select(cell => new KeyValuePair<CPos, BasicCellDomain>(cell.Key, domain)))
 								  .ToDictionary(k => k.Key, k => k.Value);
 
-				RenderBCD(domainList);
+				RenderDomains(domainList);
 
 				bcdSet = true;
 			}
@@ -939,7 +1110,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				collDebugOverlay.ClearAll();
 				domainList = GetDomainList();
-				RenderBCD(domainList);
+				RenderDomains(domainList);
 				blockStatusUpdated = false;
 			}
 
