@@ -11,7 +11,9 @@
 	TerrainGeometryOverlay:
 	CollisionDebugOverlay:
 	ClearThetaStarPathfinderOverlay:
-	ThetaStarPathfinderOverlay:    
+	ThetaStarPathfinderOverlay:
+	RVOManager:
+	BasicCellDomainManager:	
 	ThetaPathfinderExecutionManager:
 	CPosCoordsDebugOverlay:
 	DebugVisualizations:
