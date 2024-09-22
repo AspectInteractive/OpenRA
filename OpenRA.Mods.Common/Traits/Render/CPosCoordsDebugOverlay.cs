@@ -42,8 +42,9 @@ namespace OpenRA.Mods.Common.Traits
 			font = Game.Renderer.Fonts[info.Font];
 			Comms = new List<Command>()
 			{
-				new Command("cpos-coords", "toggles the cpos coordinates debug overlay.", true),
-				new Command("thetall", "toggles all anya pathfinder overlays.", false)
+				new("cpos-coords", "toggles the cpos coordinates debug overlay.", true),
+				new("thetall", "toggles all anya pathfinder overlays.", false),
+				new("colldebug", "toggles collision debug overlay.", false)
 			};
 		}
 
@@ -80,7 +81,7 @@ namespace OpenRA.Mods.Common.Traits
 					continue;
 
 				var cell = uv.ToCPos(wr.World.Map);
-				var center = wr.World.Map.CenterOfCell(cell);
+				var textPos = wr.World.Map.CenterOfCell(cell) - new WVec(0, 512, 0);
 				var color = Color.White;
 				var locomotorActor = wr.World.ActorsHavingTrait<MobileOffGrid>().FirstOrDefault();
 				Locomotor locomotor = null;
@@ -92,7 +93,7 @@ namespace OpenRA.Mods.Common.Traits
 				//else
 				cellText = $"({cell.X},{cell.Y})";
 
-				yield return new TextAnnotationRenderable(font, center, 0, color, cellText);
+				yield return new TextAnnotationRenderable(font, textPos, 0, color, cellText);
 			}
 		}
 

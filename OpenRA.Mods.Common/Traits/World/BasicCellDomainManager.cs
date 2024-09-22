@@ -170,7 +170,7 @@ namespace OpenRA.Mods.Common.Traits
 		List<(Building Building, Actor BuildingActor, bool PastBlockedStatus)> buildingsWithBlockStatusChange = new();
 		public LinkedListNode<CPos>[][] AllCellNodes;
 		CellEdges cellEdges;
-		public List<LinkedListNodeHead<CPos>> Heads = new();
+		public List<LinkedListNode<CPos>> Heads = new();
 		public Dictionary<CPos, LinkedListNode<CPos>> CellNodesDict = new();
 		public LinkedListNode<CPos> Parent;
 		public int ID;
@@ -205,7 +205,7 @@ namespace OpenRA.Mods.Common.Traits
 			return neighbours;
 		}
 
-		public void AddHeadRemoveExisting(LinkedListNodeHead<CPos> head, ref List<LinkedListNodeHead<CPos>> heads)
+		public static void AddHeadRemoveExisting(LinkedListNode<CPos> head, ref List<LinkedListNode<CPos>> heads)
 		{
 			heads.RemoveAll(h => h.Value == head.Value);
 			heads.Add(head);
@@ -214,8 +214,7 @@ namespace OpenRA.Mods.Common.Traits
 		bool CellIsBlocked(CPos c) => MobileOffGrid.CellIsBlocked(world, locomotor, c, BlockedByActor.Immovable);
 
 		// Removes the parent and sets new parents for the children
-		public LinkedListNodeHead<CPos> GetNewHeadAndUpdateChildren(LinkedListNode<CPos> parent, bool blocked,
-			ref LinkedListNode<CPos>[][] allCellNodes)
+		public LinkedListNode<CPos> GetNewHeadAndUpdateChildren(LinkedListNode<CPos> parent, ref LinkedListNode<CPos>[][] allCellNodes)
 		{
 			if (parent.Children.Count == 0)
 				return null;
@@ -229,41 +228,85 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Update all valid children with their new parent and head
 			var newParent = bestCandidateWithChildren.c1;
-			var newHead = new LinkedListNodeHead<CPos>(newParent, blocked);
-			foreach (var child in bestCandidateWithChildren.Item2)
+			newParent.Parent = null;
+			newParent.Blocked = CellIsBlocked(newParent.Value);
+			var newParentNewChildren = bestCandidateWithChildren.Item2;
+			for (var i = bestCandidateWithChildren.Item2.Count - 1; i >= 0; i--)
 			{
+				var child = newParentNewChildren[i];
 				child.Parent = newParent;
-				child.Head = newHead;
+				child.Head = newParent;
 				allCellNodes[child.Value.X][child.Value.Y] = child;
+				newParent.Children.Add(child);
 			}
 
-			return newHead;
+			return newParent;
 		}
+		public List<LinkedListNode<CPos>> GetCellNodeChildren(LinkedListNode<CPos> cn)
+			=> AllCellNodes[cn.Value.X][cn.Value.Y].Children;
+
+		public void UpdateCellNode(LinkedListNode<CPos> cn) => AllCellNodes[cn.Value.X][cn.Value.Y] = cn;
+
+		public void UpdateAllCellNodesWithNode(LinkedListNode<CPos> cellNode, ref LinkedListNode<CPos>[][] allCellNodes)
+			=> cellNode.ActionOnEveryNodeToParent(
+				cn =>
+				{
+					var cnChildren = GetCellNodeChildren(cn);
+					for (var i = cnChildren.Count - 1; i >= 0; i--)
+					{
+						var child = cnChildren[i];
+						child.Parent = cn;
+						child.Head = cn.Head;
+						cn.Children.Add(child);
+					}
+
+					UpdateCellNode(cn);
+				});
 
 		// NOTE: AddEdges cannot be done the way I have done it, because removing edges before the cells have been generated is flawed.
 		public void RemoveParent(World world, Locomotor locomotor, LinkedListNode<CPos> parent, ref int currBcdId,
-			ref LinkedListNode<CPos>[][] allCellNodes, ref List<LinkedListNodeHead<CPos>> heads,
+			ref LinkedListNode<CPos>[][] allCellNodes, ref List<LinkedListNode<CPos>> heads, ObjectRemoved objectRemoved,
 			BlockedByActor check = BlockedByActor.Immovable)
 		{
 			using var pt = new PerfTimer("RemoveParent2");
 			var headToUse = parent.Head;
+			// We do not need to update children without a head, as they are already a head
+			var childrenToReparent = parent.Children.Where(c => c.Head != null).ToList();
 
 			// If the cell's Head is null then it is the head and must assign a new head
+			// Additionally, assign any children that are adjacent to the new head
 			if (parent.Head == null)
-				headToUse = GetNewHeadAndUpdateChildren(parent, CellIsBlocked(parent.Value), ref allCellNodes);
+			{
+				headToUse = GetNewHeadAndUpdateChildren(parent, ref allCellNodes);
+				// Do not update parent of recently parented children
+				childrenToReparent = childrenToReparent.Where(c => !headToUse.Children.Select(c => c.Value).Contains(c.Value)).ToList();
+			}
+
+			if (headToUse != null && headToUse.Blocked == null)
+				throw new DataMisalignedException($"headToUse at cell {headToUse.Value} does not have a Blocked status");
+
+			if (parent.Head != null && parent.Head.Head != null)
+				throw new DataMisalignedException("Head node cannot have its own Head");
 
 			var allCellNodesCopy = allCellNodes;
-			bool MatchingBlockedStatus(CPos c) => CellIsBlocked(c) == CellIsBlocked(parent.Value);
-			bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
-				=> ValidParent(parent, candidate) && MatchingBlockedStatus(candidate);
+			var parentIsBlocked = CellIsBlocked(parent.Value);
 
+			// To check if the new parent's blocked status (CellIsBlocked(parent.Value)) is matching the existing blocked status
+			// of another cell
+			bool MatchingParentsNewBlockedStatus(CPos c) => allCellNodesCopy[c.X][c.Y].IsBlocked == parentIsBlocked;
+			bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
+				=> ValidParent(parent, candidate) && MatchingParentsNewBlockedStatus(candidate) &&
+				allCellNodesCopy[candidate.X][candidate.Y].Parent != allCellNodesCopy[parent.X][parent.Y] &&
+				allCellNodesCopy[parent.X][parent.Y].Parent != allCellNodesCopy[candidate.X][candidate.Y];
+
+			// The removed parent node needs to latch onto a neighbouring node with matching blocked status
 			var oldParentValidNeighbours = CellNeighbours(world.Map, parent.Value, ValidParentAndValidBlockedStatus);
 			if (oldParentValidNeighbours.Count > 0)
 			{
-				var oldParentFirstNeighbour = oldParentValidNeighbours.FirstOrDefault();
+				var oldParentFirstNeighbour = oldParentValidNeighbours[0];
 				var oldParentFirstNeighbourNode = allCellNodes[oldParentFirstNeighbour.X][oldParentFirstNeighbour.Y];
 				parent.Parent = oldParentFirstNeighbourNode;
-				parent.Head = oldParentFirstNeighbourNode.Head;
+				parent.Head = oldParentFirstNeighbourNode.GetHead();
 				oldParentFirstNeighbourNode.Children.Add(parent);
 			}
 			else
@@ -271,72 +314,98 @@ namespace OpenRA.Mods.Common.Traits
 				// Create new head if no valid neighbour exists
 				parent.Parent = null;
 				parent.Head = null;
-				AddHeadRemoveExisting(new LinkedListNodeHead<CPos>(parent, CellIsBlocked(parent.Value)), ref heads);
+				parent.Blocked = CellIsBlocked(parent.Value);
+				parent.OwnID = currBcdId;
 				currBcdId++;
+				parent.Children.Clear();
+				AddHeadRemoveExisting(parent, ref heads);
 			}
 
-			// May be unnecessary
-			allCellNodes[parent.Value.X][parent.Value.Y] = parent;
+			if (parent.Parent == parent)
+				throw new DataMisalignedException($"Circular loop: parent's Parent {parent.Parent.Value} is equal to parent");
+
+			if (parent.Head != null && parent.Head.Head != null)
+				throw new DataMisalignedException("Head node cannot have its own Head");
+
+			// If there are no children and no children
+			if (childrenToReparent.Count == 0)
+				return;
 
 			var possibleHeadsWithDist = new List<(LinkedListNode<CPos> Node, int Dist)>() { (headToUse, int.MaxValue) };
-			for (var i = parent.Children.Count - 1; i >= 0; i--)
+			for (var i = childrenToReparent.Count - 1; i >= 0; i--)
 			{
-				var currChild = parent.Children[i];
+				var currChild = childrenToReparent[i];
 				if (currChild != null)
 				{
 					// Search for all possible heads
+					// Initially this will be the original head only, but if this is not found, then currChild will
+					// create a new head, which will then be added to the list of possible heads for the remaining
+					// children to find.
 					var possibleHeads = possibleHeadsWithDist.ConvertAll(h => h.Node);
-					var foundHeadsWithDist = FindNodesFromStartNode(world, locomotor, currChild, possibleHeads, ref allCellNodes,
-						check: check, debugName: "_fromNewParent");
-					if (foundHeadsWithDist.Count > 0)
+					var foundHeadsWithDist = new List<(LinkedListNode<CPos> Node, int Dist)>();
+					foreach (var head in possibleHeads)
 					{
-						foundHeadsWithDist = foundHeadsWithDist.OrderBy(h => h.Dist).ToList(); // Get the closest head by sorting by distance
-						ReverseLinkedListNodes(foundHeadsWithDist[0].Node, CellIsBlocked(foundHeadsWithDist[0].Node.Value),
-							ref allCellNodes, ref heads);
+						var maybeFoundCurrChildWithDist = FindNodeFromNode(world, locomotor, head, currChild, ref allCellNodes,
+							check: check, debugName: "_fromNewParent");
+						if (maybeFoundCurrChildWithDist != null)
+						{
+							// Note that since FindNodeFromNode returns the origin not the target,
+							// we need to add the head rather than the found node here
+							var foundHeadWithDist = (head, (((LinkedListNode<CPos> Node, int Dist))maybeFoundCurrChildWithDist).Dist);
+							foundHeadsWithDist.Add(foundHeadWithDist);
+
+							// This updates all previous children of these nodes to point to the new node
+							// UpdateAllCellNodesWithNode(foundHeadWithDist.Node, ref allCellNodes);
+						}
 					}
+
+					if (currChild.Value == new CPos(124, 25) || currChild.Value == new CPos(124, 24))
+						Console.WriteLine("This is the culprit node.");
+
+					if (foundHeadsWithDist.Count > 0)
+						foundHeadsWithDist = foundHeadsWithDist.OrderBy(h => h.Dist).ToList(); // Get the closest head by sorting by distance
 					else
 					{
 						// If no head is found, we must assign a new one.
-						var newHeadWithDist = currChild.FindHead();
+						var newHeadWithDist = currChild.FindHead(CellIsBlocked(currChild.Value));
 						var newHead = newHeadWithDist.Node;
-						heads.RemoveAll(h => h.Value == currChild.Head.Value);
-						heads.Add(newHead);
-
-						// We must update the attributes rather than reassigning the head, to ensure all nodes that reference the head
-						// obtain the new values as well, without having to reassign them manually.
-						currChild.Head.Parent = newHead.Parent; // this should be null
-						currChild.Head.Value = newHead.Value;
-						currChild.Head.Children = newHead.Children;
+						currChild.Head = newHead;
+						newHead.OwnID = currBcdId;
+						currBcdId++;
+						AddHeadRemoveExisting(newHead, ref heads);
 
 						// We add the new head to the list of possible heads usable by other children, then sort by the shortest distance
 						possibleHeadsWithDist.Add(newHeadWithDist);
 						// The below has a maximum of four items so this is not expensive. Only recalculate distance if not already found earlier
-						possibleHeadsWithDist = possibleHeadsWithDist.OrderBy(h => h.Dist != int.MaxValue ? h.Dist : DistBetweenNodes(h.Node, currChild)).ToList();
+						possibleHeadsWithDist = possibleHeadsWithDist
+							.OrderBy(h => h.Dist != int.MaxValue ? h.Dist : DistBetweenNodes(h.Node, currChild)).ToList();
 					}
 				}
 			}
 		}
 
-		static List<LinkedListNode<CPos>> ReverseLinkedListNodes(LinkedListNode<CPos> head, bool blocked, ref LinkedListNode<CPos>[][] allCellNodes,
-			ref List<LinkedListNodeHead<CPos>> heads, CPos? stopPos = null)
+		public static List<LinkedListNode<CPos>> ReverseLinkedListNodes(LinkedListNode<CPos> head, ref LinkedListNode<CPos>[][] allCellNodes,
+			ref List<LinkedListNode<CPos>> heads, CPos? stopPos = null)
 		{
-			var reversedNodes = new List<LinkedListNode<CPos>>();
-			var newHead = new LinkedListNodeHead<CPos>(head.Value, head.IsValidParent, blocked); // We need to add newHead separetely since it has no parents
-			reversedNodes.Add(newHead);
-			heads.Add(newHead);
+			head = new LinkedListNode<CPos>(head.Value, head.IsValidParent, head.OwnID, (bool)head.Blocked);
+			var reversedNodes = new List<LinkedListNode<CPos>>
+			{
+				head
+			};
+			AddHeadRemoveExisting(head, ref heads);
 
 			// Create list from head to dest or end of list
 			var i = 0;
-			LinkedListNode<CPos> lastNewNode = newHead;
+			var lastNewNode = head;
 			var currNode = head.Parent;
-			currNode.Children.RemoveAll(c => c.Value == head.Value); // Make sure not to keep the head as a child
 			while (currNode != null && (stopPos == null || currNode.Value != stopPos) && i < 9000)
 			{
-				var newCurrNode = new LinkedListNode<CPos>(lastNewNode, newHead, currNode.Value, currNode.IsValidParent)
+				var newCurrNode = new LinkedListNode<CPos>(lastNewNode, head, currNode.Value, currNode.IsValidParent)
 				{
-					Children = currNode.Children // Because the parents are all still valid paths to the head, we can preserve all children of all parents
+					// Because the parents are all still valid paths to the head, we can preserve all children of all parents
+					// Also make sure not to retain the parent as a child!
+					Children = currNode.Children.Where(c => c.Value != lastNewNode.Value).ToList()
 				};
-				lastNewNode.Children.Add(newCurrNode);
 				reversedNodes.Add(newCurrNode);
 				allCellNodes[newCurrNode.Value.X][newCurrNode.Value.Y] = newCurrNode;
 				currNode = currNode.Parent;
@@ -344,18 +413,18 @@ namespace OpenRA.Mods.Common.Traits
 				i++;
 			}
 
-			if (i >= 9000)
+			if (i >= 90000)
 				throw new DataMisalignedException($"An infinite loop exists between {currNode.Value} and {currNode.Parent.Value}.");
 
 			return reversedNodes;
 		}
 
 		// For finding a single target node rather than multiple target nodes
-		public static (LinkedListNode<CPos> Node, int Dist)? FindNodeFromStartNode(World world, Locomotor locomotor, LinkedListNode<CPos> startNode,
+		public static (LinkedListNode<CPos> Node, int Dist)? FindNodeFromNode(World world, Locomotor locomotor, LinkedListNode<CPos> startNode,
 			LinkedListNode<CPos> targetNode, ref LinkedListNode<CPos>[][] allCellNodes, HashSet<CPos> borderCells = null,
 			BlockedByActor check = BlockedByActor.Immovable, string debugName = "")
 		{
-			var foundNodes = FindNodesFromStartNode(world, locomotor, startNode, new List<LinkedListNode<CPos>>() { targetNode }, ref allCellNodes,
+			var foundNodes = FindNodesFromNode(world, locomotor, startNode, new List<LinkedListNode<CPos>>() { targetNode }, ref allCellNodes,
 				borderCells, check, debugName);
 
 			if (foundNodes != null && foundNodes.Count > 0)
@@ -369,15 +438,17 @@ namespace OpenRA.Mods.Common.Traits
 
 		// NOTE: Does NOT iterate through children of nodes, uses CPos instead and works off of the assumption that
 		// any adjacent node sharing the same domain is traversable
-		public static List<(LinkedListNode<CPos> Node, int Dist)> FindNodesFromStartNode(World world, Locomotor locomotor, LinkedListNode<CPos> startNode,
+		// NOTE 2: You can find the shortest identified path (not necessarily absolute shortest) by traversing the
+		// parents from the targetNode(s) back to startNode
+		public static List<(LinkedListNode<CPos> Node, int Dist)> FindNodesFromNode(World world, Locomotor locomotor, LinkedListNode<CPos> startNode,
 			List<LinkedListNode<CPos>> targetNodes, ref LinkedListNode<CPos>[][] allCellNodes, HashSet<CPos> borderCells = null,
 			BlockedByActor check = BlockedByActor.Immovable, string debugName = "")
 		{
+			// NOTE: We do not need to reset the parent of startNode since its parent no longer exists
 			int DistToStartNode(CPos c) => DistBetweenCPos(c, startNode.Value);
 
 			using var pt = new PerfTimer("FindNodesFromStartNode" + debugName);
 			var visited = new HashSet<CPos>();
-			var visitedNodes = new List<LinkedListNode<CPos>>();
 			var foundTargetNodesWithLength = new List<(LinkedListNode<CPos> Node, int Dist)>();
 			var targetNodeCells = targetNodes.ConvertAll(cn => cn.Value);
 
@@ -401,8 +472,11 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				dist++;
 				var cn = nodesToExpand[0].Node;
+
+				if (cn.Value == new CPos(124, 25) || cn.Value == new CPos(124, 24))
+					Console.WriteLine("This is the culprit node.");
+
 				nodesToExpand.RemoveAt(0);
-				visitedNodes.Add(cn);
 				if (targetNodeCells.Contains(cn.Value))
 				{
 					foundTargetNodesWithLength.Add((cn, dist));
@@ -410,7 +484,7 @@ namespace OpenRA.Mods.Common.Traits
 					targetNodeCells.Remove(cn.Value);
 				}
 
-				foreach (var cnd in GetCellsWithinDomain(world, locomotor, cn, startNode.IsValidParent, startNode.Head, check, visited,
+				foreach (var cnd in GetCellsWithinDomain(world, locomotor, ref cn, startNode.IsValidParent, startNode.GetHead(), check, visited,
 					MatchingDomainID, borderCells))
 				{
 					// We make sure to add the node at an index that is sorted by how far it is from the StartNode, so that we are
@@ -428,8 +502,8 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public static List<LinkedListNode<CPos>> GetCellsWithinDomain(World world, Locomotor locomotor,
-			LinkedListNode<CPos> cellNode, Func<LinkedListNode<CPos>, LinkedListNode<CPos>, bool> parentValidator,
-			LinkedListNodeHead<CPos> head = null, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null,
+			ref LinkedListNode<CPos> cellNode, Func<LinkedListNode<CPos>, LinkedListNode<CPos>, bool> parentValidator,
+			LinkedListNode<CPos> head = null, BlockedByActor check = BlockedByActor.Immovable, HashSet<CPos> visited = null,
 			Func<CPos, bool> cellMatchingCriteria = null, HashSet<CPos> limitedCellSet = null)
 		{
 			var map = world.Map;
@@ -466,32 +540,21 @@ namespace OpenRA.Mods.Common.Traits
 		// Creates a basic cellNode domain by traversing all cells that match its blocked status, in the N E S and W destinations
 		// NOTE: This deliberately does not populate CellNodesDict or AllCellBCDs, to keep the logic distinct.
 		// TO DO: Isolate further by not having this create the BasicCellDomain, but just the linked nodes, or something similar
-		public static LinkedListNodeHead<CPos> CreateBasicCellDomain(int currBcdId, World world, Locomotor locomotor, CPos cell,
+		public static LinkedListNode<CPos> CreateBasicCellDomain(int currBcdId, World world, Locomotor locomotor, CPos cell,
 			ref LinkedListNode<CPos>[][] allCellNodes, ref CellEdges cellEdges, ref HashSet<CPos> visited,
 			BlockedByActor check = BlockedByActor.Immovable, string debugName = "")
 		{
 			static bool IsValidParent(LinkedListNode<CPos> a, LinkedListNode<CPos> b)
-				=> Math.Abs(b.Value.X - a.Value.X) + Math.Abs(b.Value.Y - a.Value.Y) == 1;
+				=> Math.Abs(b.Value.X - a.Value.X) + Math.Abs(b.Value.Y - a.Value.Y) == 1 &&
+				   !(a.Parent == b && b.Parent == a);
 
 			using var pt = new PerfTimer("CreateBasicCellDomain" + debugName);
 			var map = world.Map;
-			var head = new LinkedListNodeHead<CPos>(cell, IsValidParent, MobileOffGrid.CellIsBlocked(world, locomotor, cell, check),
-				currBcdId);
-			var cellNode = new LinkedListNode<CPos>(head, cell, IsValidParent);
+			var head = new LinkedListNode<CPos>(cell, IsValidParent, currBcdId, MobileOffGrid.CellIsBlocked(world, locomotor, cell, check));
 
 			var cellsToExpandWithParent = new LinkedList<LinkedListNode<CPos>>();
-			foreach (var c in GetCellsWithinDomain(world, locomotor, cellNode, cellNode.IsValidParent, head, check, visited))
-				cellsToExpandWithParent.AddLast(c);
-
-			foreach (var child in cellsToExpandWithParent)
-			{
-				cellNode.AddChild(child);
-				visited.Add(child.Value);
-			}
-
+			cellsToExpandWithParent.AddLast(head);
 			visited.Add(cell);
-			allCellNodes[cell.X][cell.Y] = cellNode;
-			cellEdges.AddCellEdges(map, cellNode, ref allCellNodes);
 
 			while (cellsToExpandWithParent.Count > 0)
 			{
@@ -506,14 +569,15 @@ namespace OpenRA.Mods.Common.Traits
 					throw new NullReferenceException("child is null");
 				if (allCellNodes == null)
 					throw new NullReferenceException("allCellNodes is null");
+				if (child.Head != null && child.Head.Head != null)
+					throw new DataMisalignedException("Head node cannot have its own Head");
 
 				cellEdges.AddCellEdges(map, child, ref allCellNodes);
 
 				// INVARIANT: bcd is independent of the below method that obtains neighbouring cells
-				foreach (var cn in GetCellsWithinDomain(world, locomotor, child, child.IsValidParent, head, check, visited))
+				foreach (var cn in GetCellsWithinDomain(world, locomotor, ref child, child.IsValidParent, head, check, visited))
 				{
 					cellsToExpandWithParent.AddLast(cn);
-					child.AddChild(cn);
 					visited.Add(cn.Value);
 				}
 			}
@@ -531,8 +595,9 @@ namespace OpenRA.Mods.Common.Traits
 		public void PopulateAllCellNodesAndEdges()
 		{
 			InitializeAllCellNodes();
-			world.ActorRemoved += AddedToOrRemovedFromWorld;
-			world.ActorAdded += AddedToOrRemovedFromWorld;
+			// === Temporarily disable RemoveParent ===
+			//world.ActorRemoved += AddedToOrRemovedFromWorld;
+			//world.ActorAdded += AddedToOrRemovedFromWorld;
 			var visited = new HashSet<CPos>();
 			for (var x = 0; x < world.Map.MapSize.X; x++)
 				for (var y = 0; y < world.Map.MapSize.Y; y++)
@@ -587,13 +652,13 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public static List<LinkedListNodeHead<T>> GetAllHeads<T>(List<LinkedListNode<T>> nodeList)
+		public static List<LinkedListNode<T>> GetAllHeads<T>(List<LinkedListNode<T>> nodeList)
 		{
-			var headList = new List<LinkedListNodeHead<T>>();
+			var headList = new List<LinkedListNode<T>>();
 
 			foreach (var node in nodeList)
-				if (!headList.Contains(node.Head))
-					headList.Add(node.Head);
+				if (!headList.Contains(node.GetHead()))
+					headList.Add(node.GetHead());
 
 			return headList;
 		}
@@ -606,7 +671,7 @@ namespace OpenRA.Mods.Common.Traits
 				{
 					//MoveOffGrid.RenderCircleCollDebug(world.WorldActor, world.Map.CenterOfCell(cellNode), new WDist(512));
 					Color colorToUse;
-					if (cellNode.Head != null && cellNode.Head.Blocked)
+					if (cellNode.IsBlocked)
 						colorToUse = Color.Red;
 					else
 						colorToUse = Color.Green;
@@ -636,15 +701,30 @@ namespace OpenRA.Mods.Common.Traits
 				MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor, edge[0], edge[1], lineColour, 3, LineEndPoint.Circle);
 		}
 
-		public void RemoveParentOfCellNode(LinkedListNode<CPos> cellNode)
-			=> RemoveParent(world, locomotor, cellNode, ref currBcdId, ref AllCellNodes, ref Heads);
+		public struct ObjectRemoved
+		{
+			public string Type;
+			public string Name;
+			public string ID;
+
+			public ObjectRemoved(string type, string name, string id)
+			{
+				Type = type;
+				Name = name;
+				ID = id;
+			}
+		}
+
+		public void RemoveParentOfCellNode(LinkedListNode<CPos> cellNode, ObjectRemoved objectRemoved)
+			=> RemoveParent(world, locomotor, cellNode, ref currBcdId, ref AllCellNodes, ref Heads, objectRemoved);
 
 		public void ActorBlockedStatusChange(Actor self, bool pastBlockedStatus)
 		{
 			if (MobileOffGrid.CellIsBlocked(world, locomotor, self.Location, BlockedByActor.Immovable) != pastBlockedStatus)
 			{
 				var cellNode = AllCellNodes[self.Location.X][self.Location.Y];
-				RemoveParentOfCellNode(cellNode);
+				var objectRemoved = new ObjectRemoved(self.GetType().ToString(), self.Info.Name, self.ActorID.ToString());
+				RemoveParentOfCellNode(cellNode, objectRemoved);
 				blockStatusUpdated = true;
 			}
 		}
@@ -658,7 +738,8 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var cell in cellsWithChangedBlockStatus)
 			{
 				var cellNode = AllCellNodes[cell.X][cell.Y];
-				RemoveParentOfCellNode(cellNode);
+				var objectRemoved = new ObjectRemoved(self.GetType().ToString(), self.Info.InstanceName, "");
+				RemoveParentOfCellNode(cellNode, objectRemoved);
 				blockStatusUpdated = true;
 			}
 		}
