@@ -30,12 +30,12 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new CPosCoordsDebugOverlay(init.Self, this); }
 	}
 
-	class CPosCoordsDebugOverlay : IWorldLoaded, IChatCommand
+	class CPosCoordsDebugOverlay : IWorldLoaded, IChatCommand, ITick
 	{
 		World world;
 		WorldRenderer wr;
 		public readonly List<Command> Comms;
-		readonly List<TextAnnotationRenderable> annotations = new();
+		readonly Dictionary<CPos, IRenderable> annotations = new();
 
 		public bool Enabled;
 
@@ -76,19 +76,34 @@ namespace OpenRA.Mods.Common.Traits
 				Enabled ^= true;
 
 			if (Enabled)
-				GenerateText(wr);
+				GenerateAnnotations(wr);
 			else
+			{
+				foreach (var anno in annotations.Values)
+					anno.Dispose();
 				annotations.Clear();
+			}
 		}
 
-		void GenerateText(WorldRenderer wr)
+		public void Tick(Actor self)
 		{
+			if (!Enabled)
+				return;
+
 			foreach (var uv in wr.Viewport.VisibleCellsInsideBounds.CandidateMapCoords)
 			{
-				if (world.ShroudObscures(uv))
-					continue;
-
 				var cell = uv.ToCPos(wr.World.Map);
+				if (!world.ShroudObscures(uv))
+					annotations[cell].AddOrUpdateScreenMap();
+				else
+					annotations[cell].Dispose();
+			}
+		}
+
+		void GenerateAnnotations(WorldRenderer wr)
+		{
+			foreach (var cell in wr.World.Map.AllCells)
+			{
 				var textPos = wr.World.Map.CenterOfCell(cell) - new WVec(0, 512, 0);
 				var color = Color.White;
 				string cellText;
@@ -102,7 +117,7 @@ namespace OpenRA.Mods.Common.Traits
 				//else
 
 				cellText = $"({cell.X},{cell.Y})";
-				annotations.Add(new TextAnnotationRenderable(wr.World, font, textPos, 0, color, cellText));
+				annotations[cell] = new TextAnnotationRenderable(wr.World, font, textPos, 0, color, cellText);
 			}
 		}
 	}

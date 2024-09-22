@@ -128,13 +128,25 @@ namespace OpenRA.Traits
 			if (ValidBounds(screenBounds))
 				partitionedRenderableAnnotations.Add(annotation, screenBounds);
 		}
-		
+
+		public void AddOrUpdate(IRenderable annotation, WPos topLeft, WPos bottomRight, int thickness)
+		{
+			Remove(annotation);
+			Add(annotation, topLeft, bottomRight, thickness);
+		}
+
 		public void Add(IRenderable annotation, WPos centerPosition, Size size)
 		{
 			var screenTL = worldRenderer.ScreenPxPosition(centerPosition - new WVec(size.Width / 2, size.Height / 2, 0));
 			var screenBounds = new Rectangle(screenTL.X, screenTL.Y, size.Width, size.Height);
 			if (ValidBounds(screenBounds))
 				partitionedRenderableAnnotations.Add(annotation, screenBounds);
+		}
+
+		public void AddOrUpdate(IRenderable annotation, WPos centerPosition, Size size)
+		{
+			Remove(annotation);
+			Add(annotation, centerPosition, size);
 		}
 
 		public void Add(IEffect effect, WPos position, Sprite sprite)

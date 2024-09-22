@@ -78,5 +78,15 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }
 		public Rectangle ScreenBounds(WorldRenderer wr) { return Rectangle.Empty; }
+
+		public void Dispose()
+		{
+			throw new System.NotImplementedException();
+		}
+
+		public void AddOrUpdateScreenMap()
+		{
+			throw new System.NotImplementedException();
+		}
 	}
 }

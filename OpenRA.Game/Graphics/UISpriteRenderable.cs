@@ -75,5 +75,15 @@ namespace OpenRA.Graphics
 			var offset = screenPos + sprite.Offset;
 			return Util.BoundingRectangle(offset, sprite.Size, rotation);
 		}
+
+		public void Dispose()
+		{
+			throw new System.NotImplementedException();
+		}
+
+		public void AddOrUpdateScreenMap()
+		{
+			throw new System.NotImplementedException();
+		}
 	}
 }

@@ -35,10 +35,15 @@ namespace OpenRA.Mods.Common.Graphics
 			this.bgDark = bgDark;
 			this.bgLight = bgLight;
 			this.text = text;
-
-			var size = font.Measure(text);
-			world.ScreenMap.Add(this, pos, new Size(size.X, size.Y));
 		}
+
+		public void AddOrUpdateScreenMap()
+		{
+			var size = font.Measure(text);
+			world.ScreenMap.AddOrUpdate(this, Pos, new Size(size.X, size.Y));
+		}
+
+		public void RemoveFromScreenMap() => world.ScreenMap.Remove(this);
 
 		public TextAnnotationRenderable(World world, SpriteFont font, WPos pos, int zOffset, Color color, string text)
 			: this(world, font, pos, zOffset, color,
@@ -73,5 +78,6 @@ namespace OpenRA.Mods.Common.Graphics
 		}
 
 		public Rectangle ScreenBounds(WorldRenderer wr) { return Rectangle.Empty; }
+		public void Dispose() => RemoveFromScreenMap();
 	}
 }

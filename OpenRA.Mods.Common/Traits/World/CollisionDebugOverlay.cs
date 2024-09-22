@@ -35,7 +35,7 @@ namespace OpenRA.Mods.Common.Traits
 		readonly List<(WPos, Color, int, CircleAnnotationRenderable Anno)> pointsWithColors = new();
 		readonly List<(List<WPos> Path, Color? C, List<LineAnnotationRenderableWithZIndex> Anno)> paths = new();
 		readonly List<(Actor, WPos, Color, int, CircleAnnotationRenderable Anno)> actorPointsWithColors = new();
-		List<(CCState, Color, (CircleAnnotationRenderable PAnno, TextAnnotationRenderable TAnno))> statesWithColors = new();
+		List<(CCState, Color, (CircleAnnotationRenderable PAnno, TextAnnotationRenderable TAnno) Annos)> statesWithColors = new();
 		readonly List<(WPos, string, Color, string, TextAnnotationRenderable Anno)> textsWithColors = new();
 		readonly List<(Actor, WPos, string, Color, string, TextAnnotationRenderable Anno)> actorTextsWithColors = new();
 		readonly List<(List<WPos>, int, List<LineAnnotationRenderableWithZIndex> Anno)> linesWithThickness = new();
@@ -99,6 +99,24 @@ namespace OpenRA.Mods.Common.Traits
 				Enabled ^= true;
 				ToggleVisibility("");
 			}
+
+			var annos
+				= linesWithColorsAndThickness.SelectMany(x => x.Anno).Cast<IRenderable>()
+					.Union(linesWithThickness.SelectMany(x => x.Anno).Cast<IRenderable>())
+					.Union(paths.SelectMany(x => x.Anno).Cast<IRenderable>())
+					.Union(circlesWithColors.ConvertAll(x => (IRenderable)x.Anno))
+					.Union(pointsWithColors.ConvertAll(x => (IRenderable)x.Anno))
+					.Union(actorPointsWithColors.ConvertAll(x => (IRenderable)x.Anno))
+					.Union(statesWithColors.SelectMany(x => new List<IRenderable>() { x.Annos.PAnno, x.Annos.TAnno }))
+					.Union(textsWithColors.ConvertAll(x => (IRenderable)x.Anno))
+					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno));
+
+			if (Enabled)
+				foreach (var anno in annos)
+					anno.AddOrUpdateScreenMap();
+			else
+				foreach (var anno in annos)
+					anno.Dispose();
 		}
 
 		public static void GenericLinkedPointsFunc<T1>(List<T1> pointList, int pointListLen, Action<T1, T1> funcOnLinkedPoints)
