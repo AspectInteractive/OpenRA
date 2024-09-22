@@ -66,11 +66,11 @@ namespace OpenRA.Mods.Common.Traits
 				var alpha = 255.0f * i.Time / info.DisplayDuration;
 				var rangeStep = alpha / i.Range.Length;
 
-				yield return new CircleAnnotationRenderable(i.CenterPosition, i.OuterRange, 1, Color.FromArgb((int)alpha, i.Color));
+				yield return new CircleAnnotationRenderable(wr.World, i.CenterPosition, i.OuterRange, 1, Color.FromArgb((int)alpha, i.Color));
 
 				foreach (var r in i.Range)
 				{
-					yield return new CircleAnnotationRenderable(i.CenterPosition, r, 1, Color.FromArgb((int)alpha, i.Color), true);
+					yield return new CircleAnnotationRenderable(wr.World, i.CenterPosition, r, 1, Color.FromArgb((int)alpha, i.Color), true);
 					alpha -= rangeStep;
 				}
 

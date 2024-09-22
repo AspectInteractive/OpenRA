@@ -18,14 +18,16 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class TextAnnotationRenderable : IRenderable, IFinalizedRenderable
 	{
+		World world;
 		readonly SpriteFont font;
 		readonly Color color;
 		readonly Color bgDark;
 		readonly Color bgLight;
 		readonly string text;
 
-		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, Color bgDark, Color bgLight, string text)
+		public TextAnnotationRenderable(World world, SpriteFont font, WPos pos, int zOffset, Color color, Color bgDark, Color bgLight, string text)
 		{
+			this.world = world;
 			this.font = font;
 			Pos = pos;
 			ZOffset = zOffset;
@@ -33,10 +35,13 @@ namespace OpenRA.Mods.Common.Graphics
 			this.bgDark = bgDark;
 			this.bgLight = bgLight;
 			this.text = text;
+
+			var size = font.Measure(text);
+			world.ScreenMap.Add(this, pos, new Size(size.X, size.Y));
 		}
 
-		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, string text)
-			: this(font, pos, zOffset, color,
+		public TextAnnotationRenderable(World world, SpriteFont font, WPos pos, int zOffset, Color color, string text)
+			: this(world, font, pos, zOffset, color,
 				ChromeMetrics.Get<Color>("TextContrastColorDark"),
 				ChromeMetrics.Get<Color>("TextContrastColorLight"),
 				text)
@@ -46,29 +51,16 @@ namespace OpenRA.Mods.Common.Graphics
 		public int ZOffset { get; }
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new TextAnnotationRenderable(font, Pos, ZOffset, color, text); }
-		public IRenderable OffsetBy(in WVec vec) { return new TextAnnotationRenderable(font, Pos + vec, ZOffset, color, text); }
+		public IRenderable WithZOffset(int newOffset) { return new TextAnnotationRenderable(world, font, Pos, ZOffset, color, text); }
+		public IRenderable OffsetBy(in WVec vec) { return new TextAnnotationRenderable(world, font, Pos + vec, ZOffset, color, text); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
-			var tl = wr.Viewport.Rectangle.TopLeft;
-			var br = wr.Viewport.Rectangle.BottomRight;
-
 			var size = font.Measure(text).ToFloat2();
-			var screenPos = wr.ScreenPosition(Pos);
 			var viewPos = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos));
-
 			var textViewTL = viewPos - 0.5f * size;
-			var textScreenTL = screenPos - 0.5f * size;
-			var textScreenBR = screenPos + 0.5f * size;
-
-			if ((textScreenTL.Y < tl.Y && textScreenBR.Y < tl.Y) ||
-				(textScreenTL.X < tl.X && textScreenBR.X < tl.X) ||
-				(textScreenTL.Y > br.Y && textScreenBR.Y > br.Y) ||
-				(textScreenTL.X > br.X && textScreenBR.X > br.X))
-				return;
 
 			font.DrawTextWithContrast(text, textViewTL, color, bgDark, bgLight, 1);
 		}

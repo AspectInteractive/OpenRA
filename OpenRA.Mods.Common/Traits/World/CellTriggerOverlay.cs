@@ -82,7 +82,7 @@ namespace OpenRA.Mods.Common.Traits
 					continue;
 
 				var center = wr.World.Map.CenterOfCell(cell);
-				yield return new TextAnnotationRenderable(font, center, 1024, color, "T");
+				yield return new TextAnnotationRenderable(wr.World, font, center, 1024, color, "T");
 			}
 		}
 

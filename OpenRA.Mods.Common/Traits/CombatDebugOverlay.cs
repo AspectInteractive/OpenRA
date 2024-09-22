@@ -62,7 +62,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (blockers.Count > 0)
 			{
 				var height = new WVec(0, 0, blockers.Max(b => b.BlockingHeight.Length));
-				yield return new LineAnnotationRenderable(self.CenterPosition, self.CenterPosition + height, 1, Color.Orange);
+				yield return new LineAnnotationRenderable(wr.World, self.CenterPosition, self.CenterPosition + height, 1, Color.Orange);
 			}
 
 			foreach (var s in shapes)
@@ -93,8 +93,8 @@ namespace OpenRA.Mods.Common.Traits
 					var da = coords.Value.LocalToWorld(new WVec(224, 0, 0).Rotate(WRot.FromYaw(p.Yaw + p.Cone)).Rotate(bodyOrientation));
 					var db = coords.Value.LocalToWorld(new WVec(224, 0, 0).Rotate(WRot.FromYaw(p.Yaw - p.Cone)).Rotate(bodyOrientation));
 
-					yield return new LineAnnotationRenderable(pos, pos + da * 224 / da.Length, 1, Color.White);
-					yield return new LineAnnotationRenderable(pos, pos + db * 224 / da.Length, 1, Color.White);
+					yield return new LineAnnotationRenderable(self.World, pos, pos + da * 224 / da.Length, 1, Color.White);
+					yield return new LineAnnotationRenderable(self.World, pos, pos + db * 224 / da.Length, 1, Color.White);
 				}
 
 				yield break;
@@ -115,7 +115,7 @@ namespace OpenRA.Mods.Common.Traits
 
 					var muzzle = self.CenterPosition + a.MuzzleOffset(self, b);
 					var endMuzzle = self.CenterPosition + a.MuzzleOffset(self, barrelEnd);
-					yield return new LineAnnotationRenderable(muzzle, endMuzzle, 1, Color.White);
+					yield return new LineAnnotationRenderable(self.World, muzzle, endMuzzle, 1, Color.White);
 				}
 			}
 		}

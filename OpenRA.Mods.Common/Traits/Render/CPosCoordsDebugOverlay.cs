@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Primitives;
@@ -29,9 +30,12 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new CPosCoordsDebugOverlay(init.Self, this); }
 	}
 
-	class CPosCoordsDebugOverlay : IWorldLoaded, IChatCommand, IRenderAnnotations
+	class CPosCoordsDebugOverlay : IWorldLoaded, IChatCommand
 	{
+		World world;
+		WorldRenderer wr;
 		public readonly List<Command> Comms;
+		readonly List<TextAnnotationRenderable> annotations = new();
 
 		public bool Enabled;
 
@@ -50,6 +54,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
+			world = w;
+			this.wr = wr;
 			var console = w.WorldActor.TraitOrDefault<ChatCommands>();
 			var help = w.WorldActor.TraitOrDefault<HelpCommand>();
 
@@ -66,37 +72,38 @@ namespace OpenRA.Mods.Common.Traits
 
 		void IChatCommand.InvokeCommand(string name, string arg)
 		{
-			if (Comms.Where(comm => comm.Name == name).Any())
+			if (Comms.Any(comm => comm.Name == name))
 				Enabled ^= true;
+
+			if (Enabled)
+				GenerateText(wr);
+			else
+				annotations.Clear();
 		}
 
-		IEnumerable<IRenderable> IRenderAnnotations.RenderAnnotations(Actor self, WorldRenderer wr)
+		void GenerateText(WorldRenderer wr)
 		{
-			if (!Enabled)
-				yield break;
-
 			foreach (var uv in wr.Viewport.VisibleCellsInsideBounds.CandidateMapCoords)
 			{
-				if (self.World.ShroudObscures(uv))
+				if (world.ShroudObscures(uv))
 					continue;
 
 				var cell = uv.ToCPos(wr.World.Map);
 				var textPos = wr.World.Map.CenterOfCell(cell) - new WVec(0, 512, 0);
 				var color = Color.White;
-				var locomotorActor = wr.World.ActorsHavingTrait<MobileOffGrid>().FirstOrDefault();
-				Locomotor locomotor = null;
-				if (locomotorActor != null)
-					locomotor = locomotorActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault().Locomotor;
 				string cellText;
+
+				//var locomotorActor = wr.World.ActorsHavingTrait<MobileOffGrid>().FirstOrDefault();
+				//Locomotor locomotor = null;
+				//if (locomotorActor != null)
+				//	locomotor = locomotorActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault().Locomotor;
 				//if (locomotor != null)
 				//	cellText = $"({locomotor.MovementCostToEnterCell(locomotorActor, cell, BlockedByActor.All, null, false, SubCell.FullCell)})";
 				//else
-				cellText = $"({cell.X},{cell.Y})";
 
-				yield return new TextAnnotationRenderable(font, textPos, 0, color, cellText);
+				cellText = $"({cell.X},{cell.Y})";
+				annotations.Add(new TextAnnotationRenderable(wr.World, font, textPos, 0, color, cellText));
 			}
 		}
-
-		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}
 }

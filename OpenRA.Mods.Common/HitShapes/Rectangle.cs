@@ -197,7 +197,7 @@ namespace OpenRA.Mods.Common.HitShapes
 			yield return new PolygonAnnotationRenderable(vertsBottom, origin, 1, shapeColor);
 			yield return new PolygonAnnotationRenderable(side1, origin, 1, shapeColor);
 			yield return new PolygonAnnotationRenderable(side2, origin, 1, shapeColor);
-			yield return new CircleAnnotationRenderable(origin, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
+			yield return new CircleAnnotationRenderable(wr.World, origin, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
 		}
 
 		public bool PosIsInsideRectangle(WPos selfCenter, WPos pos) => PosIsInsideRectangle(selfCenter.XYToInt2(), pos);

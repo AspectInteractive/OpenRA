@@ -18,6 +18,7 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class LineAnnotationRenderableWithZIndex : IRenderable, IFinalizedRenderable
 	{
+		readonly World world;
 		readonly WPos start;
 		readonly WPos end;
 		readonly float width;
@@ -26,22 +27,25 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly (int, int, Color) endPointCircleProps;
 		List<CircleAnnotationRenderable> endPointCircles = new List<CircleAnnotationRenderable>();
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color startColor, Color endColor,
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color startColor, Color endColor,
 										(int, int, Color) endPointCircleProps)
 		{
+			this.world = world;
 			this.start = start;
 			this.end = end;
 			this.width = width;
 			this.startColor = startColor;
 			this.endColor = endColor;
 			this.endPointCircleProps = endPointCircleProps;
+			world.ScreenMap.Add(this, start, end, (int)width);
 			CircleAnnotationRenderable MakeCircleAnno(WPos pos)
 			{
-				return new CircleAnnotationRenderable(pos,
+				return new CircleAnnotationRenderable(world, pos,
 					new WDist(endPointCircleProps.Item1),
 					endPointCircleProps.Item2,
 					endPointCircleProps.Item3, true);
 			}
+
 			if (endPointCircleProps.Item1 != -1)
 			{
 				endPointCircles.Add(MakeCircleAnno(start));
@@ -49,41 +53,29 @@ namespace OpenRA.Mods.Common.Graphics
 			}
 		}
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps)
-			: this(start, end, width, color, color, endPointCircleProps) { }
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps)
+			: this(world, start, end, width, color, color, endPointCircleProps) { }
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color)
-			: this(start, end, width, color, (-1, -1, Color.Black)) { }
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color color)
+			: this(world, start, end, width, color, (-1, -1, Color.Black)) { }
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color startColor, Color endColor)
-			: this(start, end, width, startColor, endColor, (-1, -1, Color.Black)) { }
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color startColor, Color endColor)
+			: this(world, start, end, width, startColor, endColor, (-1, -1, Color.Black)) { }
 
 		public WPos Pos => start;
 		public int ZOffset => 0;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset)
-		{ return new LineAnnotationRenderableWithZIndex(start, end, width, startColor, endColor, endPointCircleProps); }
+		{ return new LineAnnotationRenderableWithZIndex(world, start, end, width, startColor, endColor, endPointCircleProps); }
 		public IRenderable OffsetBy(in WVec vec)
-		{ return new LineAnnotationRenderableWithZIndex(start + vec, end + vec, width, startColor, endColor, endPointCircleProps); }
+		{ return new LineAnnotationRenderableWithZIndex(world, start + vec, end + vec, width, startColor, endColor, endPointCircleProps); }
 
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
-			var tl = wr.Viewport.Rectangle.TopLeft;
-			var br = wr.Viewport.Rectangle.BottomRight;
-
-			var startSp = wr.ScreenPosition(start);
-			var endSp = wr.ScreenPosition(end);
-
-			if ((startSp.Y < tl.Y && endSp.Y < tl.Y) ||
-				(startSp.X < tl.X && endSp.X < tl.X) ||
-				(startSp.Y > br.Y && endSp.Y > br.Y) ||
-				(startSp.X > br.X && endSp.X > br.X))
-				return;
-
 			Game.Renderer.RgbaColorRenderer.DrawLine(
 				wr.Viewport.WorldToViewPx(wr.ScreenPosition(start)),
 				wr.Viewport.WorldToViewPx(wr.Screen3DPosition(end)),

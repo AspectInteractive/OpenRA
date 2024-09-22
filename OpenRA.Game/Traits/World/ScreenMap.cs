@@ -51,6 +51,7 @@ namespace OpenRA.Traits
 
 		readonly Cache<Player, SpatiallyPartitioned<FrozenActor>> partitionedRenderableFrozenActors;
 		readonly SpatiallyPartitioned<Actor> partitionedRenderableActors;
+		readonly SpatiallyPartitioned<IRenderable> partitionedRenderableAnnotations;
 		readonly SpatiallyPartitioned<IEffect> partitionedRenderableEffects;
 
 		// Updates are done in one pass to ensure all bound changes have been applied
@@ -76,6 +77,7 @@ namespace OpenRA.Traits
 				_ => new SpatiallyPartitioned<FrozenActor>(width, height, info.BinSize));
 			partitionedRenderableActors = new SpatiallyPartitioned<Actor>(width, height, info.BinSize);
 			partitionedRenderableEffects = new SpatiallyPartitioned<IEffect>(width, height, info.BinSize);
+			partitionedRenderableAnnotations = new SpatiallyPartitioned<IRenderable>(width, height, info.BinSize);
 
 			addOrUpdateFrozenActors = new Cache<Player, HashSet<FrozenActor>>(_ => new HashSet<FrozenActor>());
 			removeFrozenActors = new Cache<Player, HashSet<FrozenActor>>(_ => new HashSet<FrozenActor>());
@@ -117,6 +119,24 @@ namespace OpenRA.Traits
 				partitionedRenderableEffects.Add(effect, screenBounds);
 		}
 
+		public void Add(IRenderable annotation, WPos topLeft, WPos bottomRight, int thickness)
+		{
+			var screenTL = worldRenderer.ScreenPxPosition(topLeft);
+			var width = Math.Abs(bottomRight.X - topLeft.X) + thickness;
+			var height = Math.Abs(bottomRight.Y - topLeft.Y) + thickness;
+			var screenBounds = new Rectangle(screenTL.X, screenTL.Y, width, height);
+			if (ValidBounds(screenBounds))
+				partitionedRenderableAnnotations.Add(annotation, screenBounds);
+		}
+		
+		public void Add(IRenderable annotation, WPos centerPosition, Size size)
+		{
+			var screenTL = worldRenderer.ScreenPxPosition(centerPosition - new WVec(size.Width / 2, size.Height / 2, 0));
+			var screenBounds = new Rectangle(screenTL.X, screenTL.Y, size.Width, size.Height);
+			if (ValidBounds(screenBounds))
+				partitionedRenderableAnnotations.Add(annotation, screenBounds);
+		}
+
 		public void Add(IEffect effect, WPos position, Sprite sprite)
 		{
 			var size = new Size((int)sprite.Size.X, (int)sprite.Size.Y);
@@ -138,6 +158,11 @@ namespace OpenRA.Traits
 		public void Remove(IEffect effect)
 		{
 			partitionedRenderableEffects.Remove(effect);
+		}
+
+		public void Remove(IRenderable annotation)
+		{
+			partitionedRenderableAnnotations.Remove(annotation);
 		}
 
 		static bool ValidBounds(Rectangle bounds)
@@ -190,6 +215,11 @@ namespace OpenRA.Traits
 				.Where(actorIsInWorld)
 				.Select(selectActorAndBounds)
 				.Where(x => x.Bounds.IntersectsWith(r));
+		}
+
+		public IEnumerable<IRenderable> RenderableAnnotationsInBox(int2 a, int2 b)
+		{
+			return partitionedRenderableAnnotations.InBox(RectWithCorners(a, b));
 		}
 
 		public IEnumerable<Actor> RenderableActorsInBox(int2 a, int2 b)
@@ -294,7 +324,8 @@ namespace OpenRA.Traits
 		public IEnumerable<Rectangle> RenderBounds(Player viewer)
 		{
 			var bounds = partitionedRenderableActors.ItemBounds
-				.Concat(partitionedRenderableEffects.ItemBounds);
+				.Concat(partitionedRenderableEffects.ItemBounds)
+				.Concat(partitionedRenderableAnnotations.ItemBounds);
 
 			return viewer != null ? bounds.Concat(partitionedRenderableFrozenActors[viewer].ItemBounds) : bounds;
 		}

@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Effects;
 using OpenRA.Primitives;
+using OpenRA.Server;
 using OpenRA.Traits;
 
 namespace OpenRA.Graphics
@@ -208,6 +209,10 @@ namespace OpenRA.Graphics
 		// PERF: Avoid LINQ.
 		void GenerateAnnotationRenderables()
 		{
+			// Add Renderable Annotations
+			foreach (var renderAnnotation in World.ScreenMap.RenderableAnnotationsInBox(Viewport.TopLeft, Viewport.BottomRight))
+				preparedAnnotationRenderables.Add(renderAnnotation.PrepareRender(this));
+
 			World.ApplyToActorsWithTrait<IRenderAnnotations>((actor, trait) =>
 			{
 				if (!actor.IsInWorld || actor.Disposed || (trait.SpatiallyPartitionable && !onScreenActors.Contains(actor)))
