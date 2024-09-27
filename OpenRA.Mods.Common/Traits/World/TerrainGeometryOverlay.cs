@@ -28,6 +28,7 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TerrainGeometryOverlay : IRenderAnnotations, IWorldLoaded, IChatCommand
 	{
+		World world;
 		public readonly List<Command> Comms;
 
 		[TranslationReference]
@@ -46,6 +47,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
+			world = w;
 			var console = w.WorldActor.TraitOrDefault<ChatCommands>();
 			var help = w.WorldActor.TraitOrDefault<HelpCommand>();
 
@@ -127,7 +129,7 @@ namespace OpenRA.Mods.Common.Traits
 						var end = pos + p[j];
 						var startColor = colors[height + p[i].Z / 512];
 						var endColor = colors[height + p[j].Z / 512];
-						yield return new LineAnnotationRenderableWithZIndex(start, end, thickness, startColor, endColor);
+						yield return new LineAnnotationRenderableWithZIndex(world, start, end, thickness, startColor, endColor);
 					}
 				}
 			}
@@ -162,7 +164,7 @@ namespace OpenRA.Mods.Common.Traits
 						//yield return new LineAnnotationRenderableWithZIndex(be.ElementAt(0), be.ElementAt(1), 3, Color.Blue, Color.Blue);
 						//yield return new LineAnnotationRenderableWithZIndex(le.ElementAt(0), le.ElementAt(1), 3, Color.Orange, Color.Orange);
 						//yield return new LineAnnotationRenderableWithZIndex(re.ElementAt(0), re.ElementAt(1), 3, Color.Pink, Color.Pink);
-						yield return new LineAnnotationRenderableWithZIndex(start, end, thickness,
+						yield return new LineAnnotationRenderableWithZIndex(world, start, end, thickness,
 																	blockedColor, blockedColor, (100, 3, endPointColor));
 #else
 #endif
@@ -180,7 +182,7 @@ namespace OpenRA.Mods.Common.Traits
 					var j = (i + 1) % 4;
 					var start = pos + projectedCorners[i] - new WVec(0, 0, pos.Z);
 					var end = pos + projectedCorners[j] - new WVec(0, 0, pos.Z);
-					yield return new LineAnnotationRenderable(start, end, 3, Color.Navy);
+					yield return new LineAnnotationRenderable(wr.World, start, end, 3, Color.Navy);
 				}
 			}
 		}

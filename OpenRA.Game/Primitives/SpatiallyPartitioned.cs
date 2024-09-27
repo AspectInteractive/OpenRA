@@ -88,13 +88,13 @@ namespace OpenRA.Primitives
 			maxCol = Math.Min(cols, Exts.IntegerDivisionRoundingAwayFromZero(right, binSize));
 		}
 
-		void MutateBins(T actor, Rectangle bounds, Action<Dictionary<T, Rectangle>, T, Rectangle> action)
+		void MutateBins(T item, Rectangle bounds, Action<Dictionary<T, Rectangle>, T, Rectangle> action)
 		{
 			BoundsToBinRowsAndCols(bounds, out var minRow, out var maxRow, out var minCol, out var maxCol);
 
 			for (var row = minRow; row < maxRow; row++)
 				for (var col = minCol; col < maxCol; col++)
-					action(BinAt(row, col), actor, bounds);
+					action(BinAt(row, col), item, bounds);
 		}
 
 		public IEnumerable<T> At(int2 location)

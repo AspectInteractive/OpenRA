@@ -16,6 +16,7 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class CircleAnnotationRenderable : IRenderable, IFinalizedRenderable
 	{
+		World world;
 		const int CircleSegments = 32;
 		static readonly WVec[] FacingOffsets = Exts.MakeArray(CircleSegments, i => new WVec(1024, 0, 0).Rotate(WRot.FromFacing(i * 256 / CircleSegments)));
 		readonly WDist radius;
@@ -23,21 +24,24 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly Color color;
 		readonly bool filled;
 
-		public CircleAnnotationRenderable(WPos centerPosition, WDist radius, int width, Color color, bool filled = false)
+		public CircleAnnotationRenderable(World world, WPos centerPosition, WDist radius, int width, Color color, bool filled = false)
 		{
+			this.world = world;
 			Pos = centerPosition;
 			this.radius = radius;
 			this.width = width;
 			this.color = color;
 			this.filled = filled;
+			var length = (radius * 2).Length;
+			world.ScreenMap.Add(this, centerPosition, new Size(length, length));
 		}
 
 		public WPos Pos { get; }
 		public int ZOffset => 0;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new CircleAnnotationRenderable(Pos, radius, width, color, filled); }
-		public IRenderable OffsetBy(in WVec vec) { return new CircleAnnotationRenderable(Pos + vec, radius, width, color, filled); }
+		public IRenderable WithZOffset(int newOffset) { return new CircleAnnotationRenderable(world, Pos, radius, width, color, filled); }
+		public IRenderable OffsetBy(in WVec vec) { return new CircleAnnotationRenderable(world, Pos + vec, radius, width, color, filled); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

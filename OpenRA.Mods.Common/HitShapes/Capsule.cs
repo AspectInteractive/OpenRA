@@ -128,15 +128,15 @@ namespace OpenRA.Mods.Common.HitShapes
 
 			var shapeColor = hs.IsTraitDisabled ? Color.LightGray : Color.Yellow;
 
-			yield return new CircleAnnotationRenderable(a, Radius, 1, shapeColor);
-			yield return new CircleAnnotationRenderable(b, Radius, 1, shapeColor);
-			yield return new CircleAnnotationRenderable(aa, Radius, 1, shapeColor);
-			yield return new CircleAnnotationRenderable(bb, Radius, 1, shapeColor);
-			yield return new CircleAnnotationRenderable(origin, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
-			yield return new LineAnnotationRenderable(a - offset1, b - offset1, 1, shapeColor);
-			yield return new LineAnnotationRenderable(a + offset1, b + offset1, 1, shapeColor);
-			yield return new LineAnnotationRenderable(aa - offset2, bb - offset2, 1, shapeColor);
-			yield return new LineAnnotationRenderable(aa + offset2, bb + offset2, 1, shapeColor);
+			yield return new CircleAnnotationRenderable(wr.World, a, Radius, 1, shapeColor);
+			yield return new CircleAnnotationRenderable(wr.World, b, Radius, 1, shapeColor);
+			yield return new CircleAnnotationRenderable(wr.World, aa, Radius, 1, shapeColor);
+			yield return new CircleAnnotationRenderable(wr.World, bb, Radius, 1, shapeColor);
+			yield return new CircleAnnotationRenderable(wr.World, origin, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
+			yield return new LineAnnotationRenderable(wr.World, a - offset1, b - offset1, 1, shapeColor);
+			yield return new LineAnnotationRenderable(wr.World, a + offset1, b + offset1, 1, shapeColor);
+			yield return new LineAnnotationRenderable(wr.World, aa - offset2, bb - offset2, 1, shapeColor);
+			yield return new LineAnnotationRenderable(wr.World, aa + offset2, bb + offset2, 1, shapeColor);
 		}
 
 		public bool LineIntersectsOrIsInside(WPos selfCenter, WPos p1, WPos p2)

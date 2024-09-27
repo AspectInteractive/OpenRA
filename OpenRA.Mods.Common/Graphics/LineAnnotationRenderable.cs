@@ -16,34 +16,39 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class LineAnnotationRenderable : IRenderable, IFinalizedRenderable
 	{
+		readonly World world;
 		readonly WPos end;
 		readonly float width;
 		readonly Color startColor;
 		readonly Color endColor;
 
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color color)
+		public LineAnnotationRenderable(World world, WPos start, WPos end, float width, Color color)
 		{
 			Pos = start;
+			this.world = world;
 			this.end = end;
 			this.width = width;
 			startColor = endColor = color;
+			world.ScreenMap.Add(this, start, end, (int)width);
 		}
 
-		public LineAnnotationRenderable(WPos start, WPos end, float width, Color startColor, Color endColor)
+		public LineAnnotationRenderable(World world, WPos start, WPos end, float width, Color startColor, Color endColor)
 		{
 			Pos = start;
+			this.world = world;
 			this.end = end;
 			this.width = width;
 			this.startColor = startColor;
 			this.endColor = endColor;
+			world.ScreenMap.Add(this, start, end, (int)width);
 		}
 
 		public WPos Pos { get; }
 		public int ZOffset => 0;
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new LineAnnotationRenderable(Pos, end, width, startColor, endColor); }
-		public IRenderable OffsetBy(in WVec vec) { return new LineAnnotationRenderable(Pos + vec, end + vec, width, startColor, endColor); }
+		public IRenderable WithZOffset(int newOffset) { return new LineAnnotationRenderable(world, Pos, end, width, startColor, endColor); }
+		public IRenderable OffsetBy(in WVec vec) { return new LineAnnotationRenderable(world, Pos + vec, end + vec, width, startColor, endColor); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

@@ -77,7 +77,7 @@ namespace OpenRA.Mods.Common.Traits
 					continue;
 
 				var info = wr.World.Map.GetTerrainInfo(cell);
-				yield return new TextAnnotationRenderable(font, center, 0, info.Color, info.Type);
+				yield return new TextAnnotationRenderable(wr.World, font, center, 0, info.Color, info.Type);
 			}
 		}
 

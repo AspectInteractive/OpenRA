@@ -436,7 +436,7 @@ namespace OpenRA.Mods.Common.Traits
 					closestCollisionPoint *= -1;
 
 				var resultPos = new WVec((int)closestCollisionPoint.X, (int)closestCollisionPoint.Y, 0);
-				yield return new LineAnnotationRenderable(mapCenter, mapCenter + resultPos, LineWidth, color, color);
+				yield return new LineAnnotationRenderable(wr.World, mapCenter, mapCenter + resultPos, LineWidth, color, color);
 			}
 		}
 

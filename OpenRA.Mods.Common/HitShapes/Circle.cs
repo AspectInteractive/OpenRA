@@ -259,11 +259,11 @@ namespace OpenRA.Mods.Common.HitShapes
 			foreach (var corner in corners)
 			{
 				var cornerWPos = new WPos(corner.X, corner.Y, origin.Z);
-				yield return new CircleAnnotationRenderable(cornerWPos, new WDist(32), 2, shapeColor);
+				yield return new CircleAnnotationRenderable(wr.World, cornerWPos, new WDist(32), 2, shapeColor);
 			}
 
-			yield return new CircleAnnotationRenderable(origin + new WVec(0, 0, VerticalTopOffset), Radius, 1, shapeColor);
-			yield return new CircleAnnotationRenderable(origin + new WVec(0, 0, VerticalBottomOffset), Radius, 1, shapeColor);
+			yield return new CircleAnnotationRenderable(wr.World, origin + new WVec(0, 0, VerticalTopOffset), Radius, 1, shapeColor);
+			yield return new CircleAnnotationRenderable(wr.World, origin + new WVec(0, 0, VerticalBottomOffset), Radius, 1, shapeColor);
 		}
 	}
 }
