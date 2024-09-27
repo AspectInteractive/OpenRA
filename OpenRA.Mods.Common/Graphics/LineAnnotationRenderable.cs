@@ -29,7 +29,6 @@ namespace OpenRA.Mods.Common.Graphics
 			this.end = end;
 			this.width = width;
 			startColor = endColor = color;
-			world.ScreenMap.Add(this, start, end, (int)width);
 		}
 
 		public LineAnnotationRenderable(World world, WPos start, WPos end, float width, Color startColor, Color endColor)
@@ -40,12 +39,14 @@ namespace OpenRA.Mods.Common.Graphics
 			this.width = width;
 			this.startColor = startColor;
 			this.endColor = endColor;
-			world.ScreenMap.Add(this, start, end, (int)width);
 		}
 
 		public WPos Pos { get; }
 		public int ZOffset => 0;
 		public bool IsDecoration => true;
+		public void AddOrUpdateScreenMap() => world.ScreenMap.AddOrUpdate(this, Pos, end, (int)width);
+
+		public void RemoveFromScreenMap() => world.ScreenMap.Remove(this);
 
 		public IRenderable WithZOffset(int newOffset) { return new LineAnnotationRenderable(world, Pos, end, width, startColor, endColor); }
 		public IRenderable OffsetBy(in WVec vec) { return new LineAnnotationRenderable(world, Pos + vec, end + vec, width, startColor, endColor); }
@@ -63,5 +64,6 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }
 		public Rectangle ScreenBounds(WorldRenderer wr) { return Rectangle.Empty; }
+		public void Dispose() => RemoveFromScreenMap();
 	}
 }

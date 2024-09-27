@@ -68,5 +68,15 @@ namespace OpenRA.Mods.Cnc.Graphics
 			var br = wr.Viewport.WorldToViewPx(pos + new float3(64, 64, 0));
 			return new Rectangle(tl.X, tl.Y, br.X - tl.X, br.Y - tl.Y);
 		}
+
+		public void Dispose()
+		{
+			throw new NotImplementedException();
+		}
+
+		public void AddOrUpdateScreenMap()
+		{
+			throw new NotImplementedException();
+		}
 	}
 }

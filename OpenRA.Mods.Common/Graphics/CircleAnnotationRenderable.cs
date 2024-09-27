@@ -32,9 +32,15 @@ namespace OpenRA.Mods.Common.Graphics
 			this.width = width;
 			this.color = color;
 			this.filled = filled;
-			var length = (radius * 2).Length;
-			world.ScreenMap.Add(this, centerPosition, new Size(length, length));
 		}
+
+		public void AddOrUpdateScreenMap()
+		{
+			var length = (radius * 2).Length;
+			world.ScreenMap.AddOrUpdate(this, Pos, new Size(length, length));
+		}
+
+		public void RemoveFromScreenMap() => world.ScreenMap.Remove(this);
 
 		public WPos Pos { get; }
 		public int ZOffset => 0;
@@ -71,5 +77,6 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }
 		public Rectangle ScreenBounds(WorldRenderer wr) { return Rectangle.Empty; }
+		public void Dispose() => RemoveFromScreenMap();
 	}
 }

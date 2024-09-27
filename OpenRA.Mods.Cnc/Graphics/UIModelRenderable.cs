@@ -73,6 +73,16 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new FinalizedUIModelRenderable(wr, this);
 		}
 
+		public void Dispose()
+		{
+			throw new NotImplementedException();
+		}
+
+		public void AddOrUpdateScreenMap()
+		{
+			throw new NotImplementedException();
+		}
+
 		sealed class FinalizedUIModelRenderable : IFinalizedRenderable
 		{
 			readonly UIModelRenderable model;
@@ -148,6 +158,16 @@ namespace OpenRA.Mods.Cnc.Graphics
 				}
 
 				return (Rectangle.FromLTRB((int)minX, (int)minY, (int)maxX, (int)maxY), new float2(minZ, maxZ));
+			}
+
+			public void AddOrUpdateScreenMap()
+			{
+				throw new NotImplementedException();
+			}
+
+			public void Dispose()
+			{
+				throw new NotImplementedException();
 			}
 		}
 	}
