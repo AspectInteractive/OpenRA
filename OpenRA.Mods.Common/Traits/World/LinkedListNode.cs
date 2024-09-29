@@ -18,6 +18,7 @@ namespace OpenRA.Mods.Common.Traits
 		// Invariant: We can safely cast to (bool) because if Head exists it must have a Blocked status,
 		// otherwise the node itself must be the Head and therefore must have a blocked status.
 		public bool IsBlocked => Head != null ? (bool)Head.Blocked : (bool)Blocked;
+		public T ParentValIfExists => Parent != null ? Parent.Value : default;
 		public int ID => Head != null ? Head.ID : OwnID;
 		public int OwnID = -1;
 		public T Value;

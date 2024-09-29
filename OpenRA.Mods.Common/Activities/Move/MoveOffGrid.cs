@@ -226,9 +226,8 @@ namespace OpenRA.Mods.Common.Activities
 		public static void RenderLineWithColorCollDebug(Actor self, WPos pos1, WPos pos2, Color color,
 			int thickness = LineThickness, LineEndPoint endpoints = LineEndPoint.None)
 		{
-			var renderLine = new List<WPos>() { pos1, pos2 };
 			self.World.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault()
-				.AddLineWithColor(renderLine, color, thickness, endpoints);
+				.AddLineWithColor(pos1, pos2, color, thickness, endpoints);
 		}
 
 		public static void RenderCircle(Actor self, WPos pos, WDist radius, string key)

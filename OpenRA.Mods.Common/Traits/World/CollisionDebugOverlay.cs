@@ -12,11 +12,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Traits;
+using RVO;
+using static System.Net.Mime.MediaTypeNames;
 using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
 using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
 
@@ -28,8 +32,44 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class CollisionDebugOverlay : IWorldLoaded, IChatCommand
 	{
+		public readonly struct BCDCellNode
+		{
+			public readonly int ID;
+			public readonly CPos ParentCPos;
+			public readonly WPos ParentPos;
+			public readonly CPos NodeCPos;
+			public readonly WPos NodePos;
+			public readonly Color LineColor;
+			public readonly Color TextColor;
+			public readonly int LineThickness;
+			public readonly LineEndPoint LineEnd;
+			public readonly string FontName;
+
+			public BCDCellNode(World world, int id, CPos parentCPos, CPos nodeCPos, bool blocked,
+				int lineThickness = 3, string fontName = "MediumBold", LineEndPoint lineEndPoint = LineEndPoint.EndArrow)
+			{
+				ID = id;
+				ParentCPos = parentCPos;
+				ParentPos = parentCPos != CPos.Zero ? ParentPos = world.Map.CenterOfCell(parentCPos) : WPos.Zero;
+				NodeCPos = nodeCPos;
+				NodePos = world.Map.CenterOfCell(nodeCPos);
+				LineColor = blocked ? Color.Red : Color.Green;
+				TextColor = blocked ? Color.Red : Color.Green;
+				LineThickness = lineThickness;
+				FontName = fontName;
+				LineEnd = lineEndPoint;
+			}
+
+			public readonly WPos LineEndPos
+				=> ParentCPos != CPos.Zero ? NodePos + (ParentPos - NodePos) / 10 * 8 : NodePos;
+
+			public readonly WPos LineStartPos => NodePos;
+			public readonly string Text => $"ID:{ID}";
+		}
+
 		World world;
 		public readonly List<Command> Comms;
+		readonly List<(BCDCellNode Node, List<IRenderable> Annos)> bcdCellNodes = new();
 		readonly List<(List<WPos>, Color, int, LineEndPoint EndPoints, List<LineAnnotationRenderableWithZIndex> Anno)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int, CircleAnnotationRenderable Anno)> circlesWithColors = new();
 		readonly List<(WPos, Color, int, CircleAnnotationRenderable Anno)> pointsWithColors = new();
@@ -109,7 +149,8 @@ namespace OpenRA.Mods.Common.Traits
 					.Union(actorPointsWithColors.ConvertAll(x => (IRenderable)x.Anno))
 					.Union(statesWithColors.SelectMany(x => new List<IRenderable>() { x.Annos.PAnno, x.Annos.TAnno }))
 					.Union(textsWithColors.ConvertAll(x => (IRenderable)x.Anno))
-					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno));
+					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno))
+					.Union(bcdCellNodes.SelectMany(x => x.Annos));
 
 			if (Enabled)
 				foreach (var anno in annos)
@@ -254,6 +295,7 @@ namespace OpenRA.Mods.Common.Traits
 			pointsWithColors.Add((pos, color, thickness, null));
 			UpdatePointColors();
 		}
+
 		public void AddActorPoint(Actor self, WPos pos, int thickness = DefaultThickness)
 		{
 			actorPointsWithColors.Add((self, pos, Color.FromAhsv(pointHue, currSat, currLight), thickness,
@@ -270,6 +312,7 @@ namespace OpenRA.Mods.Common.Traits
 					pointsWithColors.RemoveAll(pwc => pwc.Item1 == currPos && pwc.Item2 == currColor && pwc.Item3 == thickness);
 			UpdatePointColors();
 		}
+
 		public void AddPath(List<WPos> path, Color? color = null)
 		{
 			paths.Add((path, color,
@@ -298,11 +341,34 @@ namespace OpenRA.Mods.Common.Traits
 			linesWithThickness.Add((line, thickness,
 				GetPathRenderableSet(world, line, thickness, lineColor, EndPointRadius, EndPointThickness, lineColor)));
 		}
+
 		public void RemoveLine(List<WPos> line) { linesWithThickness.RemoveAll(l => l.Item1 == line); }
 		public void AddLineWithColor(List<WPos> line, Color color, int thickness = LineThickness, LineEndPoint endpoints = LineEndPoint.None)
 		{
 			linesWithColorsAndThickness.Add((line, color, thickness, endpoints,
 				LineRenderFunc(line[0], line[1], color, endpoints, thickness)));
+		}
+
+		public void AddLineWithColor(WPos pos1, WPos pos2, Color color, int thickness = LineThickness, LineEndPoint endpoints = LineEndPoint.None)
+		{
+			linesWithColorsAndThickness.Add((new List<WPos>() { pos1, pos2 }, color, thickness, endpoints,
+				LineRenderFunc(pos1, pos2, color, endpoints, thickness)));
+		}
+
+		public void RemoveBCDNode(CPos c) => bcdCellNodes.RemoveAll(b => b.Node.NodeCPos == c);
+
+		public void AddOrUpdateBCDNode(BCDCellNode bcdNode)
+		{
+			var annos = new List<IRenderable>()
+			{
+				TextRenderFunc(bcdNode.NodePos, bcdNode.Text, bcdNode.TextColor, bcdNode.FontName)
+			};
+			annos.AddRange(LineRenderFunc(bcdNode.LineStartPos, bcdNode.LineEndPos,
+				bcdNode.LineColor, bcdNode.LineEnd, bcdNode.LineThickness));
+
+			// Cannot have two nodes with the same CPos
+			RemoveBCDNode(bcdNode.NodeCPos);
+			bcdCellNodes.Add((bcdNode, annos));
 		}
 
 		public void RemoveLineWithColor(List<WPos> line) { linesWithColorsAndThickness.RemoveAll(lwc => lwc.Item1 == line); }
