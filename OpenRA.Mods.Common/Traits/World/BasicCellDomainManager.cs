@@ -236,7 +236,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var child = newParentNewChildren[i];
 				child.Parent = newParent;
-				child.Head = newParent;
+				//child.Head = newParent;
 				allCellNodes[child.Value.X][child.Value.Y] = child;
 				newParent.Children.Add(child);
 			}
@@ -258,7 +258,7 @@ namespace OpenRA.Mods.Common.Traits
 					{
 						var child = cnChildren[i];
 						child.Parent = cn;
-						child.Head = cn.Head;
+						//child.Head = cn.Head;
 						cn.Children.Add(child);
 					}
 
@@ -313,7 +313,7 @@ namespace OpenRA.Mods.Common.Traits
 				var oldParentFirstNeighbour = oldParentValidNeighbours[0];
 				var oldParentFirstNeighbourNode = allCellNodes[oldParentFirstNeighbour.X][oldParentFirstNeighbour.Y];
 				parent.Parent = oldParentFirstNeighbourNode;
-				parent.Head = oldParentFirstNeighbourNode.GetHead();
+				//parent.Head = oldParentFirstNeighbourNode.GetHead();
 				oldParentFirstNeighbourNode.Children.Add(parent);
 				visited.Add(oldParentFirstNeighbourNode.Value);
 			}
@@ -321,7 +321,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				// Create new head if no valid neighbour exists
 				parent.Parent = null;
-				parent.Head = null;
+				//parent.Head = null;
 				parent.Blocked = CellIsBlocked(parent.Value);
 				parent.OwnID = currBcdId;
 				currBcdId++;
@@ -331,9 +331,6 @@ namespace OpenRA.Mods.Common.Traits
 
 			if (parent.Parent == parent)
 				throw new DataMisalignedException($"Circular loop: parent's Parent {parent.Parent.Value} is equal to parent");
-
-			if (parent.Head != null && parent.Head.Head != null)
-				throw new DataMisalignedException("Head node cannot have its own Head");
 
 			// If there are no children and no children
 			if (childrenToReparent.Count == 0)
@@ -408,7 +405,8 @@ namespace OpenRA.Mods.Common.Traits
 			var currNode = head.Parent;
 			while (currNode != null && (stopPos == null || currNode.Value != stopPos) && i < 9000)
 			{
-				var newCurrNode = new LinkedListNode<CPos>(lastNewNode, head, currNode.Value, currNode.IsValidParent)
+				//var newCurrNode = new LinkedListNode<CPos>(lastNewNode, head, currNode.Value, currNode.IsValidParent)
+				var newCurrNode = new LinkedListNode<CPos>(lastNewNode, currNode.Value, currNode.IsValidParent)
 				{
 					// Because the parents are all still valid paths to the head, we can preserve all children of all parents
 					// Also make sure not to retain the parent as a child!
@@ -540,7 +538,10 @@ namespace OpenRA.Mods.Common.Traits
 			var cellsWithinDomain = new List<LinkedListNode<CPos>>();
 			foreach (var c in candidateCells)
 				if (map.CPosInMap(c) && cellMatchingCriteria(c) == cellMatchingCriteria(cell))
-					cellsWithinDomain.Add(new LinkedListNode<CPos>(cellNode, head, c, parentValidator));
+				{
+					//cellsWithinDomain.Add(new LinkedListNode<CPos>(cellNode, head, c, parentValidator));
+					cellsWithinDomain.Add(new LinkedListNode<CPos>(cellNode, c, parentValidator));
+				}
 
 			return cellsWithinDomain;
 		}
@@ -577,8 +578,6 @@ namespace OpenRA.Mods.Common.Traits
 					throw new NullReferenceException("child is null");
 				if (allCellNodes == null)
 					throw new NullReferenceException("allCellNodes is null");
-				if (child.Head != null && child.Head.Head != null)
-					throw new DataMisalignedException("Head node cannot have its own Head");
 
 				cellEdges.AddCellEdges(map, child, ref allCellNodes);
 

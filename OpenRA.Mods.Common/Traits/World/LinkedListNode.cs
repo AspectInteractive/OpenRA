@@ -12,20 +12,20 @@ namespace OpenRA.Mods.Common.Traits
 		public LinkedListNode<T> Parent;
 		public List<LinkedListNode<T>> Children = new();
 		public Func<LinkedListNode<T>, LinkedListNode<T>, bool> IsValidParent;
-		public LinkedListNode<T> Head = null;
+		//public LinkedListNode<T> Head = null;
+		public LinkedListNode<T> Head => GetHead();
 		public bool? Blocked = null;
 
 		// Invariant: We can safely cast to (bool) because if Head exists it must have a Blocked status,
 		// otherwise the node itself must be the Head and therefore must have a blocked status.
 		public bool IsBlocked => Head != null ? (bool)Head.Blocked : (bool)Blocked;
 		public T ParentValIfExists => Parent != null ? Parent.Value : default;
-		public int ID => Head != null ? Head.ID : OwnID;
+		public int ID => GetHead().OwnID;
 		public int OwnID = -1;
 		public T Value;
 
-		public LinkedListNode(LinkedListNode<T> parent, LinkedListNode<T> head, T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
+		public LinkedListNode(LinkedListNode<T> parent, T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
 		{
-			Head = head;
 			Parent = parent;
 			parent.AddChild(this);
 			Value = value;
@@ -50,7 +50,23 @@ namespace OpenRA.Mods.Common.Traits
 			Blocked = blocked;
 		}
 
-		public LinkedListNode<T> GetHead() => Head ?? this;
+		public LinkedListNode<T> GetHead()
+		{
+			const int MaxIters = 30000;
+			var i = 0;
+			var currParent = this;
+
+			while (currParent.Parent != null && i < MaxIters)
+			{
+				currParent = currParent.Parent;
+				i++;
+			}
+
+			if (i >= MaxIters)
+				throw new DataMisalignedException("Cannot find head node.");
+
+			return currParent;
+		}
 
 		public bool MatchesDomain(LinkedListNode<T> other) => ID == other.ID;
 		public static bool DomainsAreMatching(LinkedListNode<T> a, LinkedListNode<T> b) => a.ID == b.ID;
@@ -91,7 +107,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (dist >= maxIters)
 				throw new DataMisalignedException($"An infinite loop exists between {currNode.Value} and {currNode.Parent.Value}.");
 
-			currNode.Head = null;
+			//currNode.Head = null;
 			currNode.Parent = null; // may be redundant but just in case
 			currNode.Blocked = blocked;
 
