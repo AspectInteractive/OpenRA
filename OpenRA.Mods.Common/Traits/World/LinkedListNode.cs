@@ -12,109 +12,46 @@ namespace OpenRA.Mods.Common.Traits
 		public LinkedListNode<T> Parent;
 		public List<LinkedListNode<T>> Children = new();
 		public Func<LinkedListNode<T>, LinkedListNode<T>, bool> IsValidParent;
-		//public LinkedListNode<T> Head = null;
-		public LinkedListNode<T> Head => GetHead();
-		public bool? Blocked = null;
-
-		// Invariant: We can safely cast to (bool) because if Head exists it must have a Blocked status,
-		// otherwise the node itself must be the Head and therefore must have a blocked status.
-		public bool IsBlocked => Head != null ? (bool)Head.Blocked : (bool)Blocked;
-		public T ParentValIfExists => Parent != null ? Parent.Value : default;
-		public int ID => GetHead().OwnID;
-		public int OwnID = -1;
 		public T Value;
 
 		public LinkedListNode(LinkedListNode<T> parent, T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
 		{
 			Parent = parent;
-			parent.AddChild(this);
 			Value = value;
 			IsValidParent = parentValidator;
 		}
 
-		// If no head is specified then this must be the head, therefore blocked and ownID must be set to a value
-		// We do not use constructor chaining because we want to force the above rule
-		public LinkedListNode(LinkedListNode<T> parent, T value,
-			Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator, int ownID, bool blocked)
-			: this(value, parentValidator, ownID, blocked)
-			=> Parent = parent;
-
-		// We do not use constructor chaining because we want to force blocked and ownID to require a value
-		public LinkedListNode(T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator, int ownID,
-			bool blocked)
+		public LinkedListNode(T value, Func<LinkedListNode<T>, LinkedListNode<T>, bool> parentValidator)
 		{
-			if (ownID != int.MaxValue)
-				OwnID = ownID;
 			Value = value;
 			IsValidParent = parentValidator;
-			Blocked = blocked;
-		}
-
-		public LinkedListNode<T> GetHead()
-		{
-			const int MaxIters = 30000;
-			var i = 0;
-			var currParent = this;
-
-			while (currParent.Parent != null && i < MaxIters)
-			{
-				currParent = currParent.Parent;
-				i++;
-			}
-
-			if (i >= MaxIters)
-				throw new DataMisalignedException("Cannot find head node.");
-
-			return currParent;
-		}
-
-		public bool MatchesDomain(LinkedListNode<T> other) => ID == other.ID;
-		public static bool DomainsAreMatching(LinkedListNode<T> a, LinkedListNode<T> b) => a.ID == b.ID;
-
-		public void ActionOnEveryNodeToParent(Action<LinkedListNode<T>> action, bool inclusive = true, int maxIters = 9000)
-		{
-			var dist = 0;
-			var currNode = this;
-
-			// Skip first iteration if non-inclusive
-			if (!inclusive)
-			{
-				currNode = currNode.Parent;
-				dist++;
-			}
-
-			while (currNode.Parent != null && dist < maxIters)
-			{
-				action(currNode);
-				currNode = currNode.Parent;
-				dist++;
-			}
-
-			if (dist >= maxIters)
-				throw new DataMisalignedException($"An infinite loop exists between {currNode.Value} and {currNode.Parent.Value}.");
-		}
-
-		public (LinkedListNode<T> Node, int Dist) FindHead(bool blocked, int maxIters = 9000)
-		{
-			var dist = 0;
-			var currNode = this;
-			while (currNode.Parent != null && dist < maxIters)
-			{
-				currNode = currNode.Parent;
-				dist++;
-			}
-
-			if (dist >= maxIters)
-				throw new DataMisalignedException($"An infinite loop exists between {currNode.Value} and {currNode.Parent.Value}.");
-
-			//currNode.Head = null;
-			currNode.Parent = null; // may be redundant but just in case
-			currNode.Blocked = blocked;
-
-			return (currNode, dist); // We retain the blocked status of the head
 		}
 
 		public bool ValueEquals(LinkedListNode<T> other) => EqualityComparer<T>.Default.Equals(Value, other.Value);
+
 		public void AddChild(LinkedListNode<T> child) => Children.Add(child);
+		public void AddChildren(List<LinkedListNode<T>> children) => Children.AddRange(children);
+		public void SetChildren(List<LinkedListNode<T>> children) => Children = children;
+		public void SetParent(LinkedListNode<T> parent) => Parent = parent;
+		public void SetValue(T value) => Value = value;
+
+		// Removes the parent and sets new parents for the children
+		public LinkedListNode<T> RemoveParentAndReturnNewParent(List<LinkedListNode<T>> neighboursOfChildren)
+		{
+			Parent = null;
+			if (Children.Count == 0)
+				return null;
+
+			//var test = Children.Select(c1 => (c1, Children.Where(cx => !cx.ValueEquals(c1) && IsValidParent(c1, cx)).ToList()));
+
+			// For each child, we run IsValidParent from that child to all other children to identify if they are
+			// a valid parent and only keep them if they are valid. Then we sort the original list of children
+			// by the highest number first (most valid children), to get the best candidates for parents.
+			var bestCandidateParentWithChildren
+				= Children.Select(c1 => (c1, Children.Where(cx => !cx.ValueEquals(c1) && IsValidParent(c1, cx)).ToList()))
+					.OrderByDescending(c => c.Item2.Count).FirstOrDefault();
+
+			return bestCandidateParentWithChildren.c1;
+		}
 	}
 }
