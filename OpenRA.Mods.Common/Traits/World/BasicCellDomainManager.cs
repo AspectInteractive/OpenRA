@@ -290,9 +290,6 @@ namespace OpenRA.Mods.Common.Traits
 					visited.Add(c);
 			}
 
-			if (headToUse != null && headToUse.Blocked == null)
-				throw new DataMisalignedException($"headToUse at cell {headToUse.Value} does not have a Blocked status");
-
 			var allCellNodesCopy = allCellNodes;
 			var parentIsBlocked = CellIsBlocked(parent.Value);
 
@@ -369,16 +366,15 @@ namespace OpenRA.Mods.Common.Traits
 			//			foundHeadsWithDist = foundHeadsWithDist.OrderBy(h => h.Dist).ToList(); // Get the closest head by sorting by distance
 			//		else
 			//		{
-			//			// If no head is found, we must assign a new one.
-			//			var newHeadWithDist = currChild.FindHead(CellIsBlocked(currChild.Value));
-			//			var newHead = newHeadWithDist.Node;
-			//			currChild.Head = newHead;
-			//			newHead.OwnID = currBcdId;
+			//			// If no head is found the child becomes its own head
+			//			currChild.Parent = null;
+			//			currChild.OwnID = currBcdId;
+			//			currChild.Blocked = parentIsBlocked;
 			//			currBcdId++;
-			//			AddHeadRemoveExisting(newHead, ref heads);
+			//			AddHeadRemoveExisting(currChild, ref heads);
 
 			//			// We add the new head to the list of possible heads usable by other children, then sort by the shortest distance
-			//			possibleHeadsWithDist.Add(newHeadWithDist);
+			//			possibleHeadsWithDist.Add((currChild, int.MaxValue));
 			//			// The below has a maximum of four items so this is not expensive. Only recalculate distance if not already found earlier
 			//			possibleHeadsWithDist = possibleHeadsWithDist
 			//				.OrderBy(h => h.Dist != int.MaxValue ? h.Dist : DistBetweenNodes(h.Node, currChild)).ToList();
@@ -679,7 +675,7 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var cellNode in cellNodes)
 			{
 				collDebugOverlay.AddOrUpdateBCDNode(
-					new CollisionDebugOverlay.BCDCellNode(world, cellNode.ID, cellNode.ParentValIfExists, cellNode.Value, cellNode.IsBlocked));
+					new CollisionDebugOverlay.BCDCellNode(world, cellNode.ID, cellNode, cellNode.IsBlocked));
 			}
 
 			var edgesToUse = cellEdges.ConnectedCellEdges.ToList();

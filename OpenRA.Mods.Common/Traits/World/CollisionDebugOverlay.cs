@@ -22,6 +22,7 @@ using OpenRA.Traits;
 using RVO;
 using static System.Net.Mime.MediaTypeNames;
 using static OpenRA.Mods.Common.Pathfinder.ThetaStarPathSearch;
+using static OpenRA.Mods.Common.Traits.CollisionDebugOverlay;
 using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
 
 namespace OpenRA.Mods.Common.Traits
@@ -45,14 +46,14 @@ namespace OpenRA.Mods.Common.Traits
 			public readonly LineEndPoint LineEnd;
 			public readonly string FontName;
 
-			public BCDCellNode(World world, int id, CPos parentCPos, CPos nodeCPos, bool blocked,
+			public BCDCellNode(World world, int id, LinkedListNode<CPos> node, bool blocked,
 				int lineThickness = 3, string fontName = "MediumBold", LineEndPoint lineEndPoint = LineEndPoint.EndArrow)
 			{
 				ID = id;
-				ParentCPos = parentCPos;
-				ParentPos = parentCPos != CPos.Zero ? ParentPos = world.Map.CenterOfCell(parentCPos) : WPos.Zero;
-				NodeCPos = nodeCPos;
-				NodePos = world.Map.CenterOfCell(nodeCPos);
+				ParentCPos = node.Parent != null ? node.Parent.Value : CPos.Zero;
+				ParentPos = node.Parent != null ? ParentPos = world.Map.CenterOfCell(node.Parent.Value) : WPos.Zero;
+				NodeCPos = node.Value;
+				NodePos = world.Map.CenterOfCell(node.Value);
 				LineColor = blocked ? Color.Red : Color.Green;
 				TextColor = blocked ? Color.Red : Color.Green;
 				LineThickness = lineThickness;
@@ -69,7 +70,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		World world;
 		public readonly List<Command> Comms;
-		readonly List<(BCDCellNode Node, List<IRenderable> Annos)> bcdCellNodes = new();
+		(BCDCellNode Node, List<IRenderable> Annos)[,] bcdCellNodes;
 		readonly List<(List<WPos>, Color, int, LineEndPoint EndPoints, List<LineAnnotationRenderableWithZIndex> Anno)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int, CircleAnnotationRenderable Anno)> circlesWithColors = new();
 		readonly List<(WPos, Color, int, CircleAnnotationRenderable Anno)> pointsWithColors = new();
@@ -116,6 +117,7 @@ namespace OpenRA.Mods.Common.Traits
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
 			world = w;
+			bcdCellNodes = new (BCDCellNode Node, List<IRenderable> Annos)[w.Map.MapSize.X, w.Map.MapSize.Y];
 			var console = w.WorldActor.TraitOrDefault<ChatCommands>();
 			var help = w.WorldActor.TraitOrDefault<HelpCommand>();
 
@@ -136,7 +138,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (Comms.Any(comm => comm.Name == name))
 			{
-				Enabled ^= true;
+				//Enabled ^= true;
 				ToggleVisibility("");
 			}
 
@@ -149,8 +151,10 @@ namespace OpenRA.Mods.Common.Traits
 					.Union(actorPointsWithColors.ConvertAll(x => (IRenderable)x.Anno))
 					.Union(statesWithColors.SelectMany(x => new List<IRenderable>() { x.Annos.PAnno, x.Annos.TAnno }))
 					.Union(textsWithColors.ConvertAll(x => (IRenderable)x.Anno))
-					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno))
-					.Union(bcdCellNodes.SelectMany(x => x.Annos));
+					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno)).ToList();
+
+			foreach (var (_, nodeAnnos) in bcdCellNodes)
+				annos.AddRange(nodeAnnos);
 
 			if (Enabled)
 				foreach (var anno in annos)
@@ -355,10 +359,12 @@ namespace OpenRA.Mods.Common.Traits
 				LineRenderFunc(pos1, pos2, color, endpoints, thickness)));
 		}
 
-		public void RemoveBCDNode(CPos c) => bcdCellNodes.RemoveAll(b => b.Node.NodeCPos == c);
-
 		public void AddOrUpdateBCDNode(BCDCellNode bcdNode)
 		{
+			var oldAnnos = new List<IRenderable>();
+			if (bcdCellNodes[bcdNode.NodeCPos.X, bcdNode.NodeCPos.Y].Annos != null)
+				oldAnnos = bcdCellNodes[bcdNode.NodeCPos.X, bcdNode.NodeCPos.Y].Annos;
+
 			var annos = new List<IRenderable>()
 			{
 				TextRenderFunc(bcdNode.NodePos, bcdNode.Text, bcdNode.TextColor, bcdNode.FontName)
@@ -366,9 +372,16 @@ namespace OpenRA.Mods.Common.Traits
 			annos.AddRange(LineRenderFunc(bcdNode.LineStartPos, bcdNode.LineEndPos,
 				bcdNode.LineColor, bcdNode.LineEnd, bcdNode.LineThickness));
 
-			// Cannot have two nodes with the same CPos
-			RemoveBCDNode(bcdNode.NodeCPos);
-			bcdCellNodes.Add((bcdNode, annos));
+			bcdCellNodes[bcdNode.NodeCPos.X, bcdNode.NodeCPos.Y] = (bcdNode, annos);
+
+			if (Enabled)
+			{
+				foreach (var anno in annos)
+					anno.AddOrUpdateScreenMap();
+
+				foreach (var anno in oldAnnos)
+					anno.Dispose();
+			}
 		}
 
 		public void RemoveLineWithColor(List<WPos> line) { linesWithColorsAndThickness.RemoveAll(lwc => lwc.Item1 == line); }
