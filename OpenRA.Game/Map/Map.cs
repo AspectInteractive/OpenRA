@@ -1119,6 +1119,10 @@ namespace OpenRA
 		public List<WPos> BottomEdgeOfCell(CPos cell) { return new List<WPos>() { BottomLeftOfCell(cell), BottomRightOfCell(cell) }; }
 		public List<WPos> LeftEdgeOfCell(CPos cell) { return new List<WPos>() { TopLeftOfCell(cell), BottomLeftOfCell(cell) }; }
 		public List<WPos> RightEdgeOfCell(CPos cell) { return new List<WPos>() { TopRightOfCell(cell), BottomRightOfCell(cell) }; }
+		public List<CCPos> TopCCsOfCell(CPos cell) { return new List<CCPos>() { TopLeftCCPos(cell), TopRightCCPos(cell) }; }
+		public List<CCPos> BottomCCsOfCell(CPos cell) { return new List<CCPos>() { BottomLeftCCPos(cell), BottomRightCCPos(cell) }; }
+		public List<CCPos> LeftCCsOfCell(CPos cell) { return new List<CCPos>() { TopLeftCCPos(cell), BottomLeftCCPos(cell) }; }
+		public List<CCPos> RightCCsOfCell(CPos cell) { return new List<CCPos>() { TopRightCCPos(cell), BottomRightCCPos(cell) }; }
 
 		public static bool CellEdgeIntersectsWithLine(CellEdge cellEdge, WPos b0, WPos b1)
 		{
