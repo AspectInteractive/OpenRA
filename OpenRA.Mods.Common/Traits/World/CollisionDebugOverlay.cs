@@ -138,7 +138,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (Comms.Any(comm => comm.Name == name))
 			{
-				//Enabled ^= true;
+				Enabled ^= true;
 				ToggleVisibility("");
 			}
 
