@@ -1,16 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.ConstrainedExecution;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Activities;
-using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.HitShapes;
 using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Traits;
 using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
-
 
 #pragma warning disable SA1108 // Block statements should not contain embedded comments
 
@@ -22,9 +19,6 @@ namespace OpenRA.Mods.Common.Traits
 	public class ThetaPathfinderExecutionManagerInfo : TraitInfo<ThetaPathfinderExecutionManager> { }
 	public class ThetaPathfinderExecutionManager : ITick, IResolveGroupedOrder, IWorldLoaded
 	{
-		RVO.Circle rvoCircle;
-		RVO.Blocks rvoBlocks;
-		RVO.Roadmap rvoRoadmap;
 
 		public class ThetaCircle
 		{
@@ -65,6 +59,7 @@ namespace OpenRA.Mods.Common.Traits
 				SliceIndex = sliceIndex;
 			}
 		}
+
 		public struct PlayerCircleGroupIndex
 		{
 			public Player PlayerOwner;
@@ -90,6 +85,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// The number of expansions allowed across all Theta pathfinders
+		World world;
 		Locomotor locomotor;
 		readonly int maxCurrExpansions = 500;
 		readonly int radiusForSharedThetas = 1024 * 10;
@@ -103,8 +99,10 @@ namespace OpenRA.Mods.Common.Traits
 		public bool PlayerCirclesLocked = false;
 
 		enum ThetaPFAction { Add, Remove }
+
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
+			world = w;
 			locomotor = w.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 		}
 
@@ -113,7 +111,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public int GetOppositeSlice(int slice) { return (int)(((Fix64)slice + (Fix64)maxCircleSlices / (Fix64)2) % (Fix64)maxCircleSlices); }
 
-		// Checks from the center of the circle outward to the end of the slice to see if any cell blocks it
+		// Checks from the center of the circle outward to the end of the slice to see if any cellNode blocks it
 		public bool SliceIsBlockedByCell(Actor self, WPos circleCenter, int sliceIndex)
 		{
 			var sliceAbsoluteAngle = (int)(sliceAngle * (sliceIndex - 0.5)); // We subtract 0.5 as we want the middle of the slice
@@ -282,8 +280,8 @@ namespace OpenRA.Mods.Common.Traits
 							// var sliceLine = GetSliceLine(circle.CircleCenter, circle.CircleRadius, sliceAngle, sliceIndex);
 							// MoveOffGrid.RenderLineWithColor(blockTestActor, sliceLine.ElementAt(0), sliceLine.ElementAt(1),
 							//							 	Color.DarkGreen);
-							// If the slice is blocked by a cell in either direction, then we create a separate group of actors for this ThetaPF, since
-							// they are not going to be able to path through the cell.
+							// If the slice is blocked by a cellNode in either direction, then we create a separate group of actors for this ThetaPF, since
+							// they are not going to be able to path through the cellNode.
 							if (SliceIsBlockedByCell(blockTestActor, circle.CircleCenter, sliceIndex) ||
 								SliceIsBlockedByCell(blockTestActor, circle.CircleCenter, GetOppositeSlice(sliceIndex)) ||
 								sliceIndex == 360 / sliceAngle - 1)
@@ -369,41 +367,6 @@ namespace OpenRA.Mods.Common.Traits
 
 		void Tick(World world)
 		{
-			var collDebugOverlay = world.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
-
-			var rvoObject = rvoBlocks;
-
-			// Call RVO Tick
-			if (collDebugOverlay.Enabled && rvoObject == null)
-			{
-				RVO.Simulator.Instance.Clear();
-				//rvoObject = new RVO.Circle();
-				//rvoCircle = rvoObject;
-				rvoObject = new RVO.Blocks();
-				rvoBlocks = rvoObject;
-			}
-			else if (collDebugOverlay.Enabled)
-			{
-				collDebugOverlay.ClearCircles();
-				collDebugOverlay.ClearLines();
-
-				var agentPositions = rvoObject.getAgentPositions();
-				var agentSpawnLocation = new WPos(world.Map.MapSize.X * 1024 / 2, world.Map.MapSize.Y * 1024 / 2, 0);
-
-				var obstacleLines = RVO.Simulator.Instance.getObstacles().Select(o => (o.point_, o.next_.point_));
-				foreach (var ol in obstacleLines)
-					collDebugOverlay.AddLine(new WPos((int)ol.Item1.x(), (int)ol.Item1.y(), 0) + (WVec)agentSpawnLocation,
-											 new WPos((int)ol.Item2.x(), (int)ol.Item2.y(), 0) + (WVec)agentSpawnLocation, 3);
-
-				foreach (var agentPos in agentPositions)
-				{
-					var agentPosSpawn = new WPos((int)agentPos.x(), (int)agentPos.y(), 0) + (WVec)agentSpawnLocation;
-					MoveOffGrid.RenderCircleColorCollDebug(world.WorldActor, agentPosSpawn, new WDist(300), Color.Purple, 3);
-				}
-
-				rvoObject.Tick();
-			}
-
 			// We only add or remove Theta PFs during tick cycle to ensure integrity is maintained
 			foreach (var (thetaPF, action) in thetaPFActions)
 				if (action == ThetaPFAction.Remove)

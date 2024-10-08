@@ -134,7 +134,7 @@ namespace OpenRA.Mods.Common.Traits
 							(cost.Destination.X + nodeCell.X) / 2,
 							(cost.Destination.Y + nodeCell.Y) / 2);
 						var centerPos = self.World.Map.CenterOfSubCell(centerCell, SubCell.FullCell);
-						yield return new TextAnnotationRenderable(font, centerPos, 0, lineColor, cost.Cost.ToString(NumberFormatInfo.CurrentInfo));
+						yield return new TextAnnotationRenderable(wr.World, font, centerPos, 0, lineColor, cost.Cost.ToString(NumberFormatInfo.CurrentInfo));
 					}
 				}
 
@@ -147,7 +147,7 @@ namespace OpenRA.Mods.Common.Traits
 
 					// Show the abstract cell and its domain index.
 					var nodePos = self.World.Map.CenterOfSubCell(nodeCell, SubCell.FullCell);
-					yield return new TextAnnotationRenderable(
+					yield return new TextAnnotationRenderable(wr.World,
 						font, nodePos, 0, info.AbstractNodeColor, $"{domainForCell.Value}: {nodeCell}");
 				}
 			}

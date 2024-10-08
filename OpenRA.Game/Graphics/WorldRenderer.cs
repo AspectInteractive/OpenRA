@@ -11,9 +11,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Numerics;
 using OpenRA.Effects;
 using OpenRA.Primitives;
+using OpenRA.Server;
 using OpenRA.Traits;
 
 namespace OpenRA.Graphics
@@ -208,14 +211,24 @@ namespace OpenRA.Graphics
 		// PERF: Avoid LINQ.
 		void GenerateAnnotationRenderables()
 		{
+			var alreadyRenderedAnnotations = new HashSet<IRenderable>();
+
 			World.ApplyToActorsWithTrait<IRenderAnnotations>((actor, trait) =>
 			{
 				if (!actor.IsInWorld || actor.Disposed || (trait.SpatiallyPartitionable && !onScreenActors.Contains(actor)))
 					return;
 
 				foreach (var renderAnnotation in trait.RenderAnnotations(actor, this))
+				{
 					preparedAnnotationRenderables.Add(renderAnnotation.PrepareRender(this));
+					alreadyRenderedAnnotations.Add(renderAnnotation);
+				}
 			});
+
+			// Add Renderable Annotations, but ensure all renderables already rendered through IRenderAnnotations are excluded
+			var screenMapAnnotations = World.ScreenMap.RenderableAnnotationsInBox(Viewport.TopLeft, Viewport.BottomRight);
+			foreach (var renderable in screenMapAnnotations.Except(alreadyRenderedAnnotations))
+			preparedAnnotationRenderables.Add(renderable.PrepareRender(this));
 
 			foreach (var a in World.Selection.Actors)
 			{

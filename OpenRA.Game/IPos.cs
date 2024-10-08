@@ -1,0 +1,6 @@
+﻿namespace OpenRA
+{
+	interface IPos
+	{
+	}
+}

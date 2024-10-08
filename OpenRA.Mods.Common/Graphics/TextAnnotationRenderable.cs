@@ -12,19 +12,22 @@
 using OpenRA.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Widgets;
+using System.Security.Cryptography;
 
 namespace OpenRA.Mods.Common.Graphics
 {
 	public class TextAnnotationRenderable : IRenderable, IFinalizedRenderable
 	{
+		World world;
 		readonly SpriteFont font;
 		readonly Color color;
 		readonly Color bgDark;
 		readonly Color bgLight;
 		readonly string text;
 
-		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, Color bgDark, Color bgLight, string text)
+		public TextAnnotationRenderable(World world, SpriteFont font, WPos pos, int zOffset, Color color, Color bgDark, Color bgLight, string text)
 		{
+			this.world = world;
 			this.font = font;
 			Pos = pos;
 			ZOffset = zOffset;
@@ -34,8 +37,16 @@ namespace OpenRA.Mods.Common.Graphics
 			this.text = text;
 		}
 
-		public TextAnnotationRenderable(SpriteFont font, WPos pos, int zOffset, Color color, string text)
-			: this(font, pos, zOffset, color,
+		public void AddOrUpdateScreenMap()
+		{
+			var size = font.Measure(text);
+			world.ScreenMap.AddOrUpdate(this, Pos, new Size(size.X, size.Y));
+		}
+
+		public void RemoveFromScreenMap() => world.ScreenMap.Remove(this);
+
+		public TextAnnotationRenderable(World world, SpriteFont font, WPos pos, int zOffset, Color color, string text)
+			: this(world, font, pos, zOffset, color,
 				ChromeMetrics.Get<Color>("TextContrastColorDark"),
 				ChromeMetrics.Get<Color>("TextContrastColorLight"),
 				text)
@@ -45,15 +56,18 @@ namespace OpenRA.Mods.Common.Graphics
 		public int ZOffset { get; }
 		public bool IsDecoration => true;
 
-		public IRenderable WithZOffset(int newOffset) { return new TextAnnotationRenderable(font, Pos, ZOffset, color, text); }
-		public IRenderable OffsetBy(in WVec vec) { return new TextAnnotationRenderable(font, Pos + vec, ZOffset, color, text); }
+		public IRenderable WithZOffset(int newOffset) { return new TextAnnotationRenderable(world, font, Pos, ZOffset, color, text); }
+		public IRenderable OffsetBy(in WVec vec) { return new TextAnnotationRenderable(world, font, Pos + vec, ZOffset, color, text); }
 		public IRenderable AsDecoration() { return this; }
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }
 		public void Render(WorldRenderer wr)
 		{
-			var screenPos = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos)) - 0.5f * font.Measure(text).ToFloat2();
-			font.DrawTextWithContrast(text, screenPos, color, bgDark, bgLight, 1);
+			var size = font.Measure(text).ToFloat2();
+			var viewPos = wr.Viewport.WorldToViewPx(wr.ScreenPosition(Pos));
+			var textViewTL = viewPos - 0.5f * size;
+
+			font.DrawTextWithContrast(text, textViewTL, color, bgDark, bgLight, 1);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)
@@ -64,5 +78,6 @@ namespace OpenRA.Mods.Common.Graphics
 		}
 
 		public Rectangle ScreenBounds(WorldRenderer wr) { return Rectangle.Empty; }
+		public void Dispose() => RemoveFromScreenMap();
 	}
 }

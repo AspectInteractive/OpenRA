@@ -161,8 +161,8 @@ namespace OpenRA.Mods.Common.Traits
 			var targetPosColor = IsTraitDisabled ? Color.Gainsboro : Color.Lime;
 			foreach (var p in TargetablePositions(self))
 			{
-				yield return new LineAnnotationRenderable(p - targetPosHLine, p + targetPosHLine, 1, targetPosColor);
-				yield return new LineAnnotationRenderable(p - targetPosVLine, p + targetPosVLine, 1, targetPosColor);
+				yield return new LineAnnotationRenderable(self.World, p - targetPosHLine, p + targetPosHLine, 1, targetPosColor);
+				yield return new LineAnnotationRenderable(self.World, p - targetPosVLine, p + targetPosVLine, 1, targetPosColor);
 			}
 		}
 

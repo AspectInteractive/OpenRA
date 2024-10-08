@@ -151,5 +151,15 @@ namespace OpenRA.Mods.Common.Graphics
 			if (length < trail.Length)
 				length++;
 		}
+
+		public void Dispose()
+		{
+			throw new System.NotImplementedException();
+		}
+
+		public void AddOrUpdateScreenMap()
+		{
+			throw new System.NotImplementedException();
+		}
 	}
 }

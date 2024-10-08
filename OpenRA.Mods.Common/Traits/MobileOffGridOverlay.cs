@@ -227,7 +227,7 @@ namespace OpenRA.Mods.Common.Traits
 			return RenderAnnotations(self, wr);
 		}
 
-		static List<LineAnnotationRenderableWithZIndex> RenderArrowhead(WPos start, WVec directionAndLength, Color color,
+		static List<LineAnnotationRenderableWithZIndex> RenderArrowhead(World world, WPos start, WVec directionAndLength, Color color,
 			int thickness = DefaultArrowThickness, int sharpnessDegrees = DefaultSharpnessDegrees)
 		{
 			var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
@@ -235,9 +235,9 @@ namespace OpenRA.Mods.Common.Traits
 			var endOfLeftSide = start + directionAndLength.Rotate(WRot.FromYaw(WAngle.FromDegrees(sharpnessDegrees + 180)));
 			var endOfRightSide = start + directionAndLength.Rotate(WRot.FromYaw(WAngle.FromDegrees(-sharpnessDegrees + 180)));
 
-			linesToRender.Add(new(start, end, thickness, color));
-			linesToRender.Add(new(start, endOfLeftSide, thickness, color));
-			linesToRender.Add(new(start, endOfRightSide, thickness, color));
+			linesToRender.Add(new(world, start, end, thickness, color));
+			linesToRender.Add(new(world, start, endOfLeftSide, thickness, color));
+			linesToRender.Add(new(world, start, endOfRightSide, thickness, color));
 
 			return linesToRender;
 		}
@@ -250,16 +250,16 @@ namespace OpenRA.Mods.Common.Traits
 			var lineColor = Color.Red;
 
 			CircleAnnotationRenderable PointRenderFunc(WPos p, int radius, Color color, int thickness = DefaultThickness) =>
-				new(p, new WDist(radius), thickness, color, true);
+				new(world, p, new WDist(radius), thickness, color, true);
 
-			static CircleAnnotationRenderable CircleRenderFunc(WPos center, WDist radius, Color color, int thickness = DefaultThickness) =>
-				new(center, radius, thickness, color, false);
+			CircleAnnotationRenderable CircleRenderFunc(WPos center, WDist radius, Color color, int thickness = DefaultThickness) =>
+				new(world, center, radius, thickness, color, false);
 
 			TextAnnotationRenderable TextRenderFunc(WPos p, string text, Color color, string fontname)
 			{
 				fontname ??= DefaultFontName;
 				var font = Game.Renderer.Fonts[fontname];
-				return new(font, p, 0, color, text);
+				return new(wr.World, font, p, 0, color, text);
 			}
 
 			List<LineAnnotationRenderableWithZIndex> LineRenderFunc(WPos start, WPos end, Color color,
@@ -268,17 +268,17 @@ namespace OpenRA.Mods.Common.Traits
 				var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
 
 				if (endPoints == LineEndPoint.None)
-					linesToRender.Add(new(start, end, thickness, color, color, (0, 0, color)));
+					linesToRender.Add(new(world, start, end, thickness, color, color, (0, 0, color)));
 				else if (endPoints == LineEndPoint.Circle)
-					linesToRender.Add(new(start, end, thickness, color, color, (EndPointRadius, EndPointThickness, color)));
+					linesToRender.Add(new(world, start, end, thickness, color, color, (EndPointRadius, EndPointThickness, color)));
 				else if (endPoints == LineEndPoint.StartArrow || endPoints == LineEndPoint.EndArrow || endPoints == LineEndPoint.BothArrows)
 				{
 					var arrowVec = new WVec(defaultArrowLength, WRot.FromYaw((end - start).Yaw));
-					linesToRender.Add(new(start, end, thickness, color, color, (0, 0, color)));
+					linesToRender.Add(new(world, start, end, thickness, color, color, (0, 0, color)));
 					if (endPoints == LineEndPoint.StartArrow || endPoints == LineEndPoint.BothArrows)
-						linesToRender = linesToRender.Union(RenderArrowhead(start, -arrowVec, color)).ToList();
+						linesToRender = linesToRender.Union(RenderArrowhead(world, start, -arrowVec, color)).ToList();
 					if (endPoints == LineEndPoint.EndArrow || endPoints == LineEndPoint.BothArrows)
-						linesToRender = linesToRender.Union(RenderArrowhead(end, arrowVec, color)).ToList();
+						linesToRender = linesToRender.Union(RenderArrowhead(world, end, arrowVec, color)).ToList();
 				}
 
 				return linesToRender;

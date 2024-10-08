@@ -232,7 +232,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				var centerPos = self.World.Map.CenterOfSubCell(destination, SubCell.FullCell) +
 					CustomLayerOffset(destination) + textOffset;
-				yield return new TextAnnotationRenderable(font, centerPos, 0,
+				yield return new TextAnnotationRenderable(self.World, font, centerPos, 0,
 					destination.Layer == 0 ? color : customColor,
 					$"{costSoFar}|{estimatedRemainingCost}|{costSoFar + estimatedRemainingCost}");
 			}

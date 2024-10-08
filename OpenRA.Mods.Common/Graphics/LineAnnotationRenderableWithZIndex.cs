@@ -18,6 +18,7 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class LineAnnotationRenderableWithZIndex : IRenderable, IFinalizedRenderable
 	{
+		readonly World world;
 		readonly WPos start;
 		readonly WPos end;
 		readonly float width;
@@ -26,9 +27,10 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly (int, int, Color) endPointCircleProps;
 		List<CircleAnnotationRenderable> endPointCircles = new List<CircleAnnotationRenderable>();
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color startColor, Color endColor,
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color startColor, Color endColor,
 										(int, int, Color) endPointCircleProps)
 		{
+			this.world = world;
 			this.start = start;
 			this.end = end;
 			this.width = width;
@@ -37,11 +39,12 @@ namespace OpenRA.Mods.Common.Graphics
 			this.endPointCircleProps = endPointCircleProps;
 			CircleAnnotationRenderable MakeCircleAnno(WPos pos)
 			{
-				return new CircleAnnotationRenderable(pos,
+				return new CircleAnnotationRenderable(world, pos,
 					new WDist(endPointCircleProps.Item1),
 					endPointCircleProps.Item2,
 					endPointCircleProps.Item3, true);
 			}
+
 			if (endPointCircleProps.Item1 != -1)
 			{
 				endPointCircles.Add(MakeCircleAnno(start));
@@ -49,23 +52,27 @@ namespace OpenRA.Mods.Common.Graphics
 			}
 		}
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps)
-			: this(start, end, width, color, color, endPointCircleProps) { }
+		public void AddOrUpdateScreenMap() => world.ScreenMap.AddOrUpdate(this, start, end, (int)width);
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color color)
-			: this(start, end, width, color, (-1, -1, Color.Black)) { }
+		public void RemoveFromScreenMap() => world.ScreenMap.Remove(this);
 
-		public LineAnnotationRenderableWithZIndex(WPos start, WPos end, float width, Color startColor, Color endColor)
-			: this(start, end, width, startColor, endColor, (-1, -1, Color.Black)) { }
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color color, (int, int, Color) endPointCircleProps)
+			: this(world, start, end, width, color, color, endPointCircleProps) { }
+
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color color)
+			: this(world, start, end, width, color, (-1, -1, Color.Black)) { }
+
+		public LineAnnotationRenderableWithZIndex(World world, WPos start, WPos end, float width, Color startColor, Color endColor)
+			: this(world, start, end, width, startColor, endColor, (-1, -1, Color.Black)) { }
 
 		public WPos Pos => start;
 		public int ZOffset => 0;
 		public bool IsDecoration => true;
 
 		public IRenderable WithZOffset(int newOffset)
-		{ return new LineAnnotationRenderableWithZIndex(start, end, width, startColor, endColor, endPointCircleProps); }
+		{ return new LineAnnotationRenderableWithZIndex(world, start, end, width, startColor, endColor, endPointCircleProps); }
 		public IRenderable OffsetBy(in WVec vec)
-		{ return new LineAnnotationRenderableWithZIndex(start + vec, end + vec, width, startColor, endColor, endPointCircleProps); }
+		{ return new LineAnnotationRenderableWithZIndex(world, start + vec, end + vec, width, startColor, endColor, endPointCircleProps); }
 
 		public IRenderable AsDecoration() { return this; }
 
@@ -82,5 +89,6 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }
 		public Rectangle ScreenBounds(WorldRenderer wr) { return Rectangle.Empty; }
+		public void Dispose() => RemoveFromScreenMap();
 	}
 }

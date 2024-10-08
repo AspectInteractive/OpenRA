@@ -61,12 +61,12 @@ namespace OpenRA.Mods.Common.Traits.Render
 				yield break;
 
 			var color = self.OwnerColor();
-			yield return new TextAnnotationRenderable(font, self.CenterPosition - offset, 0, color, tagString);
+			yield return new TextAnnotationRenderable(wr.World, font, self.CenterPosition - offset, 0, color, tagString);
 
 			// Get the actor's activity.
 			var activity = self.CurrentActivity;
 			if (activity != null)
-				yield return new TextAnnotationRenderable(font, self.CenterPosition, 0, color, activity.DebugLabelComponents().JoinWith("."));
+				yield return new TextAnnotationRenderable(wr.World, font, self.CenterPosition, 0, color, activity.DebugLabelComponents().JoinWith("."));
 
 			// Get the AI squad that this actor belongs to.
 			if (!self.Owner.IsBot)
@@ -78,7 +78,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 				yield break;
 
 			var aiSquadInfo = $"{squad.Type}, {squad.TargetActor}";
-			yield return new TextAnnotationRenderable(font, self.CenterPosition + offset, 0, color, aiSquadInfo);
+			yield return new TextAnnotationRenderable(wr.World, font, self.CenterPosition + offset, 0, color, aiSquadInfo);
 		}
 
 		bool IRenderAnnotationsWhenSelected.SpatiallyPartitionable => true;

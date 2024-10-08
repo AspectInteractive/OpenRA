@@ -25,6 +25,8 @@ namespace OpenRA.Graphics
 		IRenderable AsDecoration();
 
 		IFinalizedRenderable PrepareRender(WorldRenderer wr);
+		void AddOrUpdateScreenMap();
+		void Dispose();
 	}
 
 	public interface IPalettedRenderable : IRenderable

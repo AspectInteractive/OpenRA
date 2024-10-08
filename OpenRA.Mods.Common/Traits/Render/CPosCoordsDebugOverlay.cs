@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Commands;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Primitives;
@@ -29,9 +30,12 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new CPosCoordsDebugOverlay(init.Self, this); }
 	}
 
-	class CPosCoordsDebugOverlay : IWorldLoaded, IChatCommand, IRenderAnnotations
+	class CPosCoordsDebugOverlay : IWorldLoaded, IChatCommand, ITick
 	{
+		World world;
+		WorldRenderer wr;
 		public readonly List<Command> Comms;
+		readonly Dictionary<CPos, IRenderable> annotations = new();
 
 		public bool Enabled;
 
@@ -42,13 +46,16 @@ namespace OpenRA.Mods.Common.Traits
 			font = Game.Renderer.Fonts[info.Font];
 			Comms = new List<Command>()
 			{
-				new Command("cpos-coords", "toggles the cpos coordinates debug overlay.", true),
-				new Command("thetall", "toggles all anya pathfinder overlays.", false)
+				new("cpos-coords", "toggles the cpos coordinates debug overlay.", true),
+				new("thetall", "toggles all anya pathfinder overlays.", false),
+				new("colldebug", "toggles collision debug overlay.", false)
 			};
 		}
 
 		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
+			world = w;
+			this.wr = wr;
 			var console = w.WorldActor.TraitOrDefault<ChatCommands>();
 			var help = w.WorldActor.TraitOrDefault<HelpCommand>();
 
@@ -65,37 +72,53 @@ namespace OpenRA.Mods.Common.Traits
 
 		void IChatCommand.InvokeCommand(string name, string arg)
 		{
-			if (Comms.Where(comm => comm.Name == name).Any())
+			if (Comms.Any(comm => comm.Name == name))
 				Enabled ^= true;
-		}
 
-		IEnumerable<IRenderable> IRenderAnnotations.RenderAnnotations(Actor self, WorldRenderer wr)
-		{
-			if (!Enabled)
-				yield break;
-
-			foreach (var uv in wr.Viewport.VisibleCellsInsideBounds.CandidateMapCoords)
+			if (Enabled)
+				GenerateAnnotations(wr);
+			else
 			{
-				if (self.World.ShroudObscures(uv))
-					continue;
-
-				var cell = uv.ToCPos(wr.World.Map);
-				var center = wr.World.Map.CenterOfCell(cell);
-				var color = Color.White;
-				var locomotorActor = wr.World.ActorsHavingTrait<MobileOffGrid>().FirstOrDefault();
-				Locomotor locomotor = null;
-				if (locomotorActor != null)
-					locomotor = locomotorActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault().Locomotor;
-				string cellText;
-				//if (locomotor != null)
-				//	cellText = $"({locomotor.MovementCostToEnterCell(locomotorActor, cell, BlockedByActor.All, null, false, SubCell.FullCell)})";
-				//else
-				cellText = $"({cell.X},{cell.Y})";
-
-				yield return new TextAnnotationRenderable(font, center, 0, color, cellText);
+				foreach (var anno in annotations.Values)
+					anno.Dispose();
+				annotations.Clear();
 			}
 		}
 
-		bool IRenderAnnotations.SpatiallyPartitionable => false;
+		public void Tick(Actor self)
+		{
+			if (!Enabled)
+				return;
+
+			foreach (var uv in wr.Viewport.VisibleCellsInsideBounds.CandidateMapCoords)
+			{
+				var cell = uv.ToCPos(wr.World.Map);
+				if (!world.ShroudObscures(uv))
+					annotations[cell].AddOrUpdateScreenMap();
+				else
+					annotations[cell].Dispose();
+			}
+		}
+
+		void GenerateAnnotations(WorldRenderer wr)
+		{
+			foreach (var cell in wr.World.Map.AllCells)
+			{
+				var textPos = wr.World.Map.CenterOfCell(cell) - new WVec(0, 512, 0);
+				var color = Color.White;
+				string cellText;
+
+				//var locomotorActor = wr.World.ActorsHavingTrait<MobileOffGrid>().FirstOrDefault();
+				//Locomotor locomotor = null;
+				//if (locomotorActor != null)
+				//	locomotor = locomotorActor.TraitsImplementing<MobileOffGrid>().FirstOrDefault().Locomotor;
+				//if (locomotor != null)
+				//	cellText = $"({locomotor.MovementCostToEnterCell(locomotorActor, cell, BlockedByActor.All, null, false, SubCell.FullCell)})";
+				//else
+
+				cellText = $"({cell.X},{cell.Y})";
+				annotations[cell] = new TextAnnotationRenderable(wr.World, font, textPos, 0, color, cellText);
+			}
+		}
 	}
 }

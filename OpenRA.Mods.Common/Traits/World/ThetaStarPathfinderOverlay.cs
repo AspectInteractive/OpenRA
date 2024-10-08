@@ -129,11 +129,11 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public static List<LineAnnotationRenderableWithZIndex> GetPathRenderableSet(List<WPos> path, int lineThickness, Color lineColor, int endPointRadius,
-																	int endPointThickness, Color endPointColor)
+		public static List<LineAnnotationRenderableWithZIndex> GetPathRenderableSet(World w, List<WPos> path,
+			int lineThickness, Color lineColor, int endPointRadius, int endPointThickness, Color endPointColor)
 		{
 			var linesToRender = new List<LineAnnotationRenderableWithZIndex>();
-			void FuncOnLinkedPoints(WPos wpos1, WPos wpos2) => linesToRender.Add(new LineAnnotationRenderableWithZIndex(wpos1, wpos2,
+			void FuncOnLinkedPoints(WPos wpos1, WPos wpos2) => linesToRender.Add(new LineAnnotationRenderableWithZIndex(w, wpos1, wpos2,
 																			lineThickness, lineColor, lineColor,
 																			(endPointRadius, endPointThickness, endPointColor)));
 			GenericLinkedPointsFunc(path, path.Count, FuncOnLinkedPoints);
@@ -154,8 +154,8 @@ namespace OpenRA.Mods.Common.Traits
 			var font = Game.Renderer.Fonts[fontName];
 			Color lineColor;
 
-			CircleAnnotationRenderable PointRenderFunc(WPos p, Color color)	=> new(p, new WDist(pointRadius), pointThickness, color, true);
-			CircleAnnotationRenderable CircleRenderFunc((WPos, WDist) c, Color color) => new(c.Item1, c.Item2, pointThickness, color, false);
+			CircleAnnotationRenderable PointRenderFunc(WPos p, Color color)	=> new(world, p, new WDist(pointRadius), pointThickness, color, true);
+			CircleAnnotationRenderable CircleRenderFunc((WPos, WDist) c, Color color) => new(world, c.Item1, c.Item2, pointThickness, color, false);
 
 			// Render States
 			if (NoFiltering || enabledOverlays.Contains(OverlayKeyStrings.HeatMap))
@@ -164,7 +164,7 @@ namespace OpenRA.Mods.Common.Traits
 				{
 					yield return PointRenderFunc(wr.World.Map.WPosFromCCPos(ccState.CC), color);
 					if (showCosts)
-						yield return new TextAnnotationRenderable(font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
+						yield return new TextAnnotationRenderable(wr.World, font, wr.World.Map.WPosFromCCPos(ccState.CC), 0,
 																color, $"({ccState.Gval})");
 				}
 			}
@@ -183,7 +183,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				foreach (var (path, color) in paths)
 				{
-					var linesToRender = GetPathRenderableSet(path, lineThickness, color ?? lineColor, endPointRadius, endPointThickness, lineColor);
+					var linesToRender = GetPathRenderableSet(world, path, lineThickness, color ?? lineColor, endPointRadius, endPointThickness, lineColor);
 					foreach (var line in linesToRender)
 						yield return line;
 				}
@@ -193,7 +193,7 @@ namespace OpenRA.Mods.Common.Traits
 			lineColor = Color.FromAhsv(lineHue, currSat, currLight);
 			foreach (var (line, _) in lines.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 			{
-				var linesToRender = GetPathRenderableSet(line, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
+				var linesToRender = GetPathRenderableSet(world, line, lineThickness, lineColor, endPointRadius, endPointThickness, lineColor);
 				foreach (var l in linesToRender)
 					yield return l;
 			}
@@ -201,7 +201,7 @@ namespace OpenRA.Mods.Common.Traits
 			// Render LinesWithColours
 			foreach (var (line, color, _) in linesWithColors.Where(o => NoFiltering || enabledOverlays.Contains(o.Key)))
 			{
-				var linesToRender = GetPathRenderableSet(line, lineThickness, color, endPointRadius, endPointThickness, color);
+				var linesToRender = GetPathRenderableSet(world, line, lineThickness, color, endPointRadius, endPointThickness, color);
 				foreach (var l in linesToRender)
 					yield return l;
 			}

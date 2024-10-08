@@ -973,6 +973,9 @@ namespace OpenRA
 			};
 		}
 
+		public bool CPosInMap(CPos cell)
+			=> cell.X >= 0 && cell.X < MapSize.X && cell.Y >= 0 && cell.Y < MapSize.Y;
+
 		public CPos? CellTopLeftOfCCPos(CCPos ccPos)
 		{
 			return ccPos.X != 0 && ccPos.Y != 0 ? new CPos(ccPos.X - 1, ccPos.Y - 1, ccPos.Layer) : (CPos?)null;
@@ -1035,9 +1038,9 @@ namespace OpenRA
 					return new CPos(ccPos.X, ccPos.Y - 1, ccPos.Layer); // since ccPos is at the bottom edge we take the cell directly before it
 			else // since ccPos is at the right edge we take the cell at X-1
 				if (ccPos.Y <= MapSize.Y - 1)
-					return new CPos(ccPos.X - 1, ccPos.Y, ccPos.Layer);
-				else
-					return new CPos(ccPos.X - 1, ccPos.Y - 1, ccPos.Layer); // since ccPos is at the bottom right corner we take the cell at X-1,Y-1
+				return new CPos(ccPos.X - 1, ccPos.Y, ccPos.Layer);
+			else
+				return new CPos(ccPos.X - 1, ccPos.Y - 1, ccPos.Layer); // since ccPos is at the bottom right corner we take the cell at X-1,Y-1
 		}
 
 		public WPos WPosFromCCPos(CCPos ccPos)
@@ -1116,63 +1119,107 @@ namespace OpenRA
 		public List<WPos> BottomEdgeOfCell(CPos cell) { return new List<WPos>() { BottomLeftOfCell(cell), BottomRightOfCell(cell) }; }
 		public List<WPos> LeftEdgeOfCell(CPos cell) { return new List<WPos>() { TopLeftOfCell(cell), BottomLeftOfCell(cell) }; }
 		public List<WPos> RightEdgeOfCell(CPos cell) { return new List<WPos>() { TopRightOfCell(cell), BottomRightOfCell(cell) }; }
+		public List<CCPos> TopCCsOfCell(CPos cell) { return new List<CCPos>() { TopLeftCCPos(cell), TopRightCCPos(cell) }; }
+		public List<CCPos> BottomCCsOfCell(CPos cell) { return new List<CCPos>() { BottomLeftCCPos(cell), BottomRightCCPos(cell) }; }
+		public List<CCPos> LeftCCsOfCell(CPos cell) { return new List<CCPos>() { TopLeftCCPos(cell), BottomLeftCCPos(cell) }; }
+		public List<CCPos> RightCCsOfCell(CPos cell) { return new List<CCPos>() { TopRightCCPos(cell), BottomRightCCPos(cell) }; }
 
-		public static bool CellEdgeIntersectsWithLine(List<WPos> cellEdge, WPos b0, WPos b1)
+		public static bool CellEdgeIntersectsWithLine(CellEdge cellEdge, WPos b0, WPos b1)
 		{
-			var a0 = cellEdge[0];
-			var a1 = cellEdge[1];
+			var a0 = cellEdge.Edge[0];
+			var a1 = cellEdge.Edge[1];
 			return WPos.DoTwoLinesIntersect(a0, a1, b0, b1);
 		}
 
-		public static WPos? CellEdgeIntersectionWithLine(List<WPos> cellEdge, WPos b0, WPos b1)
+		public static WPos? CellEdgeIntersectionWithLine(CellEdge cellEdge, WPos b0, WPos b1)
 		{
-			var a0 = cellEdge[0];
-			var a1 = cellEdge[1];
+			var a0 = cellEdge.Edge[0];
+			var a1 = cellEdge.Edge[1];
 			return WPos.FindIntersection(a0, a1, b0, b1);
 		}
 
 		public bool AnyCellEdgeIntersectsWithLine(CPos cell, WPos b0, WPos b1)
 		{
-			var cellEdges = new List<List<WPos>>()
-			{
-				TopEdgeOfCell(cell),
-				BottomEdgeOfCell(cell),
-				LeftEdgeOfCell(cell),
-				RightEdgeOfCell(cell),
-			};
-			foreach (var edge in cellEdges)
+			var cellEdgeSet = new CellEdgeSet(this, cell);
+
+			foreach (var edge in cellEdgeSet.CellEdges.Values)
 				if (CellEdgeIntersectsWithLine(edge, b0, b1))
 					return true; // at least one edge has intersected			
 			return false; // none of the cell's edges intersects with the line
 		}
 
-		public enum CellEdgeName { Top, Bottom, Left, Right }
+		public enum CellEdgeName { Top, Bottom, Left, Right, Undefined }
 
 		public struct CellEdge
 		{
 			public List<WPos> Edge;
 			public CellEdgeName EdgeName;
 
-			public CellEdge(List<WPos> edge, CellEdgeName edgeName)
+			public CellEdge(List<WPos> edge, CellEdgeName edgeName = CellEdgeName.Undefined)
 			{
 				Edge = edge;
 				EdgeName = edgeName;
 			}
 		}
 
+		public class CellEdgeSet
+		{
+			public CPos Cell;
+			public Dictionary<CellEdgeName, CellEdge> CellEdges;
+
+			public CellEdgeSet(Map map, CPos cell)
+			{
+				Cell = cell;
+				CellEdges = new Dictionary<CellEdgeName, CellEdge>();
+
+				AddCellEdges(new List<CellEdge>()
+				{
+					new(map.TopEdgeOfCell(cell), CellEdgeName.Top),
+					new(map.BottomEdgeOfCell(cell), CellEdgeName.Bottom),
+					new(map.LeftEdgeOfCell(cell), CellEdgeName.Left),
+					new(map.RightEdgeOfCell(cell), CellEdgeName.Right),
+				});
+			}
+
+			public CellEdgeSet(CPos cell, Dictionary<CellEdgeName, CellEdge> cellEdges)
+			{
+				Cell = cell;
+				CellEdges = cellEdges;
+			}
+
+			public void AddCellEdge(CellEdge cellEdge)
+				=> CellEdges[cellEdge.EdgeName] = cellEdge;
+
+			public void AddCellEdges(List<CellEdge> cellEdges)
+			{
+				foreach (var cellEdge in cellEdges)
+					CellEdges[cellEdge.EdgeName] = cellEdge;
+			}
+
+			public static CellEdgeSet FromCell(Map map, CPos cell)
+			{
+				var ces = new CellEdgeSet(map, cell);
+				return ces;
+			}
+
+			public static CellEdgeSet FromCellEdges(CPos cell, List<CellEdge> cellEdges)
+			{
+				var ces = new CellEdgeSet(cell, new Dictionary<CellEdgeName, CellEdge>());
+				ces.AddCellEdges(cellEdges);
+				return ces;
+			}
+
+			public List<List<WPos>> GetAllEdgesAsPosList()
+				=> CellEdges.Values.Select(ce => ce.Edge).ToList();
+		}
+
 		public List<CellEdge> CellEdgesThatIntersectWithLine(CPos cell, WPos b0, WPos b1)
 		{
 			var intersectingEdges = new List<CellEdge>();
-			var cellEdges = new List<CellEdge>()
-			{
-				new(TopEdgeOfCell(cell), CellEdgeName.Top),
-				new(BottomEdgeOfCell(cell), CellEdgeName.Bottom),
-				new(LeftEdgeOfCell(cell), CellEdgeName.Left),
-				new(RightEdgeOfCell(cell), CellEdgeName.Right),
-			};
+			var cellEdgeSet = new CellEdgeSet(this, cell);
 
-			foreach (var cellEdge in cellEdges)
-				if (CellEdgeIntersectsWithLine(cellEdge.Edge, b0, b1))
+			foreach (var cellEdge in cellEdgeSet.CellEdges.Values)
+				if (CellEdgeIntersectsWithLine(cellEdge, b0, b1))
 					intersectingEdges.Add(cellEdge);
 
 			return intersectingEdges; // none of the cell's edges intersects with the line
@@ -1181,17 +1228,11 @@ namespace OpenRA
 		public List<WPos> CellEdgeIntersectionsWithLine(CPos cell, WPos b0, WPos b1)
 		{
 			var intersectingPoints = new List<WPos>();
-			var cellEdges = new List<List<WPos>>()
-			{
-				TopEdgeOfCell(cell),
-				BottomEdgeOfCell(cell),
-				LeftEdgeOfCell(cell),
-				RightEdgeOfCell(cell),
-			};
+			var cellEdgeSet = new CellEdgeSet(this, cell);
 
-			foreach (var edge in cellEdges)
+			foreach (var cellEdge in cellEdgeSet.CellEdges.Values)
 			{
-				var intersection = CellEdgeIntersectionWithLine(edge, b0, b1);
+				var intersection = CellEdgeIntersectionWithLine(cellEdge, b0, b1);
 				if (intersection != null)
 					intersectingPoints.Add((WPos)intersection); // at least one edge has intersected
 			}

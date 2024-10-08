@@ -143,7 +143,7 @@ namespace OpenRA.Mods.Common.HitShapes
 
 			yield return new PolygonAnnotationRenderable(vertsTop, actorPos, 1, shapeColor);
 			yield return new PolygonAnnotationRenderable(vertsBottom, actorPos, 1, shapeColor);
-			yield return new CircleAnnotationRenderable(actorPos, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
+			yield return new CircleAnnotationRenderable(wr.World, actorPos, OuterRadius, 1, hs.IsTraitDisabled ? Color.Gray : Color.LimeGreen);
 		}
 
 		public bool LineIntersectsOrIsInside(WPos selfCenter, WPos p1, WPos p2)

@@ -94,7 +94,6 @@ namespace RVO
 				}
 			}
 		}
-		
 
 		void setupObstacles()
 		{
