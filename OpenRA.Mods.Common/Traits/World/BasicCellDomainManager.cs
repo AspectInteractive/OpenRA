@@ -1,13 +1,11 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using OpenRA.Graphics;
+﻿using OpenRA.Graphics;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
 
 namespace OpenRA.Mods.Common.Traits
@@ -414,15 +412,36 @@ namespace OpenRA.Mods.Common.Traits
 					UpdateCellNode(cn);
 				});
 
+		public static void ClearChildren(ref LinkedListNode<CPos> node)
+		{
+			foreach (var child in node.Children)
+				child.Parent = null;
+			node.Children.Clear();
+		}
+
+		public static void ClearParent(ref LinkedListNode<CPos> node)
+		{
+			var nodeVal = node.Value;
+			node.Parent.Children.RemoveAll(c => c.Value == nodeVal);
+			node.Parent = null;
+		}
+
+		public static void ReplaceParent(ref LinkedListNode<CPos> node, ref LinkedListNode<CPos> parent)
+		{
+			node.Parent = parent;
+			parent.Children.Add(node);
+		}
+
 		// NOTE: AddEdges cannot be done the way I have done it, because removing edges before the cells have been generated is flawed.
 		public HashSet<CPos> RemoveParent(World world, Locomotor locomotor, LinkedListNode<CPos> parent, ref int currBcdId,
 			ref LinkedListNode<CPos>[][] allCellNodes, ref List<LinkedListNode<CPos>> heads, ObjectRemoved objectRemoved,
 			BlockedByActor check = BlockedByActor.Immovable)
 		{
+			using var pt = new PerfTimer("RemoveParent2");
+
 			// Only used for RenderDomain
 			var visited = new HashSet<CPos>() { parent.Value };
 
-			using var pt = new PerfTimer("RemoveParent2");
 			var headToUse = parent.Head;
 
 			// We do not need to update children without a head, as they are already a head
@@ -430,14 +449,14 @@ namespace OpenRA.Mods.Common.Traits
 
 			// If the cell's Head is null then it is the head and must assign a new head
 			// Additionally, assign any children that are adjacent to the new head
-			if (parent.Head == null)
-			{
-				headToUse = GetNewHeadAndUpdateChildren(parent, ref allCellNodes);
-				// Do not update parent of recently parented children
-				childrenToReparent = childrenToReparent.Where(c => !headToUse.Children.Select(c => c.Value).Contains(c.Value)).ToList();
-				foreach (var c in childrenToReparent.ConvertAll(c => c.Value))
-					visited.Add(c);
-			}
+			//if (parent.Head == null)
+			//{
+			//	headToUse = GetNewHeadAndUpdateChildren(parent, ref allCellNodes);
+			//	// Do not update parent of recently parented children
+			//	childrenToReparent = childrenToReparent.Where(c => !headToUse.Children.Select(c => c.Value).Contains(c.Value)).ToList();
+			//	foreach (var c in childrenToReparent.ConvertAll(c => c.Value))
+			//		visited.Add(c);
+			//}
 
 			var allCellNodesCopy = allCellNodes;
 			var parentIsBlocked = CellIsBlocked(parent.Value);
@@ -446,11 +465,17 @@ namespace OpenRA.Mods.Common.Traits
 			// of another cell
 			bool MatchingParentsNewBlockedStatus(CPos c) => allCellNodesCopy[c.X][c.Y].IsBlocked == parentIsBlocked;
 			bool ValidParentAndValidBlockedStatus(CPos candidate, CPos parent)
-				=> ValidParent(parent, candidate) && MatchingParentsNewBlockedStatus(candidate) &&
-				!allCellNodesCopy[candidate.X][candidate.Y].Children.Contains(allCellNodesCopy[parent.X][parent.Y]) &&
-				allCellNodesCopy[candidate.X][candidate.Y].Parent != allCellNodesCopy[parent.X][parent.Y] &&
-				!allCellNodesCopy[parent.X][parent.Y].Children.Contains(allCellNodesCopy[candidate.X][candidate.Y]) &&
-				allCellNodesCopy[parent.X][parent.Y].Parent != allCellNodesCopy[candidate.X][candidate.Y];
+			{
+				var validParent = ValidParent(parent, candidate) && MatchingParentsNewBlockedStatus(candidate);
+				var notAlreadyAChild = !allCellNodesCopy[candidate.X][candidate.Y].Children.Contains(allCellNodesCopy[parent.X][parent.Y]);
+				var notParentOfCandidate = allCellNodesCopy[candidate.X][candidate.Y].Parent != allCellNodesCopy[parent.X][parent.Y];
+				var notChildOfParent = !allCellNodesCopy[parent.X][parent.Y].Children.Contains(allCellNodesCopy[candidate.X][candidate.Y]);
+				var notAlreadyParent = allCellNodesCopy[parent.X][parent.Y].Parent != allCellNodesCopy[candidate.X][candidate.Y];
+
+				if (validParent && notAlreadyAChild && notParentOfCandidate && notChildOfParent && notAlreadyParent)
+					return true;
+				return false;
+			}
 
 			// The removed parent node needs to latch onto a neighbouring node with matching blocked status
 			var oldParentValidNeighbours = CellNeighbours(world.Map, parent.Value, ValidParentAndValidBlockedStatus);
@@ -458,20 +483,18 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var oldParentFirstNeighbour = oldParentValidNeighbours[0];
 				var oldParentFirstNeighbourNode = allCellNodes[oldParentFirstNeighbour.X][oldParentFirstNeighbour.Y];
-				parent.Parent = oldParentFirstNeighbourNode;
-				//parent.Head = oldParentFirstNeighbourNode.GetHead();
-				oldParentFirstNeighbourNode.Children.Add(parent);
+				ReplaceParent(ref parent, ref oldParentFirstNeighbourNode);
 				visited.Add(oldParentFirstNeighbourNode.Value);
 			}
 			else
 			{
 				// Create new head if no valid neighbour exists
-				parent.Parent = null;
+				ClearParent(ref parent);
 				//parent.Head = null;
 				parent.Blocked = CellIsBlocked(parent.Value);
 				parent.OwnID = currBcdId;
 				currBcdId++;
-				parent.Children.Clear();
+				ClearChildren(ref parent);
 				AddHeadRemoveExisting(parent, ref heads);
 			}
 
