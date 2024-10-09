@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -312,33 +313,46 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class CellEdges
 	{
-		public List<List<WPos>> AllCellEdges = new();
-		public List<List<WPos>> ConnectedCellEdges => GenerateConnectedCellEdges(AllCellEdges);
+		public BitArray AllCellEdges;
+		public int CCPosCols;
+
+		public CellEdges(World world) => InitializeAllCellEdges(world);
+		bool Get(int row, int col) => AllCellEdges[row * CCPosCols + col];
+		bool Set(int row, int col, bool val) => AllCellEdges[row * CCPosCols + col] = val;
+
+		public void InitializeAllCellEdges(World world)
+		{
+			CCPosCols = world.Map.MapSize.X + 1;
+			AllCellEdges = new BitArray(CCPosCols * (world.Map.MapSize.Y + 1));
+		}
 
 		// NOTE: This requires all cells to be loaded, if any cell is loaded afterwards this becomes invalid
 		public void LoadEdges(Map map, ref BasicCellDomain[,] allCellBCDs, List<LinkedListNode<CPos>> cellNodes, bool clearFirst = true)
 		{
 			if (clearFirst)
-				AllCellEdges.Clear();
+				InitializeAllCellEdges(world);
 
 			foreach (var cell in cellNodes)
 				AddEdgeIfNoNeighbourExists(map, allCellBCDs, cell.Value);
 		}
 
-		public void AddEdge(List<WPos> edge)
+		public void AddEdge(List<CCPos> edge)
 		{
-			// Do not add an edge if it already exists
-			if (!AllCellEdges.Any(e => (e[0] == edge[0] && e[1] == edge[1]) ||
-									(e[0] == edge[1] && e[1] == edge[0])))
-				AllCellEdges.Add(edge);
+			foreach (var ccPos in edge)
+				Set(ccPos.X, ccPos.Y, true);
 		}
 
 		// Removes a cellNode edge from the list of edges. The order of positions does not matter
-		public void RemoveEdge(List<WPos> edge) => RemoveEdge(edge[0], edge[1]);
-		public void RemoveEdge(WPos p1, WPos p2)
+		public void RemoveEdge(List<CCPos> edge)
 		{
-			AllCellEdges.RemoveAll(e => (e[0] == p1 && e[1] == p2) ||
-									 (e[0] == p2 && e[1] == p1));
+			foreach (var ccPos in edge)
+				Set(ccPos.X, ccPos.Y, false);
+		}
+
+		public void RemoveEdge(CCPos p1, CCPos p2)
+		{
+			Set(p1.X, p1.Y, false);
+			Set(p2.X, p2.Y, false);
 		}
 
 		public void AddEdgeIfNeighbourExists(Map map, CPos cell, ref BasicCellDomain[,] allCellBCDs)
@@ -398,14 +412,64 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void AddCellEdges(Map map, LinkedListNode<CPos> cellNode, ref BasicCellDomain[,] allCellBCDs)
 		{
-			foreach (var edge in Map.CellEdgeSet.FromCell(map, cellNode.Value).GetAllEdgesAsPosList())
-				AddEdge(edge);
+			AddEdge(map.TopCCsOfCell(cellNode.Value));
+			AddEdge(map.BottomCCsOfCell(cellNode.Value));
+			AddEdge(map.LeftCCsOfCell(cellNode.Value));
+			AddEdge(map.RightCCsOfCell(cellNode.Value));
 
 			RemoveEdgeIfNeighbourExists(map, cellNode.Value, ref allCellBCDs);
 		}
 
 		public void RemoveCellEdges(Map map, LinkedListNode<CPos> cellNode, ref BasicCellDomain[,] allCellBCDs)
 			=> AddEdgeIfNeighbourExists(map, cellNode.Value, ref allCellBCDs);
+
+		public static List<List<CCPos>> GenerateConnectedCellEdges(List<List<CCPos>> cellEdges)
+		{
+			List<List<CCPos>> newEdges = new();
+			Dictionary<CCPos, List<List<CCPos>>> edgesByStart = new();
+			HashSet<List<CCPos>> traversedEdges = new();
+
+			foreach (var edge in cellEdges)
+			{
+				if (edgesByStart.ContainsKey(edge[0]))
+					edgesByStart[edge[0]].Add(edge);
+				else
+					edgesByStart[edge[0]] = new List<List<CCPos>> { edge.ToList() };
+			}
+
+			for (var i = 0; i < cellEdges.Count; i++)
+			{
+				var edge = cellEdges[i].ToList();
+
+				if (traversedEdges.Any(e => e[0] == edge[0] && e[1] == edge[1]))
+					continue;
+
+				traversedEdges.Add(new List<CCPos>(edge));
+				while (edgesByStart.ContainsKey(edge[1]) && // if a second edge starts where this edge ends
+					   edgesByStart[edge[1]].Any(e => e[1].X == edge[0].X || // and the second edge ends in the same X
+													  e[1].Y == edge[0].Y)) // or ends in the same Y, then it's a continous line
+				{
+					var matchingEdges = edgesByStart[edge[1]]
+						.Where(e => e[1].X == edge[0].X ||
+									e[1].Y == edge[0].Y).ToList();
+
+					if (matchingEdges.Count > 1)
+						throw new DataMisalignedException($"Cannot have more than one matching edge: {string.Join(',', matchingEdges)}");
+
+					traversedEdges.Add(new List<CCPos>(matchingEdges[0]));
+					edge[1] = matchingEdges[0][1]; // make the original edge's end point equal to the second edge's end point
+				}
+
+				// Before adding the new edge, remove any existing edges that are overlapping and smaller than the currently found edge
+				newEdges.RemoveAll(e => (e[0].X >= edge[0].X && e[1].X <= edge[1].X &&                      // X's of edge are fully contained
+										 e[0].Y == edge[0].Y && e[1].Y == edge[1].Y && e[0].Y == e[1].Y) || // and all points are on the same Y plane
+										(e[0].Y >= edge[0].Y && e[1].Y <= edge[1].Y &&                      // Y's of edge are fully contained
+										 e[0].X == edge[0].X && e[1].X == edge[1].X && e[0].X == e[1].X));  // and all points are on the same  plane
+				newEdges.Add(edge);
+			}
+
+			return newEdges;
+		}
 
 		public static List<List<WPos>> GenerateConnectedCellEdges(List<List<WPos>> cellEdges)
 		{
@@ -480,12 +544,12 @@ namespace OpenRA.Mods.Common.Traits
 			world = w;
 			locomotor = w.WorldActor.TraitsImplementing<Locomotor>().FirstEnabledTraitOrDefault();
 			collDebugOverlay = world.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
-			Init();
+			Init(w);
 		}
 
-		public void Init()
+		public void Init(World world)
 		{
-			cellEdges = new CellEdges();
+			cellEdges = new CellEdges(world);
 			PopulateAllCellNodesAndEdges();
 			RenderAllCells();
 		}
