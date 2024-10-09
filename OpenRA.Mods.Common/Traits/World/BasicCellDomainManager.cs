@@ -340,38 +340,19 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		// NOTE: This requires all cells to be loaded, if any cell is loaded afterwards this becomes invalid
-		public void LoadEdges(Map map, ref BasicCellDomain[,] allCellBCDs, List<LinkedListNode<CPos>> cellNodes, bool clearFirst = true)
+		public void LoadEdges(World world, ref BasicCellDomain[,] allCellBCDs, List<LinkedListNode<CPos>> cellNodes, bool clearFirst = true)
 		{
 			if (clearFirst)
 				InitializeAllCellEdges(world);
 
 			foreach (var cell in cellNodes)
-				AddEdgeIfNoNeighbourExists(map, allCellBCDs, cell.Value);
+				AddEdgeIfNoNeighbourExists(world.Map, allCellBCDs, cell.Value);
 		}
 
 		public void AddEdge(CPos cell, int edge) => Add(cell.X, cell.Y, edge);
 
 		// Removes a cellNode edge from the list of edges. The order of positions does not matter
 		public void RemoveEdge(CPos cell, int edge) => Remove(cell.X, cell.Y, edge);
-
-		public void AddEdgeIfNeighbourExists(Map map, CPos cell, ref BasicCellDomain[,] allCellBCDs)
-		{
-			var l = new CPos(cell.X - 1, cell.Y);
-			var r = new CPos(cell.X + 1, cell.Y);
-			var t = new CPos(cell.X, cell.Y - 1);
-			var b = new CPos(cell.X, cell.Y + 1);
-
-			var cellID = allCellBCDs[cell.X, cell.Y].ID;
-
-			if (map.Contains(l) && allCellBCDs[l.X, l.Y] != null && allCellBCDs[l.X, l.Y].ID == cellID)
-				AddEdge(map.LeftEdgeOfCell(cell));
-			if (map.Contains(r) && allCellBCDs[r.X, r.Y] != null && allCellBCDs[r.X, r.Y].ID == cellID)
-				AddEdge(map.RightEdgeOfCell(cell));
-			if (map.Contains(t) && allCellBCDs[t.X, t.Y] != null && allCellBCDs[t.X, t.Y].ID == cellID)
-				AddEdge(map.TopEdgeOfCell(cell));
-			if (map.Contains(b) && allCellBCDs[b.X, b.Y] != null && allCellBCDs[b.X, b.Y].ID == cellID)
-				AddEdge(map.BottomEdgeOfCell(cell));
-		}
 
 		public void AddEdgeIfNoNeighbourExists(Map map, BasicCellDomain[,] allCellBCDs, CPos cell)
 		{
@@ -381,20 +362,12 @@ namespace OpenRA.Mods.Common.Traits
 			var r = cell + new CVec(1, 0);
 
 			if (map.Contains(t) && allCellBCDs[t.X, t.Y] != null && allCellBCDs[t.X, t.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
-				AddEdge(map.TopEdgeOfCell(cell));
-			if (map.Contains(b) && allCellBCDs[b.X, b.Y] != null && allCellBCDs[b.X, b.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
-				AddEdge(map.BottomEdgeOfCell(cell));
-			if (map.Contains(l) && allCellBCDs[l.X, l.Y] != null && allCellBCDs[l.X, l.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
-				AddEdge(map.LeftEdgeOfCell(cell));
-			if (map.Contains(r) && allCellBCDs[r.X, r.Y] != null && allCellBCDs[r.X, r.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
-				AddEdge(map.RightEdgeOfCell(cell));
-			if (map.Contains(t) && allCellNodes[t.X][t.Y] != null && allCellNodes[t.X][t.Y].ID != allCellNodes[cell.X][cell.Y].ID)
 				AddEdge(cell, te);
-			if (map.Contains(b) && allCellNodes[b.X][b.Y] != null && allCellNodes[b.X][b.Y].ID != allCellNodes[cell.X][cell.Y].ID)
+			if (map.Contains(b) && allCellBCDs[b.X, b.Y] != null && allCellBCDs[b.X, b.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
 				AddEdge(cell, be);
-			if (map.Contains(l) && allCellNodes[l.X][l.Y] != null && allCellNodes[l.X][l.Y].ID != allCellNodes[cell.X][cell.Y].ID)
+			if (map.Contains(l) && allCellBCDs[l.X, l.Y] != null && allCellBCDs[l.X, l.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
 				AddEdge(cell, le);
-			if (map.Contains(r) && allCellNodes[r.X][r.Y] != null && allCellNodes[r.X][r.Y].ID != allCellNodes[cell.X][cell.Y].ID)
+			if (map.Contains(r) && allCellBCDs[r.X, r.Y] != null && allCellBCDs[r.X, r.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
 				AddEdge(cell, re);
 		}
 
@@ -408,61 +381,50 @@ namespace OpenRA.Mods.Common.Traits
 			var cellID = allCellBCDs[cell.X, cell.Y].ID;
 
 			if (map.Contains(l) && allCellBCDs[l.X, l.Y] != null && allCellBCDs[l.X, l.Y].ID == cellID)
-				RemoveEdge(map.LeftEdgeOfCell(cell));
-			if (map.Contains(r) && allCellBCDs[r.X, r.Y] != null && allCellBCDs[r.X, r.Y].ID == cellID)
-				RemoveEdge(map.RightEdgeOfCell(cell));
-			if (map.Contains(t) && allCellBCDs[t.X, t.Y] != null && allCellBCDs[t.X, t.Y].ID == cellID)
-				RemoveEdge(map.TopEdgeOfCell(cell));
-			if (map.Contains(b) && allCellBCDs[b.X, b.Y] != null && allCellBCDs[b.X, b.Y].ID == cellID)
-				RemoveEdge(map.BottomEdgeOfCell(cell));
-		}
-
-		public void AddCellEdges(Map map, LinkedListNode<CPos> cellNode, ref BasicCellDomain[,] allCellBCDs)
-			if (map.Contains(l) && allCellNodes[l.X][l.Y] != null && allCellNodes[l.X][l.Y].ID == cellID)
 			{
 				RemoveEdge(cell, le);
 				RemoveEdge(l, re);
 			}
 
-			if (map.Contains(r) && allCellNodes[r.X][r.Y] != null && allCellNodes[r.X][r.Y].ID == cellID)
+			if (map.Contains(r) && allCellBCDs[r.X, r.Y] != null && allCellBCDs[r.X, r.Y].ID == cellID)
 			{
 				RemoveEdge(cell, re);
 				RemoveEdge(r, le);
 			}
 
-			if (map.Contains(t) && allCellNodes[t.X][t.Y] != null && allCellNodes[t.X][t.Y].ID == cellID)
+			if (map.Contains(t) && allCellBCDs[t.X, t.Y] != null && allCellBCDs[t.X, t.Y].ID == cellID)
 			{
 				RemoveEdge(cell, te);
 				RemoveEdge(t, be);
 			}
 
-			if (map.Contains(b) && allCellNodes[b.X][b.Y] != null && allCellNodes[b.X][b.Y].ID == cellID)
+			if (map.Contains(b) && allCellBCDs[b.X, b.Y] != null && allCellBCDs[b.X, b.Y].ID == cellID)
 			{
 				RemoveEdge(cell, be);
 				RemoveEdge(b, te);
 			}
 		}
 
-		public void AddEdgeIfNeighbourExists(Map map, CPos cell, ref LinkedListNode<CPos>[][] allCellNodes)
+		public void AddEdgeIfNeighbourExists(Map map, CPos cell, ref BasicCellDomain[,] allCellBCDs)
 		{
 			var l = new CPos(cell.X - 1, cell.Y);
 			var r = new CPos(cell.X + 1, cell.Y);
 			var t = new CPos(cell.X, cell.Y - 1);
 			var b = new CPos(cell.X, cell.Y + 1);
 
-			var cellID = allCellNodes[cell.X][cell.Y].ID;
+			var cellID = allCellBCDs[cell.X, cell.Y].ID;
 
-			if (map.Contains(l) && allCellNodes[l.X][l.Y] != null && allCellNodes[l.X][l.Y].ID == cellID)
+			if (map.Contains(l) && allCellBCDs[l.X, l.Y] != null && allCellBCDs[l.X, l.Y].ID == cellID)
 				AddEdge(cell, le);
-			if (map.Contains(r) && allCellNodes[r.X][r.Y] != null && allCellNodes[r.X][r.Y].ID == cellID)
+			if (map.Contains(r) && allCellBCDs[r.X, r.Y] != null && allCellBCDs[r.X, r.Y].ID == cellID)
 				AddEdge(cell, re);
-			if (map.Contains(t) && allCellNodes[t.X][t.Y] != null && allCellNodes[t.X][t.Y].ID == cellID)
+			if (map.Contains(t) && allCellBCDs[t.X, t.Y] != null && allCellBCDs[t.X, t.Y].ID == cellID)
 				AddEdge(cell, te);
-			if (map.Contains(b) && allCellNodes[b.X][b.Y] != null && allCellNodes[b.X][b.Y].ID == cellID)
+			if (map.Contains(b) && allCellBCDs[b.X, b.Y] != null && allCellBCDs[b.X, b.Y].ID == cellID)
 				AddEdge(cell, be);
 		}
 
-		public void AddCellEdges(Map map, LinkedListNode<CPos> cellNode, ref LinkedListNode<CPos>[][] allCellNodes)
+		public void AddCellEdges(Map map, LinkedListNode<CPos> cellNode, ref BasicCellDomain[,] allCellBCDs)
 		{
 			AddEdge(cellNode.Value, le);
 			AddEdge(cellNode.Value, re);
