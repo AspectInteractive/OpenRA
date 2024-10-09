@@ -313,17 +313,30 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class CellEdges
 	{
-		public BitArray AllCellEdges;
+#pragma warning disable IDE1006 // Naming Styles
+		const int le = 1;
+		const int re = 2;
+		const int te = 4;
+		const int be = 8;
+#pragma warning restore IDE1006 // Naming Styles
+
+		public int[] AllCellEdges;
 		public int CCPosCols;
+		public int CCPosRows;
 
 		public CellEdges(World world) => InitializeAllCellEdges(world);
-		bool Get(int row, int col) => AllCellEdges[row * CCPosCols + col];
-		bool Set(int row, int col, bool val) => AllCellEdges[row * CCPosCols + col] = val;
+
+		// col = x, row = y
+		int Get(int col, int row) => AllCellEdges[row * CCPosCols + col];
+		void Set(int col, int row, int val) => AllCellEdges[row * CCPosCols + col] = val;
+		void Add(int col, int row, int val) => AllCellEdges[row * CCPosCols + col] |= val;
+		void Remove(int col, int row, int val) => AllCellEdges[row * CCPosCols + col] &= ~val;
 
 		public void InitializeAllCellEdges(World world)
 		{
-			CCPosCols = world.Map.MapSize.X + 1;
-			AllCellEdges = new BitArray(CCPosCols * (world.Map.MapSize.Y + 1));
+			CCPosCols = world.Map.MapSize.X;
+			CCPosRows = world.Map.MapSize.Y;
+			AllCellEdges = new int[CCPosCols * CCPosRows];
 		}
 
 		// NOTE: This requires all cells to be loaded, if any cell is loaded afterwards this becomes invalid
@@ -336,24 +349,10 @@ namespace OpenRA.Mods.Common.Traits
 				AddEdgeIfNoNeighbourExists(map, allCellBCDs, cell.Value);
 		}
 
-		public void AddEdge(List<CCPos> edge)
-		{
-			foreach (var ccPos in edge)
-				Set(ccPos.X, ccPos.Y, true);
-		}
+		public void AddEdge(CPos cell, int edge) => Add(cell.X, cell.Y, edge);
 
 		// Removes a cellNode edge from the list of edges. The order of positions does not matter
-		public void RemoveEdge(List<CCPos> edge)
-		{
-			foreach (var ccPos in edge)
-				Set(ccPos.X, ccPos.Y, false);
-		}
-
-		public void RemoveEdge(CCPos p1, CCPos p2)
-		{
-			Set(p1.X, p1.Y, false);
-			Set(p2.X, p2.Y, false);
-		}
+		public void RemoveEdge(CPos cell, int edge) => Remove(cell.X, cell.Y, edge);
 
 		public void AddEdgeIfNeighbourExists(Map map, CPos cell, ref BasicCellDomain[,] allCellBCDs)
 		{
@@ -389,6 +388,14 @@ namespace OpenRA.Mods.Common.Traits
 				AddEdge(map.LeftEdgeOfCell(cell));
 			if (map.Contains(r) && allCellBCDs[r.X, r.Y] != null && allCellBCDs[r.X, r.Y].ID != allCellBCDs[cell.X, cell.Y].ID)
 				AddEdge(map.RightEdgeOfCell(cell));
+			if (map.Contains(t) && allCellNodes[t.X][t.Y] != null && allCellNodes[t.X][t.Y].ID != allCellNodes[cell.X][cell.Y].ID)
+				AddEdge(cell, te);
+			if (map.Contains(b) && allCellNodes[b.X][b.Y] != null && allCellNodes[b.X][b.Y].ID != allCellNodes[cell.X][cell.Y].ID)
+				AddEdge(cell, be);
+			if (map.Contains(l) && allCellNodes[l.X][l.Y] != null && allCellNodes[l.X][l.Y].ID != allCellNodes[cell.X][cell.Y].ID)
+				AddEdge(cell, le);
+			if (map.Contains(r) && allCellNodes[r.X][r.Y] != null && allCellNodes[r.X][r.Y].ID != allCellNodes[cell.X][cell.Y].ID)
+				AddEdge(cell, re);
 		}
 
 		public void RemoveEdgeIfNeighbourExists(Map map, CPos cell, ref BasicCellDomain[,] allCellBCDs)
@@ -411,11 +418,41 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public void AddCellEdges(Map map, LinkedListNode<CPos> cellNode, ref BasicCellDomain[,] allCellBCDs)
+			if (map.Contains(l) && allCellNodes[l.X][l.Y] != null && allCellNodes[l.X][l.Y].ID == cellID)
+				RemoveEdge(cell, le);
+			if (map.Contains(r) && allCellNodes[r.X][r.Y] != null && allCellNodes[r.X][r.Y].ID == cellID)
+				RemoveEdge(cell, re);
+			if (map.Contains(t) && allCellNodes[t.X][t.Y] != null && allCellNodes[t.X][t.Y].ID == cellID)
+				RemoveEdge(cell, te);
+			if (map.Contains(b) && allCellNodes[b.X][b.Y] != null && allCellNodes[b.X][b.Y].ID == cellID)
+				RemoveEdge(cell, be);
+		}
+
+		public void AddEdgeIfNeighbourExists(Map map, CPos cell, ref LinkedListNode<CPos>[][] allCellNodes)
 		{
-			AddEdge(map.TopCCsOfCell(cellNode.Value));
-			AddEdge(map.BottomCCsOfCell(cellNode.Value));
-			AddEdge(map.LeftCCsOfCell(cellNode.Value));
-			AddEdge(map.RightCCsOfCell(cellNode.Value));
+			var l = new CPos(cell.X - 1, cell.Y);
+			var r = new CPos(cell.X + 1, cell.Y);
+			var t = new CPos(cell.X, cell.Y - 1);
+			var b = new CPos(cell.X, cell.Y + 1);
+
+			var cellID = allCellNodes[cell.X][cell.Y].ID;
+
+			if (map.Contains(l) && allCellNodes[l.X][l.Y] != null && allCellNodes[l.X][l.Y].ID == cellID)
+				AddEdge(cell, le);
+			if (map.Contains(r) && allCellNodes[r.X][r.Y] != null && allCellNodes[r.X][r.Y].ID == cellID)
+				AddEdge(cell, re);
+			if (map.Contains(t) && allCellNodes[t.X][t.Y] != null && allCellNodes[t.X][t.Y].ID == cellID)
+				AddEdge(cell, te);
+			if (map.Contains(b) && allCellNodes[b.X][b.Y] != null && allCellNodes[b.X][b.Y].ID == cellID)
+				AddEdge(cell, be);
+		}
+
+		public void AddCellEdges(Map map, LinkedListNode<CPos> cellNode, ref LinkedListNode<CPos>[][] allCellNodes)
+		{
+			AddEdge(cellNode.Value, le);
+			AddEdge(cellNode.Value, re);
+			AddEdge(cellNode.Value, te);
+			AddEdge(cellNode.Value, be);
 
 			RemoveEdgeIfNeighbourExists(map, cellNode.Value, ref allCellBCDs);
 		}
@@ -423,52 +460,57 @@ namespace OpenRA.Mods.Common.Traits
 		public void RemoveCellEdges(Map map, LinkedListNode<CPos> cellNode, ref BasicCellDomain[,] allCellBCDs)
 			=> AddEdgeIfNeighbourExists(map, cellNode.Value, ref allCellBCDs);
 
-		public static List<List<CCPos>> GenerateConnectedCellEdges(List<List<CCPos>> cellEdges)
+		public List<List<CCPos>> GenerateCellEdges()
 		{
-			List<List<CCPos>> newEdges = new();
-			Dictionary<CCPos, List<List<CCPos>>> edgesByStart = new();
-			HashSet<List<CCPos>> traversedEdges = new();
+			var edges = new List<List<CCPos>>();
 
-			foreach (var edge in cellEdges)
+			for (var i = 0; i < CCPosRows * CCPosCols; i++)
 			{
-				if (edgesByStart.ContainsKey(edge[0]))
-					edgesByStart[edge[0]].Add(edge);
-				else
-					edgesByStart[edge[0]] = new List<List<CCPos>> { edge.ToList() };
+				var x = i % CCPosCols;
+				var y = i / CCPosCols;
+				if (Get(x, y))
+					edges.Add(new List<CCPos>() { new(x, y), new(x, y) });
 			}
 
-			for (var i = 0; i < cellEdges.Count; i++)
+			return edges;
+		}
+
+		public List<List<CCPos>> GenerateConnectedCellEdges()
+		{
+			var x = 0;
+			var y = 0;
+
+			var edges = new List<List<CCPos>>();
+
+			// We subtract 1 from
+			while (y < CCPosRows - 1)
 			{
-				var edge = cellEdges[i].ToList();
-
-				if (traversedEdges.Any(e => e[0] == edge[0] && e[1] == edge[1]))
-					continue;
-
-				traversedEdges.Add(new List<CCPos>(edge));
-				while (edgesByStart.ContainsKey(edge[1]) && // if a second edge starts where this edge ends
-					   edgesByStart[edge[1]].Any(e => e[1].X == edge[0].X || // and the second edge ends in the same X
-													  e[1].Y == edge[0].Y)) // or ends in the same Y, then it's a continous line
+				while (x < CCPosCols - 1)
 				{
-					var matchingEdges = edgesByStart[edge[1]]
-						.Where(e => e[1].X == edge[0].X ||
-									e[1].Y == edge[0].Y).ToList();
+					// If both the current and next point are occupied, then we extend the end point further
+					var endX = x;
+					if (Get(x, y) && endX + 1 < CCPosCols)
+						while (endX + 1 < CCPosCols && Get(endX + 1, y))
+						{
+							endX++;
+						}
 
-					if (matchingEdges.Count > 1)
-						throw new DataMisalignedException($"Cannot have more than one matching edge: {string.Join(',', matchingEdges)}");
-
-					traversedEdges.Add(new List<CCPos>(matchingEdges[0]));
-					edge[1] = matchingEdges[0][1]; // make the original edge's end point equal to the second edge's end point
+					// We have either not started, reached the end of the map, or found an end point in the middle of the map
+					// If an end point was found, we add the edge
+					if (endX != x)
+					{
+						edges.Add(new List<CCPos>() { new(x, y), new(endX, y) });
+						x = endX + 1; // We increment past the endpoint
+					}
+					else
+						x++; // If we have not started, we simply increment x
 				}
 
-				// Before adding the new edge, remove any existing edges that are overlapping and smaller than the currently found edge
-				newEdges.RemoveAll(e => (e[0].X >= edge[0].X && e[1].X <= edge[1].X &&                      // X's of edge are fully contained
-										 e[0].Y == edge[0].Y && e[1].Y == edge[1].Y && e[0].Y == e[1].Y) || // and all points are on the same Y plane
-										(e[0].Y >= edge[0].Y && e[1].Y <= edge[1].Y &&                      // Y's of edge are fully contained
-										 e[0].X == edge[0].X && e[1].X == edge[1].X && e[0].X == e[1].X));  // and all points are on the same  plane
-				newEdges.Add(edge);
+				y++;
+				x = 0;
 			}
 
-			return newEdges;
+			return edges;
 		}
 
 		public static List<List<WPos>> GenerateConnectedCellEdges(List<List<WPos>> cellEdges)
@@ -685,11 +727,13 @@ namespace OpenRA.Mods.Common.Traits
 				collDebugOverlay.AddOrUpdateBCDNode(new BCDCellNode(world, cellBCD.ID, cellNode, cellBCD.DomainIsBlocked));
 			}
 
-			var edgesToUse = cellEdges.ConnectedCellEdges.ToList();
+			var edgesToUse = cellEdges.GenerateConnectedCellEdges().ToList();
+			//var edgesToUse = cellEdges.GenerateCellEdges().ToList();
 			//var lineColour = Color.RandomColor();
 			var lineColour = Color.LightBlue;
 			foreach (var edge in edgesToUse)
-				MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor, edge[0], edge[1], lineColour, 3, LineEndPoint.Circle);
+				MoveOffGrid.RenderLineWithColorCollDebug(world.WorldActor,
+					world.Map.WPosFromCCPos(edge[0]), world.Map.WPosFromCCPos(edge[1]), lineColour, 3, LineEndPoint.Circle);
 		}
 
 		public struct ObjectRemoved
