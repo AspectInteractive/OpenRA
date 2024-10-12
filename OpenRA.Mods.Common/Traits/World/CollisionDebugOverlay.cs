@@ -36,8 +36,6 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly struct BCDCellNode
 		{
 			public readonly int ID;
-			public readonly CPos ParentCPos;
-			public readonly WPos ParentPos;
 			public readonly CPos NodeCPos;
 			public readonly WPos NodePos;
 			public readonly Color LineColor;
@@ -46,12 +44,10 @@ namespace OpenRA.Mods.Common.Traits
 			public readonly LineEndPoint LineEnd;
 			public readonly string FontName;
 
-			public BCDCellNode(World world, int id, LinkedListNode<CPos> node, bool blocked,
+			public BCDCellNode(World world, int id, DomainNode<CPos> node, bool blocked,
 				int lineThickness = 3, string fontName = "MediumBold", LineEndPoint lineEndPoint = LineEndPoint.EndArrow)
 			{
 				ID = id;
-				ParentCPos = node.Parent != null ? node.Parent.Value : CPos.Zero;
-				ParentPos = node.Parent != null ? ParentPos = world.Map.CenterOfCell(node.Parent.Value) : WPos.Zero;
 				NodeCPos = node.Value;
 				NodePos = world.Map.CenterOfCell(node.Value);
 				LineColor = blocked ? Color.Red : Color.Green;
@@ -61,9 +57,7 @@ namespace OpenRA.Mods.Common.Traits
 				LineEnd = lineEndPoint;
 			}
 
-			public readonly WPos LineEndPos
-				=> ParentCPos != CPos.Zero ? NodePos + (ParentPos - NodePos) / 10 * 8 : NodePos;
-
+			public readonly WPos LineEndPos => NodePos;
 			public readonly WPos LineStartPos => NodePos;
 			public readonly string Text => $"ID:{ID}";
 		}
@@ -71,6 +65,7 @@ namespace OpenRA.Mods.Common.Traits
 		World world;
 		public readonly List<Command> Comms;
 		(BCDCellNode Node, List<IRenderable> Annos)[,] bcdCellNodes;
+		readonly List<(List<WPos>, Color, List<LineAnnotationRenderableWithZIndex> Anno)> cellEdges = new();
 		readonly List<(List<WPos>, Color, int, LineEndPoint EndPoints, List<LineAnnotationRenderableWithZIndex> Anno)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int, CircleAnnotationRenderable Anno)> circlesWithColors = new();
 		readonly List<(WPos, Color, int, CircleAnnotationRenderable Anno)> pointsWithColors = new();
@@ -151,7 +146,8 @@ namespace OpenRA.Mods.Common.Traits
 					.Union(actorPointsWithColors.ConvertAll(x => (IRenderable)x.Anno))
 					.Union(statesWithColors.SelectMany(x => new List<IRenderable>() { x.Annos.PAnno, x.Annos.TAnno }))
 					.Union(textsWithColors.ConvertAll(x => (IRenderable)x.Anno))
-					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno)).ToList();
+					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno))
+					.Union(cellEdges.SelectMany(x => x.Anno).Cast<IRenderable>()).ToList();
 
 			foreach (var (_, nodeAnnos) in bcdCellNodes)
 				annos.AddRange(nodeAnnos);
@@ -359,6 +355,19 @@ namespace OpenRA.Mods.Common.Traits
 				LineRenderFunc(pos1, pos2, color, endpoints, thickness)));
 		}
 
+		public void AddCellEdge(WPos pos1, WPos pos2, Color color)
+		{
+			var anno = LineRenderFunc(pos1, pos2, color, LineEndPoint.Circle, 3);
+			cellEdges.Add((new List<WPos>() { pos1, pos2 }, color, anno));
+
+			if (Enabled)
+				foreach (var a in anno)
+					a.AddOrUpdateScreenMap();
+			else
+				foreach (var a in anno)
+					a.Dispose();
+		}
+
 		public void AddOrUpdateBCDNode(BCDCellNode bcdNode)
 		{
 			var oldAnnos = new List<IRenderable>();
@@ -405,9 +414,23 @@ namespace OpenRA.Mods.Common.Traits
 		public void ClearRadiuses() { circlesWithColors.Clear(); }
 		public void ClearTexts() { textsWithColors.Clear(); }
 		public void ClearActorTexts() { actorTextsWithColors.Clear(); }
+		public void ClearCellEdges()
+		{
+			foreach (var anno in cellEdges.SelectMany(x => x.Anno).Cast<IRenderable>())
+				anno.Dispose();
+			cellEdges.Clear();
+		}
+
+		public void ClearBCDCellNodes()
+		{
+			foreach (var (_, annos) in bcdCellNodes)
+				annos.Clear();
+		}
 
 		public void ClearAll()
 		{
+			ClearBCDCellNodes();
+			ClearCellEdges();
 			ClearIntervals();
 			ClearPaths();
 			ClearLines();
