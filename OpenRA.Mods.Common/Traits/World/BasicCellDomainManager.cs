@@ -301,14 +301,16 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (world.Map.Contains(cell))
 			{
+				const BlockedByActor Check = BlockedByActor.None;
 				var cellBCD = AllCellBCDs[cell.X, cell.Y];
-				var newBlockedStatus = MobileOffGrid.CellIsBlocked(world, locomotor, cell, BlockedByActor.Immovable);
+				var newBlockedStatus = MobileOffGrid.CellIsBlocked(world, locomotor, cell, Check);
 
 				// Only remove parent if blocked status is changing
 				if (cellBCD.DomainIsBlocked != newBlockedStatus)
 				{
 					var cellNode = cellBCD.CellNodesDict[cell];
-					AllCellBCDs[cell.X, cell.Y].RemoveParent(world, locomotor, cellNode, newBlockedStatus, ref currBcdId, ref AllCellBCDs, ref cellEdges);
+					AllCellBCDs[cell.X, cell.Y].RemoveParent(world, locomotor, cellNode, newBlockedStatus,
+						ref currBcdId, ref AllCellBCDs, ref cellEdges, check: Check);
 					var cellsToRender = new List<CPos>() { cell };
 					cellsToRender.AddRange(CellNeighbours(world.Map, cell));
 					RenderCells(cellsToRender);

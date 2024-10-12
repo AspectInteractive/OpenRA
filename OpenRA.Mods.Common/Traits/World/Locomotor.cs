@@ -499,7 +499,7 @@ namespace OpenRA.Mods.Common.Traits
 					var mobile = actor.OccupiesSpace as Mobile;
 					var mobileOffGrid = actor.OccupiesSpace as MobileOffGrid;
 					var mobileIsMovable = mobile != null && !mobile.IsTraitDisabled && !mobile.IsTraitPaused && !mobile.IsImmovable;
-					var mobileOffGridIsMovable = mobileOffGrid != null && !mobileOffGrid.IsTraitDisabled &&	!mobileOffGrid.IsTraitPaused &&
+					var mobileOffGridIsMovable = mobileOffGrid != null && !mobileOffGrid.IsTraitDisabled && !mobileOffGrid.IsTraitPaused &&
 						!mobileOffGrid.IsImmovable;
 					var isMovable = mobileIsMovable || mobileOffGridIsMovable;
 					var isMoving = (mobileIsMovable && mobile.CurrentMovementTypes.HasMovementType(MovementType.Horizontal)) ||

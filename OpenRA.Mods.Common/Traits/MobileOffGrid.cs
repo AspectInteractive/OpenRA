@@ -979,13 +979,22 @@ namespace OpenRA.Mods.Common.Traits
 		public static bool CellIsBlocked(World world, Locomotor locomotor, CPos cell, BlockedByActor check = BlockedByActor.Immovable)
 		{
 			return locomotor.MovementCostToEnterCell(null, cell, check, null, true) == short.MaxValue ||
-				CellBlockedByBuilding(null, cell) || !CPosinMap(world, cell);
+				CellBlockedByBuilding(world, cell) || !CPosinMap(world, cell);
 		}
 
 		public static bool CellBlockedByBuilding(Actor self, CPos cell)
 		{
 			if (self != null)
 				foreach (var otherActor in self.World.ActorMap.GetActorsAt(cell))
+					if (otherActor.OccupiesSpace is Building building && !building.TransitOnlyCells().Contains(cell))
+						return true;
+			return false;
+		}
+
+		public static bool CellBlockedByBuilding(World world, CPos cell)
+		{
+			if (world != null)
+				foreach (var otherActor in world.ActorMap.GetActorsAt(cell))
 					if (otherActor.OccupiesSpace is Building building && !building.TransitOnlyCells().Contains(cell))
 						return true;
 			return false;
