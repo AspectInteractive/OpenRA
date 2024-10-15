@@ -33,6 +33,24 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class CollisionDebugOverlay : IWorldLoaded, IChatCommand
 	{
+		public readonly struct RVONode
+		{
+			public readonly WPos Pos;
+			public readonly WDist Radius;
+			public readonly int ID;
+			public readonly int LineThickness;
+			public readonly Color LineColor;
+
+			public RVONode(WPos pos, WDist radius, int id, int lineThickness = 3)
+			{
+				Pos = pos;
+				Radius = radius;
+				ID = id;
+				LineThickness = lineThickness;
+				LineColor = Color.LightBlue;
+			}
+		}
+
 		public readonly struct BCDCellNode
 		{
 			public readonly int ID;
@@ -65,6 +83,7 @@ namespace OpenRA.Mods.Common.Traits
 		World world;
 		public readonly List<Command> Comms;
 		(BCDCellNode Node, List<IRenderable> Annos)[,] bcdCellNodes;
+		(RVONode Node, List<IRenderable> Annos)[] rvoNodes = Array.Empty<(RVONode Node, List<IRenderable> Annos)>();
 		readonly List<(List<WPos>, Color, List<LineAnnotationRenderableWithZIndex> Anno)> cellEdges = new();
 		readonly List<(List<WPos>, Color, int, LineEndPoint EndPoints, List<LineAnnotationRenderableWithZIndex> Anno)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int, CircleAnnotationRenderable Anno)> circlesWithColors = new();
@@ -150,6 +169,9 @@ namespace OpenRA.Mods.Common.Traits
 					.Union(cellEdges.SelectMany(x => x.Anno).Cast<IRenderable>()).ToList();
 
 			foreach (var (_, nodeAnnos) in bcdCellNodes)
+				annos.AddRange(nodeAnnos);
+
+			foreach (var (_, nodeAnnos) in rvoNodes)
 				annos.AddRange(nodeAnnos);
 
 			if (Enabled)
@@ -393,6 +415,32 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
+		public void AddOrUpdateRVONode(RVONode rvoNode)
+		{
+			var oldAnnos = new List<IRenderable>();
+			if (rvoNodes[rvoNode.ID].Annos != null)
+				oldAnnos = rvoNodes[rvoNode.ID].Annos;
+
+			var annos = new List<IRenderable>()
+			{
+				CircleRenderFunc((rvoNode.Pos, rvoNode.Radius), rvoNode.LineColor, rvoNode.LineThickness)
+			};
+
+			rvoNodes[rvoNode.ID] = (rvoNode, annos);
+
+			if (Enabled)
+			{
+				foreach (var anno in annos)
+					anno.AddOrUpdateScreenMap();
+
+				foreach (var anno in oldAnnos)
+					anno.Dispose();
+			}
+		}
+
+		public void SetAgentAmount(int amount)
+			=> rvoNodes = new (RVONode Node, List<IRenderable> Annos)[amount];
+
 		public void RemoveLineWithColor(List<WPos> line) { linesWithColorsAndThickness.RemoveAll(lwc => lwc.Item1 == line); }
 		public void AddCircle((WPos P, WDist D) circle, int thickness = DefaultThickness)
 		{
@@ -427,9 +475,16 @@ namespace OpenRA.Mods.Common.Traits
 				annos.Clear();
 		}
 
+		public void ClearRVONodes()
+		{
+			foreach (var (_, annos) in rvoNodes)
+				annos.Clear();
+		}
+
 		public void ClearAll()
 		{
 			ClearBCDCellNodes();
+			ClearRVONodes();
 			ClearCellEdges();
 			ClearIntervals();
 			ClearPaths();

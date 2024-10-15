@@ -65,7 +65,7 @@ namespace RVO
 		}
 	}
 
-    internal class Agent
+    public class Agent
     {
         internal IList<KeyValuePair<float, Agent>> agentNeighbors_ = new List<KeyValuePair<float, Agent>>();
         internal IList<KeyValuePair<float, Obstacle>> obstacleNeighbors_ = new List<KeyValuePair<float, Obstacle>>();

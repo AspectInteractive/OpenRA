@@ -45,6 +45,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using static OpenRA.Mods.Common.Traits.MobileOffGridOverlay;
 
 namespace RVO
@@ -53,22 +54,28 @@ namespace RVO
     {
         /* Store the goals of the agents. */
         readonly IList<Vector2> goals;
-        bool firstRun = true;
 		Blocks blocks;
 
         /** Random number generator. */
         readonly Random random;
 
-        public Blocks()
+        public Blocks(bool init = true)
         {
-            goals = new List<Vector2>();
+			if (init)
+			{
+				goals = new List<Vector2>();
 
 #if RVOCS_SEED_RANDOM_NUMBER_GENERATOR
-            random = new Random();
+				random = new Random();
 #else
             random = new Random(0);
 #endif
-        }
+				blocks = new(false);
+
+				/* Set up the scenario. */
+				blocks.setupScenario();
+			}
+		}
 
 		void setupAgents(AgentPreset agentPreset)
 		{
@@ -163,6 +170,9 @@ namespace RVO
 			Simulator.Instance.processObstacles();
         }
 
+		public List<Agent> getAgents() => Simulator.Instance.agents_.ToList();
+		public int getAgentCount() => Simulator.Instance.agents_.Count;
+
 		public IEnumerable<Vector2> getAgentPositions()
 		{
 			if (Simulator.Instance.getNumAgents() == 0)
@@ -189,16 +199,6 @@ namespace RVO
 
         public void Tick()
         {
-			if (firstRun)
-			{
-				blocks = new();
-
-				/* Set up the scenario. */
-				blocks.setupScenario();
-
-				firstRun = false;
-			}
-
 			/* Perform (and manipulate) the simulation. */
 			if (!blocks.reachedGoal())
 			{

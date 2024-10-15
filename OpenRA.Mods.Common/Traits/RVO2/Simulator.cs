@@ -98,7 +98,7 @@ namespace RVO
             }
         }
 
-        internal IList<Agent> agents_;
+        public IList<Agent> agents_;
         internal IList<Obstacle> obstacles_;
         internal KdTree kdTree_;
         internal float timeStep_;
