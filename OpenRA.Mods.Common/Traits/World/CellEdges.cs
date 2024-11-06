@@ -27,7 +27,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public CellEdges(World world, int[] allCellEdges)
-			: this(world) => AllCellEdges = allCellEdges;
+			: this(world) => AllCellEdges = allCellEdges.ToArray();
 
 		public CellEdges(CellEdges cellEdges)
 			: this(cellEdges.world, cellEdges.AllCellEdges) { }
