@@ -156,6 +156,8 @@ namespace OpenRA.Mods.Common.Traits
 				ToggleVisibility("");
 			}
 
+			world.WorldActor.TraitsImplementing<BasicCellDomainManager>().FirstEnabledTraitOrDefault().RenderAllCells();
+
 			var annos
 				= linesWithColorsAndThickness.SelectMany(x => x.Anno).Cast<IRenderable>()
 					.Union(linesWithThickness.SelectMany(x => x.Anno).Cast<IRenderable>())
@@ -169,10 +171,12 @@ namespace OpenRA.Mods.Common.Traits
 					.Union(cellEdges.SelectMany(x => x.Anno).Cast<IRenderable>()).ToList();
 
 			foreach (var (_, nodeAnnos) in bcdCellNodes)
-				annos.AddRange(nodeAnnos);
+				if (nodeAnnos != null)
+					annos.AddRange(nodeAnnos);
 
 			foreach (var (_, nodeAnnos) in rvoNodes)
-				annos.AddRange(nodeAnnos);
+				if (nodeAnnos != null)
+					annos.AddRange(nodeAnnos);
 
 			if (Enabled)
 				foreach (var anno in annos)
