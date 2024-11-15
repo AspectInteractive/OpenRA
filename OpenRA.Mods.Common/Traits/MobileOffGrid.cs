@@ -1845,7 +1845,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public static List<TraitPair<MobileOffGrid>> GetGroupedActorsWithMobileOGs(List<Actor> groupedActors)
 		{
-			return groupedActors.Where(a => !a.IsDead && a.TraitsImplementing<MobileOffGrid>().Any())
+			return groupedActors.Where(a => a != null && !a.IsDead && a.TraitsImplementing<MobileOffGrid>().Any())
 				.Select(a => new TraitPair<MobileOffGrid>(a, a.TraitsImplementing<MobileOffGrid>().FirstOrDefault(Exts.IsTraitEnabled)))
 				.ToList();
 		}

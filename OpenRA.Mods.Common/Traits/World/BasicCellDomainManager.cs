@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Traits;
@@ -9,23 +10,18 @@ using static OpenRA.Mods.Common.Traits.CollisionDebugOverlay;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	using Obstacle = List<List<List<WPos>>>;
+	using Obstacle = List<List<(int, List<WPos>)>>;
 
 	public class BasicCellDomain
 	{
 		public bool DomainIsBlocked;
 		public Dictionary<CPos, DomainNode<CPos>> CellNodesDict = new();
-		public CellEdges CellEdgesMask; // Equivalent to the cell edges of the domain, but is only used as a mask
 		public int CellEdgesCols;
 		public int CellEdgesRows;
 		public DomainNode<CPos> Parent;
 		public int ID;
 
-		public BasicCellDomain(World world, int id)
-		{
-			ID = id;
-			CellEdgesMask = new(world);
-		}
+		public BasicCellDomain(int id) => ID = id;
 
 		public CellEdges CreateCellEdgesMask(World world)
 		{
@@ -96,7 +92,6 @@ namespace OpenRA.Mods.Common.Traits
 				throw new DataMisalignedException($"Parent has retained old domain with ID {oldDomainID} despite cell being removed.");
 
 			allCellBCDs[parent.Value.X, parent.Value.Y] = oldParentNewBCD;
-			oldParentNewBCD.CellEdgesMask.AddCellEdges(world.Map, parent, ref allCellBCDs);
 			cellEdges.AddCellEdges(world.Map, parent, ref allCellBCDs);
 			return modifiedBCDs;
 		}
@@ -142,7 +137,7 @@ namespace OpenRA.Mods.Common.Traits
 			List<DomainNode<CPos>> cellNodeList, BlockedByActor check = BlockedByActor.Immovable)
 		{
 			var map = world.Map;
-			var bcd = new BasicCellDomain(world, currBcdId)
+			var bcd = new BasicCellDomain(currBcdId)
 			{
 				DomainIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, cellNodeList.FirstOrDefault().Value, check)
 			};
@@ -162,7 +157,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var map = world.Map;
 			var cellNode = new DomainNode<CPos>(cell);
-			var bcd = new BasicCellDomain(world, currBcdId)
+			var bcd = new BasicCellDomain(currBcdId)
 			{
 				DomainIsBlocked = MobileOffGrid.CellIsBlocked(world, locomotor, cell, check)
 			};
@@ -178,7 +173,6 @@ namespace OpenRA.Mods.Common.Traits
 			bcd.AddCell(map, cellNode);
 			allCellBCDs[cellNode.Value.X, cellNode.Value.Y] = bcd;
 			cellEdges.AddCellEdges(map, cellNode, ref allCellBCDs);
-			bcd.CellEdgesMask.AddCellEdges(map, cellNode, ref allCellBCDs);
 
 			while (cellsToExpandWithParent.Count > 0)
 			{
@@ -187,7 +181,6 @@ namespace OpenRA.Mods.Common.Traits
 				bcd.AddCell(map, child);
 				allCellBCDs[child.Value.X, child.Value.Y] = bcd;
 				cellEdges.AddCellEdges(map, child, ref allCellBCDs);
-				bcd.CellEdgesMask.AddCellEdges(map, child, ref allCellBCDs);
 
 				// INVARIANT: bcd is independent of the below method that obtains neighbouring cells
 				foreach (var cn in GetCellsWithinDomain(world, locomotor, child, check, visited))
@@ -293,7 +286,11 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var cellNodes = new List<DomainNode<CPos>>();
 			foreach (var c in cells)
+			{
+				foreach (var index in cellEdges.GetAllEdges(c.X, c.Y))
+					collDebugOverlay.RemoveCellEdge(index);
 				cellNodes.Add(AllCellBCDs[c.X, c.Y].CellNodesDict[c]);
+			}
 
 			RenderCells(cellNodes);
 		}
@@ -301,10 +298,13 @@ namespace OpenRA.Mods.Common.Traits
 		public void RenderCells(List<DomainNode<CPos>> cellNodes)
 		{
 			var bcds = new HashSet<BasicCellDomain>();
+
 			foreach (var cellNode in cellNodes)
 			{
 				var cellBCD = AllCellBCDs[cellNode.Value.X, cellNode.Value.Y];
 				bcds.Add(cellBCD);
+				//foreach (var index in cellEdges.GetAllEdges(cellNode.Value.X, cellNode.Value.Y))
+				//	collDebugOverlay.RemoveCellEdge(index);
 				collDebugOverlay.AddOrUpdateBCDNode(new BCDCellNode(world, cellBCD.ID, cellNode, cellBCD.DomainIsBlocked));
 			}
 
@@ -321,32 +321,32 @@ namespace OpenRA.Mods.Common.Traits
 				//if (bcd.ID == 0)
 				{
 					var cellEdgesForObstacle = new CellEdges(cellEdges);
-					obstacles.Add(cellEdgesForObstacle.GenerateObstacleEdgeSets(world.Map, bcd));
+					var cellEdgeMask = bcd.CreateCellEdgesMask(world);
+					obstacles.Add(cellEdgesForObstacle.GenerateObstacleEdgeSets(world.Map, bcd, cellEdgeMask));
 					//cellEdgesForRender.ApplyEdgeMask(bcd, CellEdges.EdgeMaskOp.Or);
 				}
 
 				//Console.WriteLine($"GetNumberOfEdges(): {cellEdgesForRender.GetNumberOfEdges()}");
 			}
 
-			var testNeighbourIndices = cellEdgesForRender.GetNeighbourIndices(cellEdgesForRender.CellRightEdge(89, 70));
-			var testNeighbourEdges = testNeighbourIndices.SelectMany(a => a.Indices)
-										.Select(i => cellEdgesForRender.EdgeToWPosList(i)).ToList();
-
 			//var edgesToUse = cellEdgesForRender.GenerateConnectedCellEdges(world.Map).ToList();
+
+			Console.WriteLine(
+				$"obstacle Count: {obstacles.Count}, " +
+				$"bcds Count: {bcds.Count}, " +
+				$"cellNodes Count: {cellNodes.Count}");
 
 			var edgesToUse = cellEdgesForRender.AllEdgesToWPosList();
 			var lineColour = Color.LightBlue;
-			collDebugOverlay.ClearCellEdges();
+			//collDebugOverlay.ClearCellEdges();
 			//foreach (var edge in edgesToUse)
 			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], lineColour);
-			//foreach (var edge in testNeighbourEdges)
-			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], Color.Yellow);
 			foreach (var obstacle in obstacles)
 			{
 				var colorToUse = Color.RandomColor();
 				foreach (var edgeSet in obstacle)
-					foreach (var edge in edgeSet)
-						collDebugOverlay.AddCellEdge(edge[0], edge[1], colorToUse);
+					foreach (var (index, edge) in edgeSet)
+						collDebugOverlay.AddCellEdge(edge[0], edge[1], index, colorToUse);
 			}
 		}
 
@@ -381,7 +381,7 @@ namespace OpenRA.Mods.Common.Traits
 						ref currBcdId, ref AllCellBCDs, ref cellEdges, check: Check);
 					var cellsToRender = new List<CPos>() { cell };
 					cellsToRender.AddRange(CellNeighbours(world.Map, cell));
-					//RenderCells(cellsToRender);
+					RenderCells(cellsToRender);
 					//RenderAllCells();
 				}
 			}

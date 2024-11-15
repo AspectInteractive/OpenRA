@@ -42,6 +42,17 @@ namespace OpenRA.Mods.Common.Traits
 		public int GetLeftEdge(int x, int y) => AllCellEdges[CellLeftEdge(x, y)];
 		public int GetRightEdge(int x, int y) => AllCellEdges[CellRightEdge(x, y)];
 
+		public List<int> GetAllEdges(int x, int y)
+		{
+			return new()
+			{
+				CellTopEdge(x, y),
+				CellBotEdge(x, y),
+				CellLeftEdge(x, y),
+				CellRightEdge(x, y),
+			};
+		}
+
 		public int GetNumberOfEdges()
 		{
 			var edgesOccupied = 0;
@@ -464,19 +475,19 @@ namespace OpenRA.Mods.Common.Traits
 				return iter.MoveNext() ? iter.Current.Key : -1;
 		}
 
-		public List<List<List<WPos>>> GenerateObstacleEdgeSets(Map map, BasicCellDomain bcd)
+		public List<List<(int Index, List<WPos> Edge)>> GenerateObstacleEdgeSets(Map map, BasicCellDomain bcd, CellEdges cellEdgeMask)
 		{
-			var edgeSet = new List<List<List<WPos>>>();
-			var edges = new List<List<WPos>>();
+			var edgeSet = new List<List<(int, List<WPos>)>>();
+			var edges = new List<(int, List<WPos>)>();
 			var visitedEdgeIndices = new HashSet<int>();
-			ApplyEdgeMask(bcd.CreateCellEdgesMask(world), EdgeMaskOp.And);
+			ApplyEdgeMask(cellEdgeMask, EdgeMaskOp.And);
 			var indexListCopy = IndexList.ToDictionary(x => x.Key, x => x.Value);
 
 			//var cellEdgesWithMask = bcd.CellEdgesMask;
 
 			var currEdgeIndex = GetAnyIndex(indexListCopy);
 			var currEdgeStartPos = EdgeToWPos(currEdgeIndex).TopLeft;
-			edges.Add(EdgeToWPosList(currEdgeIndex));
+			edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 
 			while (indexListCopy.Count > 0)
 			{
@@ -498,8 +509,11 @@ namespace OpenRA.Mods.Common.Traits
 					if (currEdgeIndex == -1)
 						break;
 
+					//if (visitedEdgeIndices.Contains(currEdgeIndex))
+					//	throw new Exception("Cannot add two of the same index!");
+
 					indexListCopy.Remove(currEdgeIndex);
-					edges.Add(EdgeToWPosList(currEdgeIndex));
+					edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 					visitedEdgeIndices.Add(currEdgeIndex);
 					continue;
 				}
@@ -566,18 +580,26 @@ namespace OpenRA.Mods.Common.Traits
 						{
 							currEdgeIndex = testIndex;
 							currEdgeStartPos = currEdgeNeighbours[0].EndPoint;
+
+							//if (visitedEdgeIndices.Contains(currEdgeIndex))
+							//	throw new Exception("Cannot add two of the same index!");
+
 							visitedEdgeIndices.Add(currEdgeIndex);
 							indexListCopy.Remove(currEdgeIndex);
-							edges.Add(EdgeToWPosList(currEdgeIndex));
+							edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 						}
 				}
 				else
 				{
 					currEdgeIndex = currEdgeNeighbours[0].Indices[0];
 					currEdgeStartPos = currEdgeNeighbours[0].EndPoint;
+
+					//if (visitedEdgeIndices.Contains(currEdgeIndex))
+					//	throw new Exception("Cannot add two of the same index!");
+
 					visitedEdgeIndices.Add(currEdgeIndex);
 					indexListCopy.Remove(currEdgeIndex); // We exclude indices so they can no longer be used for a domain
-					edges.Add(EdgeToWPosList(currEdgeIndex));
+					edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 				}
 			}
 
