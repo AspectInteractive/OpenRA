@@ -651,8 +651,9 @@ namespace OpenRA.Mods.Common.Traits
 						endX = x;
 
 						// If both the current and next cell are occupied, then we extend the end cell further
-						if (GetTopEdge(x, y) == 1 && endX + 1 < CellEdgeCols)
-							while (endX + 1 < CellEdgeCols && GetTopEdge(endX + 1, y) == 1)
+						if (GetTopEdge(x, y) == 1 && endX + 1 < xMax)
+							while (endX + 1 < yMax && GetTopEdge(endX + 1, y) == 1 &&
+								(y == yMin || (GetRightEdge(endX, y) == 0 && GetRightEdge(endX, y - 1) == 0))) // confirm there is no intersection
 								endX++;
 
 						// We have either not started, reached the end of the map, or found an end cell
@@ -670,8 +671,9 @@ namespace OpenRA.Mods.Common.Traits
 
 						// If both the current and next cell are occupied, then we extend the end cell further
 						endY[x] = y;
-						if (GetLeftEdge(x, y) == 1 && endY[x] + 1 < CellEdgeRows)
-							while (endY[x] + 1 < CellEdgeRows && GetLeftEdge(x, endY[x] + 1) == 1)
+						if (GetLeftEdge(x, y) == 1 && endY[x] + 1 < yMax)
+							while (endY[x] + 1 < yMax && GetLeftEdge(x, endY[x] + 1) == 1 &&
+								(x == xMin || (GetBotEdge(x, endY[x]) == 0 && GetBotEdge(x - 1, endY[x]) == 0))) // confirm there is no intersection
 								endY[x]++;
 
 						// We have either not started, reached the end of the map, or found an end cell

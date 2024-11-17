@@ -287,8 +287,8 @@ namespace OpenRA.Mods.Common.Traits
 			var cellNodes = new List<DomainNode<CPos>>();
 			foreach (var c in cells)
 			{
-				foreach (var index in cellEdges.GetAllEdges(c.X, c.Y))
-					collDebugOverlay.RemoveCellEdgeIndex(index);
+				//foreach (var index in cellEdges.GetAllEdges(c.X, c.Y))
+				//	collDebugOverlay.RemoveCellEdgeIndex(index);
 				cellNodes.Add(AllCellBCDs[c.X, c.Y].CellNodesDict[c]);
 			}
 
@@ -308,8 +308,8 @@ namespace OpenRA.Mods.Common.Traits
 				collDebugOverlay.AddOrUpdateBCDNode(new BCDCellNode(world, cellBCD.ID, cellNode, cellBCD.DomainIsBlocked));
 			}
 
-			//var cellEdgesForRender = cellEdges;
-			var cellEdgesForRender = new CellEdges(world);
+			var cellEdgesForRender = cellEdges;
+			//var cellEdgesForRender = new CellEdges(world);
 
 			// edge is List<WPos>, edgeSet is List<List<WPos>>, obstacle is a list of edgeSets: List<List<List<WPos>>,
 			// therefore all obstacles is List<List<List<List<WPos>>>>
@@ -331,20 +331,20 @@ namespace OpenRA.Mods.Common.Traits
 				//Console.WriteLine($"GetNumberOfEdges(): {cellEdgesForRender.GetNumberOfEdges()}");
 			}
 
-			//var edgesToUse = cellEdgesForRender.GenerateConnectedCellEdges(world.Map).ToList();
+			var edgesToUse = cellEdgesForRender.GenerateConnectedCellEdges(world.Map).ToList();
 
 			Console.WriteLine(
 				$"obstacle Count: {obstacles.Count}, " +
 				$"bcds Count: {bcds.Count}, " +
 				$"cellNodes Count: {cellNodes.Count}");
 
-			var edgesToUse = cellEdgesForRender.AllEdgesToIndexWPosList();
+			//var edgesToUse = cellEdgesForRender.AllEdgesToIndexWPosList();
 			var lineColour = Color.LightBlue;
-			////collDebugOverlay.ClearCellEdges();
+			collDebugOverlay.ClearCellEdges();
 			//foreach (var (index, edge) in edgesToUse)
 			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], index, lineColour);
-			foreach (var (index, edge) in edgesToUse)
-				collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, lineColour);
+			foreach (var edge in edgesToUse)
+				collDebugOverlay.AddCellEdge(edge[0], edge[1], lineColour);
 			//foreach (var obstacle in obstacles)
 			//{
 			//	var colorToUse = Color.RandomColor();
