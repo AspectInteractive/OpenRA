@@ -272,6 +272,18 @@ namespace OpenRA.Mods.Common.Traits
 		public void ClearCircles() { circlesWithColors.Clear(); }
 		public void ClearRadiuses() { circlesWithColors.Clear(); }
 
+		public void ClearAll()
+		{
+			ClearIntervals();
+			ClearPaths();
+			ClearLines();
+			ClearLinesWithColors();
+			ClearStates();
+			ClearPoints();
+			ClearCircles();
+			ClearRadiuses();
+		}
+
 		bool IRenderAnnotations.SpatiallyPartitionable => false;
 	}
 }

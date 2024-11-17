@@ -55,27 +55,10 @@ namespace OpenRA.Mods.Common.Traits
 			ClearFunc = () =>
 			{
 				var thetaStarPathFinderTrait = w.WorldActor.TraitsImplementing<ThetaStarPathfinderOverlay>().FirstEnabledTraitOrDefault();
-				thetaStarPathFinderTrait.ClearIntervals();
-				thetaStarPathFinderTrait.ClearPaths();
-				thetaStarPathFinderTrait.ClearLines();
-				thetaStarPathFinderTrait.ClearLinesWithColors();
-				thetaStarPathFinderTrait.ClearStates();
-				thetaStarPathFinderTrait.ClearPoints();
-				thetaStarPathFinderTrait.ClearCircles();
-				thetaStarPathFinderTrait.ClearRadiuses();
+				thetaStarPathFinderTrait.ClearAll();
 
 				var collDebugOverlayTrait = w.WorldActor.TraitsImplementing<CollisionDebugOverlay>().FirstEnabledTraitOrDefault();
-				collDebugOverlayTrait.ClearIntervals();
-				collDebugOverlayTrait.ClearPaths();
-				collDebugOverlayTrait.ClearLines();
-				collDebugOverlayTrait.ClearLinesWithColors();
-				collDebugOverlayTrait.ClearStates();
-				collDebugOverlayTrait.ClearPoints();
-				collDebugOverlayTrait.ClearActorPoints();
-				collDebugOverlayTrait.ClearCircles();
-				collDebugOverlayTrait.ClearRadiuses();
-				collDebugOverlayTrait.ClearActorTexts();
-				collDebugOverlayTrait.ClearTexts();
+				collDebugOverlayTrait.ClearAll();
 
 				var mobileOffGridOverlays = w.ActorsWithTrait<MobileOffGridOverlay>().Select(a => a.Trait).ToList();
 				foreach (var overlay in mobileOffGridOverlays)

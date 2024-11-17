@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Commands;
@@ -84,7 +85,8 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly List<Command> Comms;
 		(BCDCellNode Node, List<IRenderable> Annos)[,] bcdCellNodes;
 		(RVONode Node, List<IRenderable> Annos)[] rvoNodes = Array.Empty<(RVONode Node, List<IRenderable> Annos)>();
-		public readonly Dictionary<int, (int Index, Color, List<LineAnnotationRenderableWithZIndex> Anno)> cellEdges = new();
+		readonly Dictionary<int, (int Index, Color, List<LineAnnotationRenderableWithZIndex> Anno)> cellEdgesIndex = new();
+		readonly List<(Color, List<LineAnnotationRenderableWithZIndex> Anno)> cellEdges = new();
 		readonly List<(List<WPos>, Color, int, LineEndPoint EndPoints, List<LineAnnotationRenderableWithZIndex> Anno)> linesWithColorsAndThickness = new();
 		readonly List<((WPos, WDist), Color, int, CircleAnnotationRenderable Anno)> circlesWithColors = new();
 		readonly List<(WPos, Color, int, CircleAnnotationRenderable Anno)> pointsWithColors = new();
@@ -168,7 +170,9 @@ namespace OpenRA.Mods.Common.Traits
 					.Union(statesWithColors.SelectMany(x => new List<IRenderable>() { x.Annos.PAnno, x.Annos.TAnno }))
 					.Union(textsWithColors.ConvertAll(x => (IRenderable)x.Anno))
 					.Union(actorTextsWithColors.ConvertAll(x => (IRenderable)x.Anno))
-					.Union(cellEdges.Values.SelectMany(x => x.Anno).Cast<IRenderable>()).ToList();
+					.Union(cellEdgesIndex.Values.SelectMany(x => x.Anno).Cast<IRenderable>())
+					.Union(cellEdges.SelectMany(x => x.Anno).Cast<IRenderable>())
+					.ToList();
 
 			foreach (var (_, nodeAnnos) in bcdCellNodes)
 				if (nodeAnnos != null)
@@ -381,9 +385,9 @@ namespace OpenRA.Mods.Common.Traits
 				LineRenderFunc(pos1, pos2, color, endpoints, thickness)));
 		}
 
-		public void RemoveCellEdge(int index)
+		public void RemoveCellEdgeIndex(int index)
 		{
-			if (!cellEdges.TryGetValue(index, out var value))
+			if (!cellEdgesIndex.TryGetValue(index, out var value))
 				return;
 
 			var (_, _, anno) = value;
@@ -391,24 +395,37 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var a in anno)
 				a.Dispose();
 
-			cellEdges.Remove(index);
+			cellEdgesIndex.Remove(index);
 		}
 
-		public void AddCellEdge(WPos pos1, WPos pos2, int index, Color color)
+		public void AddCellEdge(WPos pos1, WPos pos2, Color color)
+		{
+			var anno = LineRenderFunc(pos1, pos2, color, LineEndPoint.Circle, 3);
+			cellEdges.Add((color, anno));
+
+			if (Enabled)
+				foreach (var a in anno)
+					a.AddOrUpdateScreenMap();
+			else
+				foreach (var a in anno)
+					a.Dispose();
+		}
+
+		public void AddCellEdgeIndex(WPos pos1, WPos pos2, int index, Color color)
 		{
 			// We remove any edge that currently exists here, since we cannot have two edges
 			// in the same location, as we have no way to differentiate between them (e.g. layers)
 			// and this is not necessary.
-			if (cellEdges.ContainsKey(index))
+			if (cellEdgesIndex.ContainsKey(index))
 			{
-				foreach (var a in cellEdges[index].Anno)
+				foreach (var a in cellEdgesIndex[index].Anno)
 					a.Dispose();
-				cellEdges.Remove(index);
+				cellEdgesIndex.Remove(index);
 			}
 
 			var anno = LineRenderFunc(pos1, pos2, color, LineEndPoint.Circle, 3);
 
-			cellEdges[index] = (index, color, anno);
+			cellEdgesIndex[index] = (index, color, anno);
 
 			if (Enabled)
 				foreach (var a in anno)
@@ -490,9 +507,16 @@ namespace OpenRA.Mods.Common.Traits
 		public void ClearRadiuses() { circlesWithColors.Clear(); }
 		public void ClearTexts() { textsWithColors.Clear(); }
 		public void ClearActorTexts() { actorTextsWithColors.Clear(); }
+		public void ClearCellEdgeIndexes()
+		{
+			foreach (var anno in cellEdgesIndex.Values.SelectMany(x => x.Anno).Cast<IRenderable>())
+				anno.Dispose();
+			cellEdgesIndex.Clear();
+		}
+
 		public void ClearCellEdges()
 		{
-			foreach (var anno in cellEdges.Values.SelectMany(x => x.Anno).Cast<IRenderable>())
+			foreach (var anno in cellEdges.SelectMany(x => x.Anno).Cast<IRenderable>())
 				anno.Dispose();
 			cellEdges.Clear();
 		}
@@ -513,10 +537,12 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			ClearBCDCellNodes();
 			ClearRVONodes();
-			ClearCellEdges();
+			ClearCellEdgeIndexes();
 			ClearIntervals();
 			ClearPaths();
 			ClearLines();
+			ClearCellEdgeIndexes();
+			ClearCellEdges();
 			ClearLinesWithColors();
 			ClearStates();
 			ClearPoints();

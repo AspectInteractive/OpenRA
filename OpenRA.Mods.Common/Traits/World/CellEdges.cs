@@ -1,4 +1,5 @@
-﻿using System;
+﻿using RVO;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace OpenRA.Mods.Common.Traits
 {
+	using Obstacle = List<List<(int, List<WPos>)>>;
 
 	public class CellEdges
 	{
@@ -62,12 +64,12 @@ namespace OpenRA.Mods.Common.Traits
 			return edgesOccupied;
 		}
 
-		public List<List<WPos>> AllEdgesToWPosList()
+		public List<(int Index, List<WPos> Edge)> AllEdgesToIndexWPosList()
 		{
-			var edges = new List<List<WPos>>();
+			var edges = new List<(int Index, List<WPos> Edge)>();
 			for (var i = 0; i < AllCellEdges.Length; i++)
 				if (AllCellEdges[i] == 1)
-					edges.Add(EdgeToWPosList(i));
+					edges.Add((i, EdgeToWPosList(i)));
 			return edges;
 		}
 
@@ -475,9 +477,21 @@ namespace OpenRA.Mods.Common.Traits
 				return iter.MoveNext() ? iter.Current.Key : -1;
 		}
 
-		public List<List<(int Index, List<WPos> Edge)>> GenerateObstacleEdgeSets(Map map, BasicCellDomain bcd, CellEdges cellEdgeMask)
+		public void AddObstacleEdges(Obstacle obstacle)
 		{
-			var edgeSet = new List<List<(int, List<WPos>)>>();
+			foreach (var edgeSet in obstacle)
+			{
+				foreach (var (index, _) in edgeSet)
+				{
+					AllCellEdges[index] = 1;
+					IndexList[index] = 1;
+				}
+			}
+		}
+
+		public Obstacle GenerateObstacleEdgeSets(Map map, BasicCellDomain bcd, CellEdges cellEdgeMask)
+		{
+			var edgeSets = new Obstacle();
 			var edges = new List<(int, List<WPos>)>();
 			var visitedEdgeIndices = new HashSet<int>();
 			ApplyEdgeMask(cellEdgeMask, EdgeMaskOp.And);
@@ -501,7 +515,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				if (currEdgeNeighbours.Count == 0)
 				{
-					edgeSet.Add(edges.ToList());
+					edgeSets.Add(edges.ToList());
 					edges.Clear();
 					currEdgeIndex = GetAnyIndex(indexListCopy);
 					currEdgeStartPos = EdgeToWPos(currEdgeIndex).TopLeft;
@@ -604,9 +618,9 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			if (edges.Count > 0)
-				edgeSet.Add(edges.ToList());
+				edgeSets.Add(edges.ToList());
 
-			return edgeSet;
+			return edgeSets;
 		}
 
 		public List<List<WPos>> GenerateConnectedCellEdges(Map map, int xMin = 0, int xMax = -1, int yMin = 0, int yMax = -1)

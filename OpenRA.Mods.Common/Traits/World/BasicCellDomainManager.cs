@@ -288,7 +288,7 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var c in cells)
 			{
 				foreach (var index in cellEdges.GetAllEdges(c.X, c.Y))
-					collDebugOverlay.RemoveCellEdge(index);
+					collDebugOverlay.RemoveCellEdgeIndex(index);
 				cellNodes.Add(AllCellBCDs[c.X, c.Y].CellNodesDict[c]);
 			}
 
@@ -308,23 +308,25 @@ namespace OpenRA.Mods.Common.Traits
 				collDebugOverlay.AddOrUpdateBCDNode(new BCDCellNode(world, cellBCD.ID, cellNode, cellBCD.DomainIsBlocked));
 			}
 
-			var cellEdgesForRender = cellEdges;
-			//var cellEdgesForRender = new CellEdges(world);
+			//var cellEdgesForRender = cellEdges;
+			var cellEdgesForRender = new CellEdges(world);
 
-			// edge is List<WPos>, edgeSet is List<List<WPos>>, obstacle is List<List<List<WPos>>,
+			// edge is List<WPos>, edgeSet is List<List<WPos>>, obstacle is a list of edgeSets: List<List<List<WPos>>,
 			// therefore all obstacles is List<List<List<List<WPos>>>>
 			var obstacles = new List<Obstacle>();
 
 			foreach (var bcd in bcds)
 			{
-				if (bcd.DomainIsBlocked)
+				//if (bcd.DomainIsBlocked)
 				//if (bcd.ID == 0)
-				{
-					var cellEdgesForObstacle = new CellEdges(cellEdges);
-					var cellEdgeMask = bcd.CreateCellEdgesMask(world);
-					obstacles.Add(cellEdgesForObstacle.GenerateObstacleEdgeSets(world.Map, bcd, cellEdgeMask));
+				//{
+				var cellEdgesForObstacle = new CellEdges(cellEdges);
+				var cellEdgeMask = bcd.CreateCellEdgesMask(world);
+				var newObstacle = cellEdgesForObstacle.GenerateObstacleEdgeSets(world.Map, bcd, cellEdgeMask);
+				obstacles.Add(newObstacle);
+				cellEdgesForRender.AddObstacleEdges(newObstacle);
 					//cellEdgesForRender.ApplyEdgeMask(bcd, CellEdges.EdgeMaskOp.Or);
-				}
+				//}
 
 				//Console.WriteLine($"GetNumberOfEdges(): {cellEdgesForRender.GetNumberOfEdges()}");
 			}
@@ -336,18 +338,20 @@ namespace OpenRA.Mods.Common.Traits
 				$"bcds Count: {bcds.Count}, " +
 				$"cellNodes Count: {cellNodes.Count}");
 
-			var edgesToUse = cellEdgesForRender.AllEdgesToWPosList();
+			var edgesToUse = cellEdgesForRender.AllEdgesToIndexWPosList();
 			var lineColour = Color.LightBlue;
-			//collDebugOverlay.ClearCellEdges();
-			//foreach (var edge in edgesToUse)
-			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], lineColour);
-			foreach (var obstacle in obstacles)
-			{
-				var colorToUse = Color.RandomColor();
-				foreach (var edgeSet in obstacle)
-					foreach (var (index, edge) in edgeSet)
-						collDebugOverlay.AddCellEdge(edge[0], edge[1], index, colorToUse);
-			}
+			////collDebugOverlay.ClearCellEdges();
+			//foreach (var (index, edge) in edgesToUse)
+			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], index, lineColour);
+			foreach (var (index, edge) in edgesToUse)
+				collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, lineColour);
+			//foreach (var obstacle in obstacles)
+			//{
+			//	var colorToUse = Color.RandomColor();
+			//	foreach (var edgeSet in obstacle)
+			//		foreach (var (index, edge) in edgeSet)
+			//			collDebugOverlay.AddCellEdge(edge[0], edge[1], index, colorToUse);
+			//}
 		}
 
 		public struct ObjectRemoved
@@ -380,7 +384,7 @@ namespace OpenRA.Mods.Common.Traits
 					AllCellBCDs[cell.X, cell.Y].RemoveParent(world, locomotor, cellNode, newBlockedStatus,
 						ref currBcdId, ref AllCellBCDs, ref cellEdges, check: Check);
 					var cellsToRender = new List<CPos>() { cell };
-					cellsToRender.AddRange(CellNeighbours(world.Map, cell));
+					//cellsToRender.AddRange(CellNeighbours(world.Map, cell));
 					RenderCells(cellsToRender);
 					//RenderAllCells();
 				}
