@@ -10,7 +10,7 @@ using static OpenRA.Mods.Common.Traits.CollisionDebugOverlay;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	using Obstacle = List<List<(int, List<WPos>)>>;
+	using Obstacle = List<(int, List<WPos>)>;
 
 	public class BasicCellDomain
 	{
@@ -200,6 +200,7 @@ namespace OpenRA.Mods.Common.Traits
 		World world;
 		Locomotor locomotor;
 		public BasicCellDomain[,] AllCellBCDs;
+		public Dictionary<int, List<Obstacle>> BCDObstacles = new();
 		CollisionDebugOverlay collDebugOverlay;
 		public bool DomainIsBlocked;
 		int currBcdId = 0;
@@ -270,13 +271,13 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			enabled = true;
 			var allCells = new List<DomainNode<CPos>>();
-			var allBCDs = new HashSet<BasicCellDomain>();
+			var visitedBCDs = new HashSet<BasicCellDomain>();
 
 			foreach (var bcd in AllCellBCDs)
-				if (bcd != null && !allBCDs.Contains(bcd))
+				if (bcd != null && !visitedBCDs.Contains(bcd))
 				{
 					allCells.AddRange(bcd.CellNodesDict.Values);
-					allBCDs.Add(bcd);
+					visitedBCDs.Add(bcd);
 				}
 
 			RenderCells(allCells);
@@ -287,8 +288,8 @@ namespace OpenRA.Mods.Common.Traits
 			var cellNodes = new List<DomainNode<CPos>>();
 			foreach (var c in cells)
 			{
-				//foreach (var index in cellEdges.GetAllEdges(c.X, c.Y))
-				//	collDebugOverlay.RemoveCellEdgeIndex(index);
+				foreach (var index in cellEdges.GetAllEdges(c.X, c.Y))
+					collDebugOverlay.RemoveCellEdgeIndex(index);
 				cellNodes.Add(AllCellBCDs[c.X, c.Y].CellNodesDict[c]);
 			}
 
@@ -299,32 +300,33 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var bcds = new HashSet<BasicCellDomain>();
 
+			// Get all BCDs that correspond to the node(s) that were added/removed.
 			foreach (var cellNode in cellNodes)
 			{
 				var cellBCD = AllCellBCDs[cellNode.Value.X, cellNode.Value.Y];
 				bcds.Add(cellBCD);
-				//foreach (var index in cellEdges.GetAllEdges(cellNode.Value.X, cellNode.Value.Y))
-				//	collDebugOverlay.RemoveCellEdge(index);
 				collDebugOverlay.AddOrUpdateBCDNode(new BCDCellNode(world, cellBCD.ID, cellNode, cellBCD.DomainIsBlocked));
 			}
 
 			var cellEdgesForRender = cellEdges;
 			//var cellEdgesForRender = new CellEdges(world);
 
-			// edge is List<WPos>, edgeSet is List<List<WPos>>, obstacle is a list of edgeSets: List<List<List<WPos>>,
-			// therefore all obstacles is List<List<List<List<WPos>>>>
+			// edge is List<WPos>, obstacle is List<(int, List<WPos>)>, where the int represents the index of the edge
 			var obstacles = new List<Obstacle>();
 
+			// Recreate edges for rendering from all relevant BCDs found earlier.
 			foreach (var bcd in bcds)
 			{
 				//if (bcd.DomainIsBlocked)
 				//if (bcd.ID == 0)
 				//{
+				BCDObstacles[bcd.ID] = new List<Obstacle>();
 				var cellEdgesForObstacle = new CellEdges(cellEdges);
 				var cellEdgeMask = bcd.CreateCellEdgesMask(world);
-				var newObstacle = cellEdgesForObstacle.GenerateObstacleEdgeSets(world.Map, bcd, cellEdgeMask);
-				obstacles.Add(newObstacle);
-				cellEdgesForRender.AddObstacleEdges(newObstacle);
+				var newObstacles = cellEdgesForObstacle.GenerateObstacles(world.Map, bcd, cellEdgeMask);
+				obstacles.AddRange(newObstacles);
+				BCDObstacles[bcd.ID].AddRange(newObstacles);
+				cellEdgesForRender.AddObstaclesEdges(newObstacles);
 					//cellEdgesForRender.ApplyEdgeMask(bcd, CellEdges.EdgeMaskOp.Or);
 				//}
 
@@ -343,15 +345,14 @@ namespace OpenRA.Mods.Common.Traits
 			collDebugOverlay.ClearCellEdges();
 			//foreach (var (index, edge) in edgesToUse)
 			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], index, lineColour);
-			foreach (var edge in edgesToUse)
-				collDebugOverlay.AddCellEdge(edge[0], edge[1], lineColour);
-			//foreach (var obstacle in obstacles)
-			//{
-			//	var colorToUse = Color.RandomColor();
-			//	foreach (var edgeSet in obstacle)
-			//		foreach (var (index, edge) in edgeSet)
-			//			collDebugOverlay.AddCellEdge(edge[0], edge[1], index, colorToUse);
-			//}
+			//foreach (var edge in edgesToUse)
+			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], lineColour);
+			foreach (var obstacle in obstacles)
+			{
+				var colorToUse = Color.RandomColor();
+				foreach (var (index, edge) in obstacle)
+					collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, colorToUse);
+			}
 		}
 
 		public struct ObjectRemoved

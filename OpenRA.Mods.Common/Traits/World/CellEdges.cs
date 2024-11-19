@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	using Obstacle = List<List<(int, List<WPos>)>>;
+	using Obstacle = List<(int, List<WPos>)>;
 
 	public class CellEdges
 	{
@@ -477,11 +477,11 @@ namespace OpenRA.Mods.Common.Traits
 				return iter.MoveNext() ? iter.Current.Key : -1;
 		}
 
-		public void AddObstacleEdges(Obstacle obstacle)
+		public void AddObstaclesEdges(List<Obstacle> obstacles)
 		{
-			foreach (var edgeSet in obstacle)
+			foreach (var obstacle in obstacles)
 			{
-				foreach (var (index, _) in edgeSet)
+				foreach (var (index, _) in obstacle)
 				{
 					AllCellEdges[index] = 1;
 					IndexList[index] = 1;
@@ -489,10 +489,10 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public Obstacle GenerateObstacleEdgeSets(Map map, BasicCellDomain bcd, CellEdges cellEdgeMask)
+		public List<Obstacle> GenerateObstacles(Map map, BasicCellDomain bcd, CellEdges cellEdgeMask)
 		{
-			var edgeSets = new Obstacle();
-			var edges = new List<(int, List<WPos>)>();
+			var obstacles = new List<Obstacle>();
+			var obstacle = new Obstacle();
 			var visitedEdgeIndices = new HashSet<int>();
 			ApplyEdgeMask(cellEdgeMask, EdgeMaskOp.And);
 			var indexListCopy = IndexList.ToDictionary(x => x.Key, x => x.Value);
@@ -501,7 +501,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			var currEdgeIndex = GetAnyIndex(indexListCopy);
 			var currEdgeStartPos = EdgeToWPos(currEdgeIndex).TopLeft;
-			edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+			obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 
 			while (indexListCopy.Count > 0)
 			{
@@ -515,8 +515,8 @@ namespace OpenRA.Mods.Common.Traits
 
 				if (currEdgeNeighbours.Count == 0)
 				{
-					edgeSets.Add(edges.ToList());
-					edges.Clear();
+					obstacles.Add(obstacle.ToList());
+					obstacle.Clear();
 					currEdgeIndex = GetAnyIndex(indexListCopy);
 					currEdgeStartPos = EdgeToWPos(currEdgeIndex).TopLeft;
 
@@ -527,7 +527,7 @@ namespace OpenRA.Mods.Common.Traits
 					//	throw new Exception("Cannot add two of the same index!");
 
 					indexListCopy.Remove(currEdgeIndex);
-					edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+					obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 					visitedEdgeIndices.Add(currEdgeIndex);
 					continue;
 				}
@@ -600,7 +600,7 @@ namespace OpenRA.Mods.Common.Traits
 
 							visitedEdgeIndices.Add(currEdgeIndex);
 							indexListCopy.Remove(currEdgeIndex);
-							edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+							obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 						}
 				}
 				else
@@ -613,14 +613,14 @@ namespace OpenRA.Mods.Common.Traits
 
 					visitedEdgeIndices.Add(currEdgeIndex);
 					indexListCopy.Remove(currEdgeIndex); // We exclude indices so they can no longer be used for a domain
-					edges.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+					obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
 				}
 			}
 
-			if (edges.Count > 0)
-				edgeSets.Add(edges.ToList());
+			if (obstacle.Count > 0)
+				obstacles.Add(obstacle.ToList());
 
-			return edgeSets;
+			return obstacles;
 		}
 
 		public List<List<WPos>> GenerateConnectedCellEdges(Map map, int xMin = 0, int xMax = -1, int yMin = 0, int yMax = -1)
