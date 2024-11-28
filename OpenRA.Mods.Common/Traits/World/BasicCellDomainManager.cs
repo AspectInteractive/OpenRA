@@ -201,6 +201,8 @@ namespace OpenRA.Mods.Common.Traits
 		Locomotor locomotor;
 		public BasicCellDomain[,] AllCellBCDs;
 		public Dictionary<int, List<Obstacle>> BCDObstacles = new();
+		public List<Obstacle> Obstacles = new();
+		public bool ObstaclesSet = false;
 		CollisionDebugOverlay collDebugOverlay;
 		public bool DomainIsBlocked;
 		int currBcdId = 0;
@@ -314,6 +316,8 @@ namespace OpenRA.Mods.Common.Traits
 			// edge is List<WPos>, obstacle is List<(int, List<WPos>)>, where the int represents the index of the edge
 			var obstacles = new List<Obstacle>();
 
+			ObstaclesSet = false;
+
 			// Recreate edges for rendering from all relevant BCDs found earlier.
 			foreach (var bcd in bcds)
 			{
@@ -327,13 +331,18 @@ namespace OpenRA.Mods.Common.Traits
 				obstacles.AddRange(newObstacles);
 				BCDObstacles[bcd.ID].AddRange(newObstacles);
 				cellEdgesForRender.AddObstaclesEdges(newObstacles);
+				foreach (var obstacle in newObstacles)
+					if (obstacle.Count < 20 && Obstacles.Count < 50)
+						Obstacles.Add(obstacle);
 					//cellEdgesForRender.ApplyEdgeMask(bcd, CellEdges.EdgeMaskOp.Or);
 				//}
 
 				//Console.WriteLine($"GetNumberOfEdges(): {cellEdgesForRender.GetNumberOfEdges()}");
 			}
 
-			var edgesToUse = cellEdgesForRender.GenerateConnectedCellEdges(world.Map).ToList();
+			ObstaclesSet = true;
+
+			//var edgesToUse = cellEdgesForRender.GenerateConnectedCellEdges(world.Map).ToList();
 
 			Console.WriteLine(
 				$"obstacle Count: {obstacles.Count}, " +
@@ -347,11 +356,20 @@ namespace OpenRA.Mods.Common.Traits
 			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], index, lineColour);
 			//foreach (var edge in edgesToUse)
 			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], lineColour);
-			foreach (var obstacle in obstacles)
+
+			var currEdgeNo = 0;
+			foreach (var obstacle in Obstacles)
 			{
+				var obstacleEdges = cellEdgesForRender.ConnectObstacleCellEdges(obstacle).ToList();
 				var colorToUse = Color.RandomColor();
-				foreach (var (index, edge) in obstacle)
-					collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, colorToUse);
+				foreach (var edge in obstacleEdges)
+				//foreach (var (index, edge) in obstacle)
+				{
+					collDebugOverlay.AddText(edge[0], $"{currEdgeNo}", colorToUse);
+					collDebugOverlay.AddCellEdge(edge[0], edge[1], colorToUse);
+					//collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, colorToUse);
+					currEdgeNo++;
+				}
 			}
 		}
 

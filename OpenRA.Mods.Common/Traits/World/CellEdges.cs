@@ -314,7 +314,7 @@ namespace OpenRA.Mods.Common.Traits
 			WPos? limitToPos = null)
 		{
 			var indicesWithEndPoints = new List<IndicesWithEndPoint>();
-			var edgeWPos = EdgeToWPos(index);
+			var (edgeTopLeft, edgeBotRight) = EdgeToWPos(index);
 
 			// We need to exclude any neighbours that are starting from a position that has already been traversed
 			if (limitToPos != null)
@@ -351,7 +351,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 
 				// Northern edges
-				if (index > CellEdgeCols && (limitToPos == null || limitToPos == edgeWPos.TopLeft))
+				if (index > CellEdgeCols && (limitToPos == null || limitToPos == edgeTopLeft))
 				{
 					var neighbourIndices = new List<int>();
 
@@ -369,12 +369,12 @@ namespace OpenRA.Mods.Common.Traits
 
 					// Add the origin position edgeWPos.TopLeft, so that these edges can be excluded from future searches
 					if (neighbourIndices.Count > 0)
-						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeWPos.TopLeft));
+						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeTopLeft));
 				}
 
 				// Southern edges
 				if (index < 2 * CellEdgeCols * (CellEdgeRows - 1)
-					&& (limitToPos == null || limitToPos == edgeWPos.BotRight)) // at least 1 row available at the bottom
+					&& (limitToPos == null || limitToPos == edgeBotRight)) // at least 1 row available at the bottom
 				{
 					var neighbourIndices = new List<int>();
 
@@ -393,7 +393,7 @@ namespace OpenRA.Mods.Common.Traits
 
 					// Add the origin position edgeWPos.TopLeft, so that these edges can be excluded from future searches
 					if (neighbourIndices.Count > 0)
-						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeWPos.BotRight));
+						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeBotRight));
 				}
 			}
 
@@ -411,7 +411,7 @@ namespace OpenRA.Mods.Common.Traits
 			else // it is a horizontal edge
 			{
 				// Western Edges
-				if (x > 0 && (limitToPos == null || limitToPos == edgeWPos.TopLeft))
+				if (x > 0 && (limitToPos == null || limitToPos == edgeTopLeft))
 				{
 					var neighbourIndices = new List<int>();
 
@@ -428,11 +428,11 @@ namespace OpenRA.Mods.Common.Traits
 						neighbourIndices.Add(swVertEdge); // add SW vertical edge
 
 					if (neighbourIndices.Count > 0)
-						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeWPos.TopLeft));
+						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeTopLeft));
 				}
 
 				// Eastern Edges
-				if (x < CellEdgeCols && (limitToPos == null || limitToPos == edgeWPos.BotRight))
+				if (x < CellEdgeCols && (limitToPos == null || limitToPos == edgeBotRight))
 				{
 					var neighbourIndices = new List<int>();
 
@@ -449,7 +449,7 @@ namespace OpenRA.Mods.Common.Traits
 						neighbourIndices.Add(index + CellEdgeCols + 1); // add SE vertical edge
 
 					if (neighbourIndices.Count > 0)
-						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeWPos.BotRight));
+						indicesWithEndPoints.Add(new IndicesWithEndPoint(neighbourIndices, edgeBotRight));
 				}
 			}
 
@@ -501,12 +501,14 @@ namespace OpenRA.Mods.Common.Traits
 
 			var currEdgeIndex = GetAnyIndex(indexListCopy);
 			var currEdgeStartPos = EdgeToWPos(currEdgeIndex).TopLeft;
-			obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+			var (currEdgeTopLeft, currEdgeBotRight) = EdgeToWPos(currEdgeIndex);
+			var currEdgeEndPos = currEdgeStartPos == currEdgeTopLeft ? currEdgeBotRight : currEdgeTopLeft;
+			obstacle.Add((currEdgeIndex, new List<WPos>() { currEdgeStartPos, currEdgeEndPos }));
 
 			while (indexListCopy.Count > 0)
 			{
-				var (currEdgeTopLeft, currEdgeBotRight) = EdgeToWPos(currEdgeIndex);
-				var currEdgeEndPos = currEdgeStartPos == currEdgeTopLeft ? currEdgeBotRight : currEdgeTopLeft;
+				(currEdgeTopLeft, currEdgeBotRight) = EdgeToWPos(currEdgeIndex);
+				currEdgeEndPos = currEdgeStartPos == currEdgeTopLeft ? currEdgeBotRight : currEdgeTopLeft;
 
 				var currEdgeNeighbours = GetNeighbourIndices(currEdgeIndex, ref visitedEdgeIndices,
 					//ref cellEdgesWithMask.AllCellEdges,
@@ -526,9 +528,9 @@ namespace OpenRA.Mods.Common.Traits
 					//if (visitedEdgeIndices.Contains(currEdgeIndex))
 					//	throw new Exception("Cannot add two of the same index!");
 
-					indexListCopy.Remove(currEdgeIndex);
-					obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
-					visitedEdgeIndices.Add(currEdgeIndex);
+					//indexListCopy.Remove(currEdgeIndex);
+					//obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+					//visitedEdgeIndices.Add(currEdgeIndex);
 					continue;
 				}
 
@@ -593,27 +595,31 @@ namespace OpenRA.Mods.Common.Traits
 						if (ind == testIndex)
 						{
 							currEdgeIndex = testIndex;
+							(currEdgeTopLeft, currEdgeBotRight) = EdgeToWPos(currEdgeIndex);
 							currEdgeStartPos = currEdgeNeighbours[0].EndPoint;
+							currEdgeEndPos = currEdgeStartPos == currEdgeTopLeft ? currEdgeBotRight : currEdgeTopLeft;
 
 							//if (visitedEdgeIndices.Contains(currEdgeIndex))
 							//	throw new Exception("Cannot add two of the same index!");
 
 							visitedEdgeIndices.Add(currEdgeIndex);
 							indexListCopy.Remove(currEdgeIndex);
-							obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+							obstacle.Add((currEdgeIndex, new List<WPos>() { currEdgeStartPos, currEdgeEndPos }));
 						}
 				}
 				else
 				{
 					currEdgeIndex = currEdgeNeighbours[0].Indices[0];
+					(currEdgeTopLeft, currEdgeBotRight) = EdgeToWPos(currEdgeIndex);
 					currEdgeStartPos = currEdgeNeighbours[0].EndPoint;
+					currEdgeEndPos = currEdgeStartPos == currEdgeTopLeft ? currEdgeBotRight : currEdgeTopLeft;
 
 					//if (visitedEdgeIndices.Contains(currEdgeIndex))
 					//	throw new Exception("Cannot add two of the same index!");
 
 					visitedEdgeIndices.Add(currEdgeIndex);
 					indexListCopy.Remove(currEdgeIndex); // We exclude indices so they can no longer be used for a domain
-					obstacle.Add((currEdgeIndex, EdgeToWPosList(currEdgeIndex)));
+					obstacle.Add((currEdgeIndex, new List<WPos>() { currEdgeStartPos, currEdgeEndPos }));
 				}
 			}
 
@@ -621,6 +627,45 @@ namespace OpenRA.Mods.Common.Traits
 				obstacles.Add(obstacle.ToList());
 
 			return obstacles;
+		}
+
+		public List<List<WPos>> ConnectObstacleCellEdges(Obstacle obstacle)
+		{
+			var edgeList = new List<List<WPos>>();
+
+			var i = 0;
+			while (i < obstacle.Count)
+			{
+				var n = 0;
+
+				// Item2[0] is the StartPos of the edge, Item2[1] is the EndPos of the edge
+				if (obstacle[i].Item2[1].X == obstacle[i].Item2[0].X)
+				{
+					// We use modulo so that the last edge can use the first edge onward to form a continuous edge
+					while (obstacle[(i + n + 1) % obstacle.Count].Item2[1].X == obstacle[i].Item2[0].X)
+						n++;
+
+					// Since n will not increment if the next edge does not share the same plane, we add it to i regardless
+					edgeList.Add(new List<WPos>() { obstacle[i].Item2[0], obstacle[(i + n) % obstacle.Count].Item2[1] });
+				}
+				else // obstacle[i].Item2[1].Y == obstacle[i].Item2[0].Y, since diagonal moves are not allowed
+				{
+					while (obstacle[(i + n + 1) % obstacle.Count].Item2[1].Y == obstacle[i].Item2[0].Y)
+						n++;
+
+					// Since n will not increment if the next edge does not share the same plane, we add it to i regardless
+					edgeList.Add(new List<WPos>() { obstacle[i].Item2[0], obstacle[(i + n) % obstacle.Count].Item2[1] });
+				}
+
+				// Remove the first edge from the edgeList if it is being overlapped
+				if (n != 0 && i + n + 1 >= obstacle.Count)
+					edgeList.RemoveAt(0);
+
+				// We skip to the first non-connected edge, which is at the index directly after i + n that we connected earlier
+				i = i + n + 1;
+			}
+
+			return edgeList;
 		}
 
 		public List<List<WPos>> GenerateConnectedCellEdges(Map map, int xMin = 0, int xMax = -1, int yMin = 0, int yMax = -1)

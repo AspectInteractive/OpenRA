@@ -59,8 +59,9 @@ namespace RVO
         /** Random number generator. */
         readonly Random random;
 
-        public Blocks(bool init = true)
-        {
+
+		public Blocks(bool init = true)
+		{
 			if (init)
 			{
 				goals = new List<Vector2>();
@@ -74,6 +75,24 @@ namespace RVO
 
 				/* Set up the scenario. */
 				blocks.setupScenario();
+			}
+		}
+
+		public Blocks(List<IList<Vector2>> obstacles, bool init = true)
+        {
+			if (init)
+			{
+				goals = new List<Vector2>();
+
+#if RVOCS_SEED_RANDOM_NUMBER_GENERATOR
+				random = new Random();
+#else
+            random = new Random(0);
+#endif
+				blocks = new(obstacles, false);
+
+				/* Set up the scenario. */
+				blocks.setupScenario(obstacles);
 			}
 		}
 
@@ -100,6 +119,14 @@ namespace RVO
 						goal: new Vector2(75.0f, 75.0f) * 150);
 				}
 			}
+		}
+
+		void addObstacle(IList<Vector2> obstacle) => Simulator.Instance.addObstacle(obstacle);
+
+		void setupObstaclesNew(List<IList<Vector2>> obstacles)
+		{
+			foreach (var obstacle in obstacles)
+				addObstacle(obstacle);
 		}
 
 		void setupObstacles()
@@ -142,6 +169,35 @@ namespace RVO
 		}
 
 		void setupScenario()
+		{
+			/* Specify the global time step of the simulation. */
+			Simulator.Instance.setTimeStep(0.25f * 150);
+
+			/*
+             * Specify the default parameters for agents that are subsequently
+             * added.
+             */
+
+			var agentPreset = new AgentPreset(
+				neighborDist: 15.0f * 150,
+				maxNeighbors: 10 * 150,
+				timeHorizon: 5.0f * 150,
+				timeHorizonObst: 5.0f * 150,
+				radius: 2.0f * 150,
+				maxSpeed: 2.0f * 150,
+				velocity: new Vector2(0.0f, 0.0f));
+
+			setupAgents(agentPreset);
+			setupObstacles();
+
+			/*
+             * Process the obstacles so that they are accounted for in the
+             * simulation.
+             */
+			Simulator.Instance.processObstacles();
+		}
+
+		void setupScenario(List<IList<Vector2>> obstacles)
         {
             /* Specify the global time step of the simulation. */
             Simulator.Instance.setTimeStep(0.25f * 150);
@@ -161,7 +217,7 @@ namespace RVO
 				velocity: new Vector2(0.0f, 0.0f));
 
 			setupAgents(agentPreset);
-			setupObstacles();
+			setupObstaclesNew(obstacles);
 
 			/*
              * Process the obstacles so that they are accounted for in the
