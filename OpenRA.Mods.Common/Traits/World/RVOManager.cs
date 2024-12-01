@@ -14,10 +14,7 @@ namespace OpenRA.Mods.Common.Traits
 	public class RVOManager : IWorldLoaded, ITick
 	{
 		World world;
-		Circle rvoCircle;
-		WDist rvoCircleRadius = new(300);
 		Blocks rvoBlocks;
-		Roadmap rvoRoadmap;
 		bool RVOtest = true;
 		CollisionDebugOverlay collDebugOverlay;
 		BasicCellDomainManager bcdManager;
@@ -34,7 +31,7 @@ namespace OpenRA.Mods.Common.Traits
 		// We subtract the agent spawn location as that is what RVO requires
 		public WPos GetObstaclePos(WPos pos, WPos agentSpawnLoc) => pos - (WVec)agentSpawnLoc;
 
-		public List<IList<Vector2>> GetObstacles(List<List<(int Index, List<WPos> Edge)>> obstacles, WPos agentSpawnLoc)
+		public List<IList<Vector2>> GetObstacles(List<List<List<WPos>>> obstacles, WPos agentSpawnLoc)
 		{
 			var rvoObstacles = new List<IList<Vector2>>();
 
@@ -50,29 +47,17 @@ namespace OpenRA.Mods.Common.Traits
 			return new Vector2(obstaclePos.X, obstaclePos.Y);
 		}
 
-		public IList<Vector2> EdgeSetToObstacle(List<(int Index, List<WPos> Edge)> obstacle, WPos agentSpawnLoc)
+		public IList<Vector2> EdgeSetToObstacle(List<List<WPos>> obstacle, WPos agentSpawnLoc)
 		{
-			var rvoObstacle = new List<Vector2>();
-
-			// We pretend that the last edge ended at the start of the first edge in the dictionary
-			//var currEdgeEndPos = obstacle.First().Value.Edge[0];
-			while (obstacle.Count > 0)
+			var rvoObstacle = new List<Vector2>
 			{
-				var currItem = obstacle[0];
-				var currEdge = currItem.Edge;
-				var currEdgeStartPos = currEdge[0];
-				var currEdgeEndPos = currEdge[1];
+				// Add the first starting position of the first edge
+				WPosToVector2(obstacle[0][0], agentSpawnLoc)
+			};
 
-				//var currEdge = obstacle[currEdgeEndPos].Edge; // we take the first edge that ends where the last edge began
-				//obstacle.Remove(currEdgeEndPos);
-
-				//var currEdgeStartPos = currEdge[0]; // this is defined as startPos in CellEdges
-				//currEdgeEndPos = currEdge[1]; // this is defined as endPos in CellEdges
-				rvoObstacle.Add(WPosToVector2(currEdgeStartPos, agentSpawnLoc));
-				rvoObstacle.Add(WPosToVector2(currEdgeEndPos, agentSpawnLoc));
-
-				obstacle.Remove(currItem);
-			}
+			// Add the end position of every subsequent edge
+			foreach (var edge in obstacle)
+				rvoObstacle.Add(WPosToVector2(edge[1], agentSpawnLoc));
 
 			return rvoObstacle;
 		}
@@ -85,11 +70,8 @@ namespace OpenRA.Mods.Common.Traits
 			if (RVOtest && collDebugOverlay.Enabled && rvoObject == null && bcdManager.ObstaclesSet)
 			{
 				Simulator.Instance.Clear();
-				//rvoObject = new RVO.Circle();
-				//rvoCircle = rvoObject;
 				var rvoObstacles = GetObstacles(bcdManager.Obstacles, GetAgentSpawnLocation(world.Map));
 				rvoObject = new Blocks(rvoObstacles);
-				//rvoObject = new Blocks();
 				rvoBlocks = rvoObject;
 				collDebugOverlay.SetAgentAmount(rvoObject.getAgentCount());
 			}
@@ -97,8 +79,8 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				//collDebugOverlay.ClearAll();
 
-				var agents = rvoObject.getAgents().ToList();
-				var agentSpawnLocation = GetAgentSpawnLocation(world.Map);
+				//var agents = rvoObject.getAgents().ToList();
+				//var agentSpawnLocation = GetAgentSpawnLocation(world.Map);
 
 				//var obstacles = bcdManager.Obstacles;
 

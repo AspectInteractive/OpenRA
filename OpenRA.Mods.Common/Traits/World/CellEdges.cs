@@ -629,7 +629,7 @@ namespace OpenRA.Mods.Common.Traits
 			return obstacles;
 		}
 
-		public List<List<WPos>> ConnectObstacleCellEdges(Obstacle obstacle)
+		public List<List<WPos>> ConnectObstacleCellEdges(List<List<WPos>> obstacle)
 		{
 			var edgeList = new List<List<WPos>>();
 
@@ -638,23 +638,23 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var n = 0;
 
-				// Item2[0] is the StartPos of the edge, Item2[1] is the EndPos of the edge
-				if (obstacle[i].Item2[1].X == obstacle[i].Item2[0].X)
+				// [i][0] is the StartPos of the edge, [i][1] is the EndPos of the edge
+				if (obstacle[i][1].X == obstacle[i][0].X)
 				{
 					// We use modulo so that the last edge can use the first edge onward to form a continuous edge
-					while (obstacle[(i + n + 1) % obstacle.Count].Item2[1].X == obstacle[i].Item2[0].X)
+					while (obstacle[(i + n + 1) % obstacle.Count][1].X == obstacle[i][0].X)
 						n++;
 
 					// Since n will not increment if the next edge does not share the same plane, we add it to i regardless
-					edgeList.Add(new List<WPos>() { obstacle[i].Item2[0], obstacle[(i + n) % obstacle.Count].Item2[1] });
+					edgeList.Add(new List<WPos>() { obstacle[i][0], obstacle[(i + n) % obstacle.Count][1] });
 				}
-				else // obstacle[i].Item2[1].Y == obstacle[i].Item2[0].Y, since diagonal moves are not allowed
+				else // obstacle[i][1].Y == obstacle[i][0].Y, since diagonal moves are not allowed
 				{
-					while (obstacle[(i + n + 1) % obstacle.Count].Item2[1].Y == obstacle[i].Item2[0].Y)
+					while (obstacle[(i + n + 1) % obstacle.Count][1].Y == obstacle[i][0].Y)
 						n++;
 
 					// Since n will not increment if the next edge does not share the same plane, we add it to i regardless
-					edgeList.Add(new List<WPos>() { obstacle[i].Item2[0], obstacle[(i + n) % obstacle.Count].Item2[1] });
+					edgeList.Add(new List<WPos>() { obstacle[i][0], obstacle[(i + n) % obstacle.Count][1] });
 				}
 
 				// Remove the first edge from the edgeList if it is being overlapped

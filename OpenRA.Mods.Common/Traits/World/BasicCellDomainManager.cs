@@ -201,7 +201,7 @@ namespace OpenRA.Mods.Common.Traits
 		Locomotor locomotor;
 		public BasicCellDomain[,] AllCellBCDs;
 		public Dictionary<int, List<Obstacle>> BCDObstacles = new();
-		public List<Obstacle> Obstacles = new();
+		public List<List<List<WPos>>> Obstacles = new();
 		public bool ObstaclesSet = false;
 		CollisionDebugOverlay collDebugOverlay;
 		public bool DomainIsBlocked;
@@ -225,7 +225,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			cellEdges = new CellEdges(world);
 			PopulateAllCellNodesAndEdges();
-			//RenderAllCells();
+			//RenderAllCells(); // Temporarily disabled
 		}
 
 		public static List<CPos> CellNeighbours(Map map, CPos cell, Func<CPos, CPos, bool> checkCondition = null)
@@ -311,7 +311,6 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			var cellEdgesForRender = cellEdges;
-			//var cellEdgesForRender = new CellEdges(world);
 
 			// edge is List<WPos>, obstacle is List<(int, List<WPos>)>, where the int represents the index of the edge
 			var obstacles = new List<Obstacle>();
@@ -321,9 +320,6 @@ namespace OpenRA.Mods.Common.Traits
 			// Recreate edges for rendering from all relevant BCDs found earlier.
 			foreach (var bcd in bcds)
 			{
-				//if (bcd.DomainIsBlocked)
-				//if (bcd.ID == 0)
-				//{
 				BCDObstacles[bcd.ID] = new List<Obstacle>();
 				var cellEdgesForObstacle = new CellEdges(cellEdges);
 				var cellEdgeMask = bcd.CreateCellEdgesMask(world);
@@ -332,30 +328,19 @@ namespace OpenRA.Mods.Common.Traits
 				BCDObstacles[bcd.ID].AddRange(newObstacles);
 				cellEdgesForRender.AddObstaclesEdges(newObstacles);
 				foreach (var obstacle in newObstacles)
-					if (obstacle.Count < 20 && Obstacles.Count < 50)
-						Obstacles.Add(obstacle);
-					//cellEdgesForRender.ApplyEdgeMask(bcd, CellEdges.EdgeMaskOp.Or);
-				//}
-
-				//Console.WriteLine($"GetNumberOfEdges(): {cellEdgesForRender.GetNumberOfEdges()}");
+				{
+					var obstacleEdges = obstacle.ConvertAll(o => o.Item2);
+					Obstacles.Add(cellEdgesForRender.ConnectObstacleCellEdges(obstacleEdges).ToList());
+				}
 			}
 
 			ObstaclesSet = true;
 
-			//var edgesToUse = cellEdgesForRender.GenerateConnectedCellEdges(world.Map).ToList();
-
-			Console.WriteLine(
-				$"obstacle Count: {obstacles.Count}, " +
-				$"bcds Count: {bcds.Count}, " +
-				$"cellNodes Count: {cellNodes.Count}");
-
-			//var edgesToUse = cellEdgesForRender.AllEdgesToIndexWPosList();
 			var lineColour = Color.LightBlue;
-			collDebugOverlay.ClearCellEdges();
+			//var edgesToUse = cellEdgesForRender.AllEdgesToIndexWPosList();
+			//var edgesToUse = cellEdgesForRender.GenerateConnectedCellEdges(world.Map).ToList();
 			//foreach (var (index, edge) in edgesToUse)
-			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], index, lineColour);
-			//foreach (var edge in edgesToUse)
-			//	collDebugOverlay.AddCellEdge(edge[0], edge[1], lineColour);
+			//	collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, lineColour);
 
 			var currEdgeNo = 0;
 			foreach (var obstacle in Obstacles)
@@ -363,11 +348,9 @@ namespace OpenRA.Mods.Common.Traits
 				var obstacleEdges = cellEdgesForRender.ConnectObstacleCellEdges(obstacle).ToList();
 				var colorToUse = Color.RandomColor();
 				foreach (var edge in obstacleEdges)
-				//foreach (var (index, edge) in obstacle)
 				{
 					collDebugOverlay.AddText(edge[0], $"{currEdgeNo}", colorToUse);
 					collDebugOverlay.AddCellEdge(edge[0], edge[1], colorToUse);
-					//collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, colorToUse);
 					currEdgeNo++;
 				}
 			}
@@ -391,7 +374,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (enabled && world.Map.Contains(cell))
 			{
-				//const BlockedByActor Check = BlockedByActor.None;
+				// Use BlockedByActors.None instead of the below if you want allow blocked cells to have actors on them
 				const BlockedByActor Check = BlockedByActor.Immovable;
 				var cellBCD = AllCellBCDs[cell.X, cell.Y];
 				var newBlockedStatus = MobileOffGrid.CellIsBlocked(world, locomotor, cell, Check);
@@ -403,9 +386,7 @@ namespace OpenRA.Mods.Common.Traits
 					AllCellBCDs[cell.X, cell.Y].RemoveParent(world, locomotor, cellNode, newBlockedStatus,
 						ref currBcdId, ref AllCellBCDs, ref cellEdges, check: Check);
 					var cellsToRender = new List<CPos>() { cell };
-					//cellsToRender.AddRange(CellNeighbours(world.Map, cell));
-					RenderCells(cellsToRender);
-					//RenderAllCells();
+					//RenderCells(cellsToRender); // Temporarily disabled
 				}
 			}
 		}
