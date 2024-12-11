@@ -342,18 +342,31 @@ namespace OpenRA.Mods.Common.Traits
 			//foreach (var (index, edge) in edgesToUse)
 			//	collDebugOverlay.AddCellEdgeIndex(edge[0], edge[1], index, lineColour);
 
+			var visitedObstacles = new List<List<List<WPos>>>();
+			var visitedEdges = new List<List<WPos>>();
+
 			var currEdgeNo = 0;
 			foreach (var obstacle in Obstacles)
 			{
+				if (visitedObstacles.Contains(obstacle))
+					throw new Exception($"Cannot render the same obstacle twice: {obstacle}");
+				visitedObstacles.Add(obstacle);
 				var obstacleEdges = cellEdgesForRender.ConnectObstacleCellEdges(obstacle).ToList();
 				var colorToUse = Color.RandomColor();
 				foreach (var edge in obstacleEdges)
 				{
+					if (visitedEdges.Contains(edge))
+						throw new Exception($"Cannot render the same edge twice: {edge}");
+					visitedEdges.Add(edge);
 					collDebugOverlay.AddText(edge[0], $"{currEdgeNo}", colorToUse);
 					collDebugOverlay.AddCellEdge(edge[0], edge[1], colorToUse);
 					currEdgeNo++;
 				}
 			}
+
+			Console.WriteLine($"Total number of obstacles: {visitedObstacles.Count}, " +
+								$"edges: {visitedEdges.Count}, " +
+								$"bcds: {bcds.Count}");
 		}
 
 		public struct ObjectRemoved
